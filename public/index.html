@@ -14,6 +14,16 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
+    /* Giriş sonrası tanıtım ekranı animasyonları */
+    @keyframes introFadeIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scrollWheel {
+      0% { transform: translateY(0); opacity: 1; }
+      70% { transform: translateY(14px); opacity: 0; }
+      100% { transform: translateY(0); opacity: 0; }
+    }
     input[type="date"]::-webkit-calendar-picker-indicator {
       filter: invert(0.8);
       cursor: pointer;
@@ -274,6 +284,31 @@
     </div>
   </div>
 
+  <!-- GİRİŞ SONRASI TANITIM VİDEOSU: Apple tarzı, tam ekran, kullanıcı aşağı kaydırana kadar
+       loop oynar; kaydırınca (veya ipucuna tıklanınca) ana panele geçilir.
+       NOT: arka plan videosu için public klasöründe 'opening-bg.mp4' bulunmalı;
+       yoksa siyah zeminde karşılama yazısı görünür ve yine kaydırarak geçilir. -->
+  <div id="introVideoScreen" class="hidden relative w-full h-[180vh] bg-black">
+    <div class="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center">
+      <video id="introVideo" class="absolute inset-0 w-full h-full object-cover" autoplay muted loop playsinline>
+        <source src="opening-bg.mp4" type="video/mp4">
+      </video>
+      <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-black/70"></div>
+
+      <div class="relative z-10 flex flex-col items-center text-center px-4" style="animation: introFadeIn 1.2s ease-out;">
+        <h1 class="text-2xl sm:text-4xl font-bold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">Görevlendirme &amp; Takip Sistemi</h1>
+        <p id="introWelcomeText" class="mt-2 text-sm sm:text-base text-slate-200 drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"></p>
+      </div>
+
+      <button type="button" id="introScrollHint" onclick="finishPostLoginIntro()" class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2.5 text-white/90 hover:text-white transition-colors">
+        <span class="text-xs sm:text-sm font-medium tracking-wide">Aşağı kaydırın</span>
+        <span class="w-6 h-10 sm:w-7 sm:h-11 rounded-full border-2 border-white/80 flex justify-center pt-2">
+          <span class="w-1 h-2 sm:h-2.5 bg-white/90 rounded-full" style="animation: scrollWheel 1.6s ease-in-out infinite;"></span>
+        </span>
+      </button>
+    </div>
+  </div>
+
   <!-- ANA PANEL (DASHBOARD) -->
   <div id="dashboardContainer" class="hidden min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
     <!-- HEADER -->
@@ -469,6 +504,27 @@
                 <h4 class="font-bold text-xs mb-3 text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left"></i>Geçmiş / Tamamlanan <span id="leaderPastTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">0</span></h4>
                 <div id="leaderTaskListPast" class="grid grid-cols-1 gap-4"></div>
               </section>
+            </div>
+
+            <!-- GÖREVLERİM: kendi kendine hatırlatma amaçlı görev ekleme + kendine atanan görevler -->
+            <div class="mt-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+              <h4 class="font-bold text-sm mb-3 text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-user-check text-cyan-500"></i> Görevlerim
+              </h4>
+              <form onsubmit="handleAddSelfTask(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end mb-3">
+                <div class="sm:col-span-2">
+                  <label class="block text-[10px] text-slate-500 mb-1">Görev Tanımı</label>
+                  <input type="text" id="selfTaskTitle" required placeholder="örn: Haftalık rapor hazırla" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Bitiş Tarihi</label>
+                  <input type="date" id="selfTaskEndDate" required class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                </div>
+                <button type="submit" class="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all">
+                  <i class="fa-solid fa-plus me-1"></i> Kendime Ekle
+                </button>
+              </form>
+              <div id="selfTaskList" class="grid grid-cols-1 sm:grid-cols-2 gap-3 scroll-panel max-h-[320px] pr-1"></div>
             </div>
           </div>
         </section>
@@ -1087,6 +1143,17 @@
                 </h4>
                 <div id="engineerOverdueProjectsList" class="space-y-2 scroll-panel max-h-[260px] pr-1"></div>
               </div>
+
+              <!-- STAJYER GİRİŞ/ÇIKIŞ: mühendise bağlı stajyerlerin kalıcı yoklama takibi -->
+              <div id="attendanceFeedWrap" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+                <button type="button" onclick="toggleAttendanceFeedPanel()" class="w-full flex items-center justify-between gap-2 px-4 py-3 text-left">
+                  <span class="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-user-clock text-cyan-500"></i>Stajyer Giriş/Çıkış</span>
+                  <i id="attendanceFeedChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform text-xs rotate-180"></i>
+                </button>
+                <div id="attendanceFeedBody" class="px-4 pb-4">
+                  <div id="attendanceFeedList" class="space-y-1.5 scroll-panel max-h-[280px] pr-1 mt-1"></div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -1246,6 +1313,30 @@
 
         <!-- MÜHENDİS / STAJYER ANA EKRAN GÖREV PANELİ -->
         <section id="mainTasksSection" class="hidden space-y-6">
+          <!-- STAJYER GİRİŞ/ÇIKIŞ TAKİBİ: sadece stajyerlerde görünür, konum + saat ile kaydedilir -->
+          <div id="attendanceInternCard" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <div class="p-4 flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div id="attendanceStatusIcon" class="h-11 w-11 rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-400 flex items-center justify-center text-lg"><i class="fa-solid fa-clock"></i></div>
+                <div>
+                  <div class="text-xs text-slate-400">Bugünkü Durum</div>
+                  <div id="attendanceStatusText" class="text-sm font-bold text-slate-800 dark:text-slate-100">Yükleniyor...</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="attendanceCheckInBtn" onclick="handleAttendanceCheckIn()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-500/20"><i class="fa-solid fa-right-to-bracket me-1.5"></i>Giriş Yap</button>
+                <button type="button" id="attendanceCheckOutBtn" onclick="handleAttendanceCheckOut()" class="hidden bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-md shadow-rose-500/20"><i class="fa-solid fa-right-from-bracket me-1.5"></i>Çıkış Yap</button>
+              </div>
+            </div>
+            <button type="button" onclick="toggleAttendanceHistoryPanel()" class="w-full flex items-center justify-between gap-2 px-4 py-3 text-left border-t border-slate-100 dark:border-slate-800">
+              <span class="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-cyan-500"></i>Geçmiş Kayıtlarım</span>
+              <i id="attendanceHistoryChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform text-xs"></i>
+            </button>
+            <div id="attendanceHistoryBody" class="hidden px-4 pb-4">
+              <div id="attendanceHistoryList" class="space-y-1.5 scroll-panel max-h-[260px] pr-1"></div>
+            </div>
+          </div>
+
           <div class="bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur-md">
             <div class="flex flex-wrap justify-between items-center gap-2 mb-4">
               <h3 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -1809,11 +1900,24 @@
   </div>
 
   <script>
-    // API adresi: localhost'ta açıldıysa yerel sunucu, aksi halde canlı sunucu kullanılır.
-    // Böylece yerel geliştirmede güncel server.js'e, yayında canlı sunucuya bağlanır.
-    const API_BASE_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-      ? `${location.protocol}//${location.hostname}:5000`
-      : 'https://intern-tasks-pannel.onrender.com';
+    // API adresi: sayfayı SUNAN sunucuyla aynı origin kullanılır (göreli adres).
+    // Böylece yerelde, tünelde (trycloudflare) ve canlıda (Render) her zaman
+    // sayfayı veren sunucuya bağlanır; istek yanlış sunucuya gitmez.
+    const API_BASE_URL = '';
+
+    // === JWT token'ı her /api/ isteğine otomatik ekle (güvenli backend için) ===
+    // Böylece koddaki 80 fetch çağrısını tek tek düzenlemeye gerek kalmıyor.
+    (function () {
+      const _origFetch = window.fetch;
+      window.fetch = function (url, opts = {}) {
+        const token = localStorage.getItem('token');
+        if (token && typeof url === 'string' && url.includes('/api/')) {
+          opts = Object.assign({}, opts);
+          opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + token });
+        }
+        return _origFetch(url, opts);
+      };
+    })();
 
     let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
     let usersList = [];
@@ -4949,7 +5053,11 @@
         if (res.ok) {
           currentUser = data;
           localStorage.setItem('currentUser', JSON.stringify(currentUser));
+          if (data.token) localStorage.setItem('token', data.token);
           
+          // 0. Giriş sonrası tanıtım ekranı (kullanıcı aşağı kaydırana/ipucuna tıklayana kadar bekler)
+          await startPostLoginIntro();
+
           // 1. Ana paneli / ekranı görünür yap (bitmeden yönlendirme yapılmasın)
           await showDashboard();
           
@@ -4984,6 +5092,7 @@
     function handleLogout() {
       currentUser = null;
       localStorage.removeItem('currentUser');
+      localStorage.removeItem('token');
       document.getElementById('dashboardContainer').classList.add('hidden');
       document.getElementById('authContainer').classList.remove('hidden');
       // AI'dan entegre: asistanı gizle ve sohbeti sıfırla
@@ -4991,6 +5100,290 @@
       { const _p = document.getElementById('asistanPanel'); if (_p) { _p.classList.add('hidden','opacity-0','-translate-y-3','scale-95','pointer-events-none'); _p.classList.remove('opacity-100','translate-y-0','scale-100'); } }
       { const _m = document.getElementById('asistanMesajlar'); if (_m) _m.innerHTML = ''; }
       if (typeof asistanGecmis !== 'undefined') { try { asistanGecmis = []; } catch(e){} }
+    }
+
+    // ============================================================
+    // STAJYER GİRİŞ/ÇIKIŞ TAKİBİ (YOKLAMA) — frontend
+    // ============================================================
+
+    // Tarayıcının konum iznini ister; reddedilirse/alınamazsa hata fırlatmadan {lat:null,lng:null} döner
+    function getAttendanceLocation() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) { resolve({ lat: null, lng: null }); return; }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve({ lat: null, lng: null }),
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        );
+      });
+    }
+
+    // Konum linki: koordinat varsa Google Haritalar bağlantısı, yoksa "konum yok" metni
+    function attendanceLocationLink(lat, lng) {
+      if (lat == null || lng == null) return `<span class="text-slate-400">Konum yok</span>`;
+      return `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener" class="text-cyan-600 dark:text-cyan-400 hover:underline" onclick="event.stopPropagation()"><i class="fa-solid fa-location-dot me-1"></i>Konumu Gör</a>`;
+    }
+
+    async function loadAttendanceStatus() {
+      if (!currentUser) return;
+      const iconEl = document.getElementById('attendanceStatusIcon');
+      const textEl = document.getElementById('attendanceStatusText');
+      const inBtn = document.getElementById('attendanceCheckInBtn');
+      const outBtn = document.getElementById('attendanceCheckOutBtn');
+      if (!textEl || !inBtn || !outBtn) return;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/attendance/status?internId=${currentUser.id}`);
+        const data = await safeJson(res);
+        const open = data && data.open;
+
+        if (open) {
+          const timeLabel = (open.check_in_at || '').substring(11, 16);
+          textEl.innerText = `Giriş yapıldı: ${timeLabel}`;
+          if (iconEl) iconEl.className = 'h-11 w-11 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-lg';
+          inBtn.classList.add('hidden');
+          outBtn.classList.remove('hidden');
+        } else {
+          textEl.innerText = 'Henüz giriş yapmadınız';
+          if (iconEl) iconEl.className = 'h-11 w-11 rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-400 flex items-center justify-center text-lg';
+          inBtn.classList.remove('hidden');
+          outBtn.classList.add('hidden');
+        }
+      } catch (e) {
+        textEl.innerText = 'Durum alınamadı.';
+      }
+    }
+
+    async function handleAttendanceCheckIn() {
+      const btn = document.getElementById('attendanceCheckInBtn');
+      if (btn) { btn.disabled = true; btn.classList.add('opacity-60'); }
+      try {
+        const { lat, lng } = await getAttendanceLocation();
+        const res = await fetch(`${API_BASE_URL}/api/attendance/checkin`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ internId: currentUser.id, lat, lng })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { showToast(data.error || 'Giriş kaydedilemedi.', 'error'); return; }
+        showToast('Giriş yapıldı.', 'success');
+        await loadAttendanceStatus();
+        await loadInternAttendanceHistory();
+      } catch (e) {
+        showToast('Hata: ' + e.message, 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('opacity-60'); }
+      }
+    }
+
+    async function handleAttendanceCheckOut() {
+      const btn = document.getElementById('attendanceCheckOutBtn');
+      if (btn) { btn.disabled = true; btn.classList.add('opacity-60'); }
+      try {
+        const { lat, lng } = await getAttendanceLocation();
+        const res = await fetch(`${API_BASE_URL}/api/attendance/checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ internId: currentUser.id, lat, lng })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { showToast(data.error || 'Çıkış kaydedilemedi.', 'error'); return; }
+        showToast('Çıkış yapıldı.', 'success');
+        await loadAttendanceStatus();
+        await loadInternAttendanceHistory();
+      } catch (e) {
+        showToast('Hata: ' + e.message, 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('opacity-60'); }
+      }
+    }
+
+    function toggleAttendanceHistoryPanel() {
+      const body = document.getElementById('attendanceHistoryBody');
+      const chevron = document.getElementById('attendanceHistoryChevron');
+      if (!body) return;
+      body.classList.toggle('hidden');
+      if (chevron) chevron.classList.toggle('rotate-180');
+    }
+
+    async function loadInternAttendanceHistory() {
+      const listEl = document.getElementById('attendanceHistoryList');
+      if (!listEl || !currentUser) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/attendance/mine?internId=${currentUser.id}`);
+        const rows = await safeJson(res) || [];
+        if (!Array.isArray(rows) || rows.length === 0) {
+          listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-3">Henüz kayıt yok.</p>`;
+          return;
+        }
+        listEl.innerHTML = rows.map(r => {
+          const dateLabel = (r.check_in_at || '').substring(0, 10).split('-').reverse().join('.');
+          const inTime = (r.check_in_at || '').substring(11, 16);
+          const outTime = r.check_out_at ? r.check_out_at.substring(11, 16) : null;
+          return `
+            <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-slate-700 dark:text-slate-200">${dateLabel}</span>
+                ${outTime ? `<span class="text-emerald-500 font-semibold">Tamamlandı</span>` : `<span class="text-amber-500 font-semibold">Devam Ediyor</span>`}
+              </div>
+              <div class="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <span><i class="fa-solid fa-right-to-bracket me-1"></i>${inTime} · ${attendanceLocationLink(r.check_in_lat, r.check_in_lng)}</span>
+              </div>
+              ${outTime ? `<div class="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <span><i class="fa-solid fa-right-from-bracket me-1"></i>${outTime} · ${attendanceLocationLink(r.check_out_lat, r.check_out_lng)}</span>
+              </div>` : ''}
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-3">Kayıtlar yüklenemedi.</p>`;
+      }
+    }
+
+    // Mühendis: "Stajyer Giriş/Çıkış" panelini açar/kapatır
+    function toggleAttendanceFeedPanel() {
+      const body = document.getElementById('attendanceFeedBody');
+      const chevron = document.getElementById('attendanceFeedChevron');
+      if (!body) return;
+      body.classList.toggle('hidden');
+      if (chevron) chevron.classList.toggle('rotate-180');
+    }
+
+    // Mühendis: kendisine bağlı tüm stajyerlerin giriş/çıkış geçmişini çeker (kalıcı takip listesi)
+    async function loadEngineerAttendanceFeed() {
+      const listEl = document.getElementById('attendanceFeedList');
+      if (!listEl || !currentUser) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/attendance/team?engineerId=${currentUser.id}`);
+        const rows = await safeJson(res) || [];
+        if (!Array.isArray(rows) || rows.length === 0) {
+          listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-3">Henüz kayıt yok.</p>`;
+          return;
+        }
+        listEl.innerHTML = rows.map(r => {
+          const dateLabel = (r.check_in_at || '').substring(0, 10).split('-').reverse().join('.');
+          const inTime = (r.check_in_at || '').substring(11, 16);
+          const outTime = r.check_out_at ? r.check_out_at.substring(11, 16) : null;
+          return `
+            <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-slate-700 dark:text-slate-200">${escapeHtmlProj(r.intern_name || '-')} <span class="text-slate-400 font-normal">· ${dateLabel}</span></span>
+                ${outTime ? `<span class="text-emerald-500 font-semibold">Tamamlandı</span>` : `<span class="text-amber-500 font-semibold">İçeride</span>`}
+              </div>
+              <div class="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <span><i class="fa-solid fa-right-to-bracket me-1"></i>${inTime} · ${attendanceLocationLink(r.check_in_lat, r.check_in_lng)}</span>
+              </div>
+              ${outTime ? `<div class="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <span><i class="fa-solid fa-right-from-bracket me-1"></i>${outTime} · ${attendanceLocationLink(r.check_out_lat, r.check_out_lng)}</span>
+              </div>` : ''}
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-3">Kayıtlar yüklenemedi.</p>`;
+      }
+    }
+
+    // ============================================================
+    // GİRİŞ SONRASI TANITIM (INTRO) EKRANI
+    // Kullanıcı giriş yapınca tam ekran karşılama; aşağı kaydırınca (veya ipucuna
+    // tıklayınca) ana panele geçilir. introVideoScreen yoksa sessizce atlanır.
+    // ============================================================
+    let finishPostLoginIntroFn = null;
+    function startPostLoginIntro() {
+      return new Promise((resolve) => {
+        const introEl = document.getElementById('introVideoScreen');
+        const authEl = document.getElementById('authContainer');
+        if (!introEl) { resolve(); return; }
+
+        if (authEl) authEl.classList.add('hidden');
+        introEl.classList.remove('hidden');
+        window.scrollTo(0, 0);
+
+        const welcomeEl = document.getElementById('introWelcomeText');
+        if (welcomeEl) welcomeEl.innerText = currentUser && currentUser.name ? `Hoş geldin, ${currentUser.name}` : '';
+
+        const video = document.getElementById('introVideo');
+        if (video) {
+          video.currentTime = 0;
+          video.play().catch(() => {});
+        }
+
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          window.removeEventListener('scroll', onScroll);
+          introEl.classList.add('hidden');
+          if (video) video.pause();
+          window.scrollTo(0, 0);
+          finishPostLoginIntroFn = null;
+          resolve();
+        };
+        const onScroll = () => {
+          if (window.scrollY > window.innerHeight * 0.7) finish();
+        };
+        window.addEventListener('scroll', onScroll, { passive: true });
+        finishPostLoginIntroFn = finish;
+      });
+    }
+
+    // "Aşağı kaydırın" ipucuna tıklanınca da (kaydırmadan) tanıtım ekranı tamamlanır
+    function finishPostLoginIntro() {
+      if (typeof finishPostLoginIntroFn === 'function') finishPostLoginIntroFn();
+    }
+
+    // ============================================================
+    // "GÖREVLERİM": Mühendis/Ekip Lideri/Müdür'ün kendine hatırlatma amaçlı görev eklemesi
+    // ============================================================
+
+    // Kendisine atanmış tüm görevleri listeler (Görevler sayfasının altındaki "Görevlerim" alanı)
+    function renderSelfTaskList() {
+      const el = document.getElementById('selfTaskList');
+      if (!el || !currentUser) return;
+
+      const mine = (tasksList || [])
+        .filter(t => t.assigned_to == currentUser.id)
+        .slice()
+        .sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
+
+      el.innerHTML = '';
+      if (mine.length === 0) {
+        el.innerHTML = `<p class="text-xs text-slate-400 col-span-full text-center py-4">Henüz kendinize atadığınız bir görev yok.</p>`;
+        return;
+      }
+      mine.forEach(t => el.appendChild(createTaskCard(t, t.status === 'APPROVED' || t.status === 'COMPLETED', false)));
+    }
+
+    // "Görevlerim" hızlı ekleme formu: kendine hatırlatma amaçlı görev oluşturur
+    async function handleAddSelfTask(e) {
+      e.preventDefault();
+      const title = document.getElementById('selfTaskTitle').value;
+      const endDate = document.getElementById('selfTaskEndDate').value;
+      const today = new Date().toISOString().split('T')[0];
+      const workDays = calculateWorkDays(today, endDate);
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title, description: '', assignedTo: currentUser.id, category: 'Genel',
+            endDate, workDays, createdBy: currentUser.name, userRole: currentUser.role
+          })
+        });
+        if (res.ok) {
+          document.getElementById('selfTaskTitle').value = '';
+          document.getElementById('selfTaskEndDate').value = '';
+          await loadTasks();
+          // Hem üstteki Aktif/Geçmiş sütunları hem de "Görevlerim" listesini tazele
+          if (typeof renderLeaderTasksPage === 'function') renderLeaderTasksPage();
+          else if (typeof renderSelfTaskList === 'function') renderSelfTaskList();
+        } else {
+          const data = await res.json();
+          alert('Hata: ' + (data.error || 'Görev eklenemedi.'));
+        }
+      } catch (err) { console.error('Kendime görev ekleme hatası:', err); }
     }
 
     async function showDashboard() {
@@ -5143,6 +5536,7 @@
       } else if (isEngineer) {
         // Mühendis: Ekip Lideri/Müdür/Admin ile aynı düzende, kutucuklu ana ekranı (engineerHomeSection) görür.
         if (engineerHomeSection) engineerHomeSection.classList.remove('hidden');
+        if (typeof loadEngineerAttendanceFeed === 'function') loadEngineerAttendanceFeed();
         if (typeof renderLeaderWeekMeetings === 'function') renderLeaderWeekMeetings('engineerWeekMeetingsList');
         if (typeof loadEngineerOwnedProjects === 'function') loadEngineerOwnedProjects();
 
@@ -5162,6 +5556,16 @@
         if (mainTasksSection) mainTasksSection.classList.remove('hidden');
         if (typeof renderMainTaskList === 'function') renderMainTaskList();
         if (typeof checkDailyLogWarning === 'function') checkDailyLogWarning();
+
+        // Giriş/Çıkış (Yoklama) kartı yalnızca stajyerlerde görünür ve yüklenir
+        const attendanceInternCard = document.getElementById('attendanceInternCard');
+        if (role === 'INTERN') {
+          if (attendanceInternCard) attendanceInternCard.classList.remove('hidden');
+          if (typeof loadAttendanceStatus === 'function') loadAttendanceStatus();
+          if (typeof loadInternAttendanceHistory === 'function') loadInternAttendanceHistory();
+        } else {
+          if (attendanceInternCard) attendanceInternCard.classList.add('hidden');
+        }
       }
 
       // 5. Toplantı erişimi (Mühendis, Ekip Lideri, Müdür, Admin görebilir)
@@ -5911,6 +6315,9 @@
       } else {
         pastTasks.forEach(t => pastEl.appendChild(createTaskCard(t, true, t.assigned_to != currentUser.id)));
       }
+
+      // "Görevlerim" alanını da doldur (kendine atanmış görevler)
+      if (typeof renderSelfTaskList === 'function') renderSelfTaskList();
     }
 
     // Görev atama hedef tipi (INTERN / ENGINEER) - Müdür/Ekip Lideri formu için
@@ -7410,7 +7817,7 @@
   <!-- ===================================================== -->
 
   <!-- ===== AI İŞ PLANI: SORU-CEVAP MODALI ===== -->
-  <div id="isPlaniModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div id="isPlaniModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
     <div class="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-3xl border border-slate-200 dark:border-slate-700 shadow-2xl max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
         <h3 class="font-bold text-lg text-cyan-600 dark:text-cyan-300 flex items-center gap-2"><i class="fa-solid fa-robot"></i> AI İş Planı</h3>
@@ -7712,7 +8119,8 @@
     }
     function ipYenidenBasla() { ipAdimGoster('isPlaniAdim1'); }
     async function ipPlaniKaydet() {
-      if (!ipSonPlan || !ipTask) return;
+      if (!ipTask) { alert('Görev bulunamadı. Pencereyi kapatıp görevi yeniden açın.'); return; }
+      if (!ipSonPlan) { alert('Önce plan oluşturun (Plan Oluştur adımını tamamlayın).'); return; }
       try {
         const res = await fetch(`${API_BASE_URL}/api/tasks/${ipTask.id}/is-plani-kaydet`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -7720,7 +8128,10 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Hata');
-        isPlaniKapat(); loadTasks();
+        ipTask.is_plani = JSON.stringify(ipSonPlan);   // yerel görevi güncelle ki plan hemen görünsün
+        alert('İş planı göreve kaydedildi.');
+        isPlaniKapat();
+        if (typeof loadTasks === 'function') loadTasks();
       } catch (err) { alert('Kaydedilemedi: ' + err.message); }
     }
 

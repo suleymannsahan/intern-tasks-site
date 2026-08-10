@@ -1,7 +1,9 @@
+require('dotenv').config();   // .env dosyasındaki değişkenleri process.env'e yükler
 const express = require('express');
 const { createClient } = require('@libsql/client');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken'); 
 const path = require('path');
 // Google Takvim modülü opsiyonel: dosya yoksa (ör. yerelde) güvenli bir yedek kullanılır.
 let gcal;
@@ -21,11 +23,28 @@ try {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
+// ÖNEMLİ: Gerçek sunucuda JWT_SECRET'i .env dosyasından ver (uzun, rastgele bir değer).
+// Aşağıdaki varsayılan yalnızca yerel geliştirme içindir; yayına çıkmadan mutlaka değiştir.
+const JWT_SECRET = process.env.JWT_SECRET || 'gelistirme-icin-gecici-anahtar-DEGISTIR';
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
+function auth(req, res, next) {
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);   // { id, role, department } döner
+    // GÜVENLİK: Yetki DAİMA token'daki role'e göre belirlenir. İstemciden gelen
+    // userRole/adminRole (taklit edilebilir) burada güvenilir değerle EZİLİR;
+    // böylece gövdeden rol okuyan tüm mevcut kontroller otomatik güvenli olur.
+    if (req.body && typeof req.body === 'object') {
+      req.body.userRole = req.user.role;
+      req.body.adminRole = req.user.role;
+    }
+    next();
+  } catch {
+    res.status(401).json({ error: 'Oturum geçersiz veya süresi doldu. Lütfen tekrar giriş yapın.' });
+  }
+}
 // Turso Bulut Veritabanı Bağlantısı
 // Turso bulut DB tanımlıysa onu kullan; yoksa (yerelde) yerel dosya veritabanına düş.
 const db = process.env.TURSO_DATABASE_URL
@@ -390,6 +409,25 @@ async function initDb() {
       )
     `);
 
+    // ============================================================
+    // STAJYER GİRİŞ/ÇIKIŞ TAKİBİ (Yoklama): her satır bir "gün içi oturum";
+    // check_out alanları, stajyer çıkış yapana kadar NULL kalır.
+    // Konum, tarayıcının Geolocation API'sinden opsiyonel olarak alınır.
+    // ============================================================
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS attendance_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        intern_id INTEGER NOT NULL,
+        check_in_at TEXT NOT NULL,
+        check_in_lat REAL,
+        check_in_lng REAL,
+        check_out_at TEXT,
+        check_out_lat REAL,
+        check_out_lng REAL,
+        FOREIGN KEY(intern_id) REFERENCES users(id)
+      )
+    `);
+
     // Sağ alt pop-up "bugün görüldü" kayıtları (cihazdan bağımsız susturma).
     // Kullanıcı bir pop-up'a (göreve git) ya da X'e tıkladığında ilgili anahtar
     // o gün için buraya yazılır; aynı gün başka cihazdan girse de tekrar çıkmaz.
@@ -404,6 +442,16 @@ async function initDb() {
       )
     `);
     // ===== AI ŞEMASI SONU =====
+
+    // Şifre sıfırlama doğrulama kodları (hash'li, süreli, tek kullanımlık)
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS password_resets (
+        email TEXT PRIMARY KEY,
+        code_hash TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        attempts INTEGER DEFAULT 0
+      )
+    `);
 
     console.log('Turso bulut veritabanı tabloları hazır.');
   } catch (err) {
@@ -622,7 +670,7 @@ app.get('/api/google/callback', async (req, res) => {
 });
 
 // 3) Bağlı durumu sorgula
-app.get('/api/google/status', async (req, res) => {
+app.get('/api/google/status', auth, async (req, res) => {
   const { userId } = req.query;
   if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
   try {
@@ -638,7 +686,7 @@ app.get('/api/google/status', async (req, res) => {
 });
 
 // 4) Bağlantıyı kaldır
-app.post('/api/google/disconnect', async (req, res) => {
+app.post('/api/google/disconnect', auth, async (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
   try {
@@ -773,8 +821,15 @@ app.post('/api/login', async (req, res) => {
       });
     }
 
-    // Başarılı Giriş
+    // Başarılı Giriş — 12 saat geçerli JWT üret
+    const token = jwt.sign(
+      { id: user.id, role: user.role, department: user.department },
+      JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+
     res.json({
+      token,
       id: user.id,
       name: user.name,
       username: user.username,
@@ -796,7 +851,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // GET /api/users/pending - Onay Bekleyen Yönetici / Liderleri Getir
-app.get('/api/users/pending', async (req, res) => {
+app.get('/api/users/pending', auth, async (req, res) => {
   try {
     const result = await db.execute(
       `SELECT id, name, username, department, role, leader_sub_type AS leaderType, status 
@@ -844,13 +899,50 @@ app.patch('/api/users/:id/approve', async (req, res) => {
 // Şifre Sıfırlama
 app.post('/api/reset-password', async (req, res) => {
   try {
-    const { email, newPassword } = req.body;
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ error: 'E-posta, doğrulama kodu ve yeni şifre zorunludur.' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalıdır.' });
+    }
 
+    // Bu e-posta için kayıtlı sıfırlama kodunu al
+    const pr = await db.execute({
+      sql: `SELECT code_hash, expires_at, attempts FROM password_resets WHERE email = ?`,
+      args: [email]
+    });
+    if (pr.rows.length === 0) {
+      return res.status(400).json({ error: 'Önce doğrulama kodu isteyin.' });
+    }
+    const row = pr.rows[0];
+
+    // Süre doldu mu?
+    if (Number(row.expires_at) < Date.now()) {
+      await db.execute({ sql: `DELETE FROM password_resets WHERE email = ?`, args: [email] });
+      return res.status(400).json({ error: 'Kodun süresi doldu. Yeni kod isteyin.' });
+    }
+    // Çok fazla hatalı deneme (brute-force koruması)
+    if (Number(row.attempts) >= 5) {
+      await db.execute({ sql: `DELETE FROM password_resets WHERE email = ?`, args: [email] });
+      return res.status(429).json({ error: 'Çok fazla hatalı deneme. Yeni kod isteyin.' });
+    }
+
+    // Kod doğru mu?
+    const kodDogru = await bcrypt.compare(String(code), row.code_hash);
+    if (!kodDogru) {
+      await db.execute({ sql: `UPDATE password_resets SET attempts = attempts + 1 WHERE email = ?`, args: [email] });
+      return res.status(400).json({ error: 'Doğrulama kodu hatalı.' });
+    }
+
+    // Kod doğru → şifreyi güncelle
+    const hashedPassword = await bcrypt.hash(String(newPassword), 10);
     const result = await db.execute({
       sql: `UPDATE users SET password = ? WHERE email = ?`,
       args: [hashedPassword, email]
     });
+    // Kodu tek kullanımlık yap: sil
+    await db.execute({ sql: `DELETE FROM password_resets WHERE email = ?`, args: [email] });
 
     if (result.rowsAffected === 0) return res.status(400).json({ error: 'Kullanıcı bulunamadı.' });
     res.json({ message: 'Şifre güncellendi.' });
@@ -862,7 +954,7 @@ app.post('/api/reset-password', async (req, res) => {
 
 // Kullanıcı Kendi Profil Bilgilerini Güncelleme (Tüm Kayıt Alanları Dahil)
 // Profil tamamlama: kullanıcı ilk girişte eksik telefon/e-posta bilgisini tamamlar
-app.put('/api/users/:id/complete-profile', async (req, res) => {
+app.put('/api/users/:id/complete-profile', auth, async (req, res) => {
   try {
     const uid = req.params.id;
     const { email, phone } = req.body;
@@ -882,7 +974,7 @@ app.put('/api/users/:id/complete-profile', async (req, res) => {
 });
 
 // Stajyerin sorumlu mühendisini kaydetme: ilk girişte zorunlu seçim adımı için kullanılır
-app.put('/api/users/:id/engineer', async (req, res) => {
+app.put('/api/users/:id/engineer', auth, async (req, res) => {
   try {
     const uid = req.params.id;
     const { engineerId } = req.body;
@@ -904,7 +996,7 @@ app.put('/api/users/:id/engineer', async (req, res) => {
   }
 });
 
-app.put('/api/users/profile', async (req, res) => {
+app.put('/api/users/profile', auth, async (req, res) => {
   try {
     const { userId, name, email, password, startDate, endDate, engineerId } = req.body;
 
@@ -935,9 +1027,9 @@ app.put('/api/users/profile', async (req, res) => {
 });
 
 // Kullanıcı Listesi
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', auth, async (req, res) => {
   try {
-    const { department, role } = req.query;
+    const department = req.user.department, role = req.user.role;
 
     let sql = `SELECT id, name, email, username, department, role, status, sub_area, phone, leader_sub_type, intern_start_date, intern_end_date, engineer_id FROM users`;
     let args = [];
@@ -956,7 +1048,7 @@ app.get('/api/users', async (req, res) => {
 });
 
 // Staj Tarihlerini Güncelleme
-app.put('/api/users/:id/intern-dates', async (req, res) => {
+app.put('/api/users/:id/intern-dates', auth, async (req, res) => {
   try {
     const userId = req.params.id;
     const { startDate, endDate } = req.body;
@@ -977,7 +1069,7 @@ app.put('/api/users/:id/intern-dates', async (req, res) => {
 });
 
 // Görev Oluşturma
-app.post('/api/tasks', async (req, res) => {
+app.post('/api/tasks', auth, async (req, res) => {
   try {
     const { title, description, assignedTo, category, startDate, endDate, workDays, createdBy, userRole } = req.body;
 
@@ -1094,9 +1186,9 @@ app.post('/api/tasks', async (req, res) => {
 const isAdmin = (role) => role === 'ADMIN';
 
 // Görev Getirme Endpoint'ini Admin İçin Güncelleme
-app.get('/api/tasks', async (req, res) => {
+app.get('/api/tasks', auth, async (req, res) => {
   try {
-    const { userId, role, department } = req.query;
+    const userId = req.user.id, role = req.user.role, department = req.user.department;
 
     let sql = `
       SELECT tasks.*, users.name as assignee_name,
@@ -1158,9 +1250,9 @@ app.get('/api/tasks', async (req, res) => {
 // --- ADMIN ÖZEL ENDPOINT'LERİ ---
 
 // 1. Tüm Kullanıcıları Listele (Admin Paneli İçin)
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', auth, async (req, res) => {
   try {
-    const { userRole } = req.query;
+    const userRole = req.user.role;
     if (!isAdmin(userRole)) {
       return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
     }
@@ -1173,7 +1265,7 @@ app.get('/api/admin/users', async (req, res) => {
 });
 
 // 2. Yeni Kullanıcı Oluştur (Admin Paneli)
-app.post('/api/admin/users', async (req, res) => {
+app.post('/api/admin/users', auth, async (req, res) => {
   try {
     const { name, username, email, password, role, department, adminRole } = req.body;
 
@@ -1203,7 +1295,7 @@ app.post('/api/admin/users', async (req, res) => {
 });
 
 // 3. Kullanıcı Rolünü Güncelle
-app.put('/api/admin/users/:id/role', async (req, res) => {
+app.put('/api/admin/users/:id/role', auth, async (req, res) => {
   try {
     const userId = req.params.id;
     const { newRole, department, adminRole } = req.body;
@@ -1231,7 +1323,7 @@ app.put('/api/admin/users/:id/role', async (req, res) => {
 });
 
 // 4. Kullanıcı Sil
-app.delete('/api/admin/users/:id', async (req, res) => {
+app.delete('/api/admin/users/:id', auth, async (req, res) => {
   try {
     const userId = req.params.id;
     const { adminRole } = req.body;
@@ -1271,9 +1363,9 @@ app.delete('/api/admin/users/:id', async (req, res) => {
 });
 
 // 5. Sistem Genel İstatistikleri
-app.get('/api/admin/stats', async (req, res) => {
+app.get('/api/admin/stats', auth, async (req, res) => {
   try {
-    const { userRole } = req.query;
+    const userRole = req.user.role;
     if (!isAdmin(userRole)) {
       return res.status(403).json({ error: 'Yetkisiz erişim.' });
     }
@@ -1295,7 +1387,7 @@ app.get('/api/admin/stats', async (req, res) => {
 });
 
 // Geliştirme 1: Görevi Tamamlama & Brevo ile Ekip Liderine Mail Bildirimi
-app.put('/api/tasks/:id/complete', async (req, res) => {
+app.put('/api/tasks/:id/complete', auth, async (req, res) => {
   try {
     const taskId = req.params.id;
     const result = await db.execute({
@@ -1406,7 +1498,7 @@ app.put('/api/tasks/:id/complete', async (req, res) => {
 });
 
 // Görev Onaylama / Revize Etme Endpoint'i
-app.put('/api/tasks/:id/review', async (req, res) => {
+app.put('/api/tasks/:id/review', auth, async (req, res) => {
   try {
     const taskId = req.params.id;
     const { action, comment, userRole, revisedBy } = req.body;
@@ -1451,7 +1543,7 @@ app.put('/api/tasks/:id/review', async (req, res) => {
 });
 
 // Günlük Not Ekleme
-app.post('/api/daily-logs', async (req, res) => {
+app.post('/api/daily-logs', auth, async (req, res) => {
   try {
     const { taskId, internId, logDate, note } = req.body;
     const result = await db.execute({
@@ -1466,7 +1558,7 @@ app.post('/api/daily-logs', async (req, res) => {
 });
 
 // Günlük Notları Getirme
-app.get('/api/daily-logs', async (req, res) => {
+app.get('/api/daily-logs', auth, async (req, res) => {
   try {
     const result = await db.execute(`SELECT * FROM daily_logs`);
     res.json(result.rows);
@@ -1476,10 +1568,10 @@ app.get('/api/daily-logs', async (req, res) => {
 });
 
 // Görev Silme Endpoint'ii
-app.delete('/api/tasks/:id', async (req, res) => {
+app.delete('/api/tasks/:id', auth, async (req, res) => {
   try {
     const taskId = req.params.id;
-    const userRole = (req.headers['user-role'] || '').toUpperCase();
+    const userRole = (req.user.role || '').toUpperCase();
 
     if (!['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'].includes(userRole)) {
       return res.status(403).json({ error: 'Bu işlemi yapmaya yetkiniz yok!' });
@@ -1516,10 +1608,10 @@ app.delete('/api/tasks/:id', async (req, res) => {
 });
 
 // Stajyer Silme
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', auth, async (req, res) => {
   try {
     const userId = req.params.id;
-    const userRole = (req.headers['user-role'] || '').toUpperCase();
+    const userRole = (req.user.role || '').toUpperCase();
 
     if (!['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'].includes(userRole)) {
       return res.status(403).json({ error: 'Bu işlemi yapmaya yetkiniz yok!' });
@@ -1548,7 +1640,7 @@ app.delete('/api/users/:id', async (req, res) => {
 });
 
 // Görev Güncelleme Endpoint'i
-app.put('/api/tasks/:id', async (req, res) => {
+app.put('/api/tasks/:id', auth, async (req, res) => {
   try {
     const taskId = req.params.id;
     const { title, description, assignedTo, category, endDate, workDays, userRole } = req.body;
@@ -1574,7 +1666,7 @@ app.put('/api/tasks/:id', async (req, res) => {
 });
 
 // Kullanıcının Kendi Hesabını Silmesi
-app.delete('/api/users/profile', async (req, res) => {
+app.delete('/api/users/profile', auth, async (req, res) => {
   try {
     const { userId } = req.body;
 
@@ -1594,11 +1686,11 @@ app.delete('/api/users/profile', async (req, res) => {
 });
 
 // Ekip Liderinin / Mühendisin Bir Kullanıcıyı Düzenlemesi
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', auth, async (req, res) => {
   try {
     const userId = req.params.id;
     const { name, email, role, startDate, endDate } = req.body;
-    const userRole = (req.headers['user-role'] || '').toUpperCase();
+    const userRole = (req.user.role || '').toUpperCase();
 
     if (!['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'].includes(userRole)) {
       return res.status(403).json({ error: 'Bu işlemi yapmaya yetkiniz yok!' });
@@ -1640,6 +1732,26 @@ app.post('/api/send-verification-code', async (req, res) => {
   try {
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
+    // Kodu güvenli şekilde sakla: hash'li, 10 dk geçerli, tek kullanımlık.
+    // reset-password bu kaydı doğrular. Kod ASLA yanıtta döndürülmez.
+    const codeHash = await bcrypt.hash(verificationCode, 10);
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await db.execute({
+      sql: `INSERT INTO password_resets (email, code_hash, expires_at, attempts)
+            VALUES (?, ?, ?, 0)
+            ON CONFLICT(email) DO UPDATE SET
+              code_hash = excluded.code_hash,
+              expires_at = excluded.expires_at,
+              attempts = 0`,
+      args: [email, codeHash, expiresAt]
+    });
+
+    // Üretim: e-posta ile gönder. Geliştirme (BREVO_API_KEY yoksa): konsola yaz.
+    if (!process.env.BREVO_API_KEY) {
+      console.log(`ℹ️  [DEV] ${email} için doğrulama kodu: ${verificationCode}  (BREVO_API_KEY yok, e-posta atlandı)`);
+      return res.status(200).json({ message: 'Kod üretildi (geliştirme modu: sunucu konsoluna yazıldı).' });
+    }
+
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
@@ -1650,29 +1762,28 @@ app.post('/api/send-verification-code', async (req, res) => {
       body: JSON.stringify({
         sender: { name: "Ekip Portali", email: "semresahann@gmail.com" },
         to: [{ email: email }],
-        subject: "Ekip Lideri Doğrulama Kodu",
-        htmlContent: `<p>Ekip Lideri kayıt doğrulama kodunuz: <strong>${verificationCode}</strong></p>`
+        subject: "Doğrulama Kodu",
+        htmlContent: `<p>Doğrulama kodunuz: <strong>${verificationCode}</strong> (10 dakika geçerli)</p>`
       })
     });
 
     const data = await response.json();
-
     if (!response.ok) {
       throw new Error(data.message || 'Brevo API isteği başarısız oldu.');
     }
 
-    return res.status(200).json({ message: 'Kod başarıyla gönderildi.', data });
+    return res.status(200).json({ message: 'Kod başarıyla gönderildi.' });
 
   } catch (error) {
-    console.error('Brevo Mail Gönderme Hatası:', error);
-    return res.status(500).json({ error: 'Mail gönderilirken sunucu hatası oluştu: ' + error.message });
+    console.error('Doğrulama kodu hatası:', error);
+    return res.status(500).json({ error: 'Kod gönderilirken sunucu hatası oluştu: ' + error.message });
   }
 });
 
 // --- TOPLANTI TALEBİ ENDPOINT'LERİ ---
 
 // Yeni Toplantı Talebi Oluşturma (Sadece Mühendis ve üstü roller: ENGINEER, LEADER, MANAGER)
-app.post('/api/meetings', async (req, res) => {
+app.post('/api/meetings', auth, async (req, res) => {
   try {
     const { requestedBy, subject, description, preferredDate, userRole, targetDepartment, targetRoles, targetUserIds } = req.body;
 
@@ -1759,9 +1870,9 @@ app.post('/api/meetings', async (req, res) => {
 });
 
 // Toplantı Taleplerini Listeleme
-app.get('/api/meetings', async (req, res) => {
+app.get('/api/meetings', auth, async (req, res) => {
   try {
-    const { userId, role, department } = req.query;
+    const userId = req.user.id, role = req.user.role, department = req.user.department;
 
     let sql = `
       SELECT meeting_requests.*, users.name as requester_name, users.role as requester_role
@@ -1810,9 +1921,10 @@ function getSubordinateRoles(role) {
 }
 
 // Seçilen birim(ler)/rol(ler) için kişi listesi + görev + günlük log verisi
-app.get('/api/admin/team-progress', async (req, res) => {
+app.get('/api/admin/team-progress', auth, async (req, res) => {
   try {
-    const { userRole, departments, roles, userId, viewerDepartment } = req.query;
+    const { departments, roles, viewerDepartment } = req.query;
+    const userRole = req.user.role, userId = req.user.id;
 
     // ADMIN veya rol hiyerarşisinde yer alan (alt rolleri olan) roller erişebilir
     const canView = isAdmin(userRole) || getSubordinateRoles(userRole).length > 0;
@@ -1934,7 +2046,7 @@ app.get('/api/admin/team-progress', async (req, res) => {
 
 
 // Toplantı Talebini Onaylama / Reddetme (Sadece Müdür/Ekip Lideri kendi birimi, veya Admin)
-app.put('/api/meetings/:id/review', async (req, res) => {
+app.put('/api/meetings/:id/review', auth, async (req, res) => {
   try {
     const meetingId = req.params.id;
     const { action, reviewComment, userRole, reviewerName, department } = req.body;
@@ -1994,7 +2106,7 @@ app.put('/api/meetings/:id/review', async (req, res) => {
 });
 
 // Toplantı talebinin içeriğini (konu / açıklama / tarih) düzenleme — onay/red akışından bağımsız
-app.put('/api/meetings/:id/content', async (req, res) => {
+app.put('/api/meetings/:id/content', auth, async (req, res) => {
   try {
     const meetingId = req.params.id;
     const { subject, description, preferredDate, userRole, department } = req.body;
@@ -2061,7 +2173,7 @@ function daysBetween(a, b) {
 // --- BİRİM ALT ALANLARI (department_subareas) ---
 
 // Bir birimin alt alanlarını listele (department query ile) veya tümü
-app.get('/api/subareas', async (req, res) => {
+app.get('/api/subareas', auth, async (req, res) => {
   try {
     const { department } = req.query;
     let sql = `SELECT * FROM department_subareas`;
@@ -2076,7 +2188,7 @@ app.get('/api/subareas', async (req, res) => {
 });
 
 // Alt alan ekle (Admin)
-app.post('/api/subareas', async (req, res) => {
+app.post('/api/subareas', auth, async (req, res) => {
   try {
     const { department, label, userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2092,7 +2204,7 @@ app.post('/api/subareas', async (req, res) => {
 });
 
 // Alt alan sil (Admin)
-app.delete('/api/subareas/:id', async (req, res) => {
+app.delete('/api/subareas/:id', auth, async (req, res) => {
   try {
     const { userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2104,7 +2216,7 @@ app.delete('/api/subareas/:id', async (req, res) => {
 });
 
 // Bir kullanıcının alt alanını / telefonunu güncelle (Admin)
-app.put('/api/users/:id/sub-area', async (req, res) => {
+app.put('/api/users/:id/sub-area', auth, async (req, res) => {
   try {
     const { sub_area, phone, userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2127,7 +2239,7 @@ app.put('/api/users/:id/sub-area', async (req, res) => {
 // --- BİRİMLER (project_departments) ---
 
 // Birim listesi
-app.get('/api/departments', async (req, res) => {
+app.get('/api/departments', auth, async (req, res) => {
   try {
     const r = await db.execute(`SELECT * FROM project_departments ORDER BY id ASC`);
     res.json(r.rows);
@@ -2137,7 +2249,7 @@ app.get('/api/departments', async (req, res) => {
 });
 
 // Birim ekle (Admin)
-app.post('/api/departments', async (req, res) => {
+app.post('/api/departments', auth, async (req, res) => {
   try {
     const { label, icon, userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2168,7 +2280,7 @@ app.post('/api/departments', async (req, res) => {
 });
 
 // Birim sil (Admin) — bağlı firma/proje varsa engelle
-app.delete('/api/departments/:id', async (req, res) => {
+app.delete('/api/departments/:id', auth, async (req, res) => {
   try {
     const { userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2187,7 +2299,7 @@ app.delete('/api/departments/:id', async (req, res) => {
 // --- FİRMALAR ---
 
 // Firma listesi (opsiyonel birim filtresi)
-app.get('/api/companies', async (req, res) => {
+app.get('/api/companies', auth, async (req, res) => {
   try {
     const { department } = req.query;
     let sql = `SELECT * FROM companies`;
@@ -2202,7 +2314,7 @@ app.get('/api/companies', async (req, res) => {
 });
 
 // Firma ekle (Admin)
-app.post('/api/companies', async (req, res) => {
+app.post('/api/companies', auth, async (req, res) => {
   try {
     const { name, department, userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2218,7 +2330,7 @@ app.post('/api/companies', async (req, res) => {
 });
 
 // Firma sil (Admin) — bağlı projeler ve ilerleme kayıtları da silinir
-app.delete('/api/companies/:id', async (req, res) => {
+app.delete('/api/companies/:id', auth, async (req, res) => {
   try {
     const { userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2238,7 +2350,7 @@ app.delete('/api/companies/:id', async (req, res) => {
 // --- PROJELER ---
 
 // Proje listesi (opsiyonel firma / birim filtresi). Her projeye özet ilerleme bilgisi eklenir.
-app.get('/api/projects', async (req, res) => {
+app.get('/api/projects', auth, async (req, res) => {
   try {
     const { company_id, department } = req.query;
     let sql = `
@@ -2284,7 +2396,7 @@ app.get('/api/projects', async (req, res) => {
 });
 
 // Tek proje + tam ilerleme serisi (gidişat grafiği için)
-app.get('/api/projects/:id', async (req, res) => {
+app.get('/api/projects/:id', auth, async (req, res) => {
   try {
     const pid = req.params.id;
     const pr = await db.execute({
@@ -2307,7 +2419,7 @@ app.get('/api/projects/:id', async (req, res) => {
 });
 
 // Proje oluştur (Admin)
-app.post('/api/projects', async (req, res) => {
+app.post('/api/projects', auth, async (req, res) => {
   try {
     const { company_id, name, department, owner_id, start_date, end_date, priority, note, userRole, createdBy } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2326,7 +2438,7 @@ app.post('/api/projects', async (req, res) => {
 });
 
 // Proje güncelle (Admin) — durum, öncelik, not, tarihler
-app.put('/api/projects/:id', async (req, res) => {
+app.put('/api/projects/:id', auth, async (req, res) => {
   try {
     const { name, owner_id, start_date, end_date, priority, status, note, userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2354,7 +2466,7 @@ app.put('/api/projects/:id', async (req, res) => {
 });
 
 // Proje sil (Admin)
-app.delete('/api/projects/:id', async (req, res) => {
+app.delete('/api/projects/:id', auth, async (req, res) => {
   try {
     const { userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2370,7 +2482,7 @@ app.delete('/api/projects/:id', async (req, res) => {
 // --- İLERLEME KAYITLARI (gidişat noktaları) ---
 
 // İlerleme noktası ekle (Admin veya proje sahibi)
-app.post('/api/projects/:id/progress', async (req, res) => {
+app.post('/api/projects/:id/progress', auth, async (req, res) => {
   try {
     const { log_date, planned, actual, note, userRole, userId } = req.body;
     const pid = req.params.id;
@@ -2390,7 +2502,7 @@ app.post('/api/projects/:id/progress', async (req, res) => {
 });
 
 // İlerleme noktası sil (Admin)
-app.delete('/api/progress/:id', async (req, res) => {
+app.delete('/api/progress/:id', auth, async (req, res) => {
   try {
     const { userRole } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
@@ -2403,7 +2515,7 @@ app.delete('/api/progress/:id', async (req, res) => {
 
 // --- ADMIN DASHBOARD ÖZETİ (geciken projeler + aciliyet sıralaması + son toplantılar) ---
 // --- KİŞİ DETAY (Ekip Gidişatı → kişi sayfası) ---
-app.get('/api/person/:id/detail', async (req, res) => {
+app.get('/api/person/:id/detail', auth, async (req, res) => {
   try {
     const uid = req.params.id;
     const uRes = await db.execute({
@@ -2487,9 +2599,9 @@ app.get('/api/person/:id/detail', async (req, res) => {
 
 // --- KİŞİ DETAY SONU ---
 
-app.get('/api/admin/dashboard', async (req, res) => {
+app.get('/api/admin/dashboard', auth, async (req, res) => {
   try {
-    const { userRole } = req.query;
+    const userRole = req.user.role;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
     const today = todayISO();
 
@@ -2579,7 +2691,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
 const IS_PLANI_YETKILI = ['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'];
 
 // 1) Plan üret (6 adıma böler + AI açıklaması) — DB'ye yazmaz
-app.post('/api/is-plani', async (req, res) => {
+app.post('/api/is-plani', auth, async (req, res) => {
   try {
     const { kartIsmi, kategori, dokumanTarihi, bitisTarihi, userRole } = req.body;
 
@@ -2647,7 +2759,7 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
 });
 
 // 2) Planı görevin is_plani sütununa kaydet
-app.post('/api/tasks/:id/is-plani-kaydet', async (req, res) => {
+app.post('/api/tasks/:id/is-plani-kaydet', auth, async (req, res) => {
   try {
     const { plan, userRole } = req.body;
     if (!IS_PLANI_YETKILI.includes(userRole)) {
@@ -2663,7 +2775,7 @@ app.post('/api/tasks/:id/is-plani-kaydet', async (req, res) => {
   }
 });
 // Görevin iş planını sil (geçmiş verilere DOKUNMAZ)
-app.post('/api/tasks/:id/is-plani-sil', async (req, res) => {
+app.post('/api/tasks/:id/is-plani-sil', auth, async (req, res) => {
   try {
     const { userRole } = req.body;
     if (!IS_PLANI_YETKILI.includes(userRole)) {
@@ -2679,7 +2791,7 @@ app.post('/api/tasks/:id/is-plani-sil', async (req, res) => {
   }
 });
 // Planı güncelle: biten aşamalar korunur, kalanlar yeni bitişe göre yeniden hesaplanır
-app.post('/api/tasks/:id/is-plani-guncelle', async (req, res) => {
+app.post('/api/tasks/:id/is-plani-guncelle', auth, async (req, res) => {
   try {
     const { yeniBitis, userRole } = req.body;
     if (!IS_PLANI_YETKILI.includes(userRole)) {
@@ -2764,7 +2876,7 @@ app.post('/api/tasks/:id/is-plani-guncelle', async (req, res) => {
 
 // Gecikme kontrolü: panel açılınca çağrılır, geciken aşamalar için bildirim üretir
 // (aynı aşama için tekrar bildirim üretmez)
-app.post('/api/bildirimler/gecikme-kontrol', async (req, res) => {
+app.post('/api/bildirimler/gecikme-kontrol', auth, async (req, res) => {
   try {
     const bugun = new Date(); bugun.setHours(0,0,0,0);
     const bugunStr = new Date().toISOString().split('T')[0];
@@ -2849,9 +2961,9 @@ app.post('/api/bildirimler/gecikme-kontrol', async (req, res) => {
 });
 
 // Kullanıcının bildirimlerini getir (en yeni önce)
-app.get('/api/bildirimler', async (req, res) => {
+app.get('/api/bildirimler', auth, async (req, res) => {
   try {
-    const { userId } = req.query;
+    const userId = req.user.id;
     const result = await db.execute({
       sql: `SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 50`,
       args: [userId]
@@ -2863,7 +2975,7 @@ app.get('/api/bildirimler', async (req, res) => {
 });
 
 // Bildirimi okundu işaretle (tek bildirim ya da hepsi)
-app.post('/api/bildirimler/okundu', async (req, res) => {
+app.post('/api/bildirimler/okundu', auth, async (req, res) => {
   try {
     const { bildirimId, userId, hepsi } = req.body;
     if (hepsi) {
@@ -2879,9 +2991,9 @@ app.post('/api/bildirimler/okundu', async (req, res) => {
 
 // Sağ alt pop-up: kullanıcının BUGÜN susturduğu (görülmüş) anahtarları getir.
 // Anahtar biçimi ör: "gecikme:12:0", "onay:12:0".
-app.get('/api/toast-gorulenler', async (req, res) => {
+app.get('/api/toast-gorulenler', auth, async (req, res) => {
   try {
-    const { userId } = req.query;
+    const userId = req.user.id;
     if (!userId) return res.json([]);
     const bugun = new Date().toISOString().split('T')[0];
     // Dünden kalan kayıtları temizle ki tablo şişmesin (ertesi gün pop-up tekrar çıkabilsin).
@@ -2897,7 +3009,7 @@ app.get('/api/toast-gorulenler', async (req, res) => {
 });
 
 // Sağ alt pop-up: bir anahtarı BUGÜN için susturulmuş olarak işaretle (idempotent).
-app.post('/api/toast-gorulenler', async (req, res) => {
+app.post('/api/toast-gorulenler', auth, async (req, res) => {
   try {
     const { userId, anahtar } = req.body;
     if (!userId || !anahtar) return res.status(400).json({ error: 'userId ve anahtar gerekli.' });
@@ -2914,7 +3026,7 @@ app.post('/api/toast-gorulenler', async (req, res) => {
 });
 // ===== BİLDİRİM SİSTEMİ SONU =====
 // 3) Aşama durumu: stajyer bitirme talebi -> görevi verenin onayı -> bitti
-app.post('/api/tasks/:id/asama-durum', async (req, res) => {
+app.post('/api/tasks/:id/asama-durum', auth, async (req, res) => {
   try {
     const taskId = req.params.id;
     const { asamaIndex, islem, kullanici, userId, userRole, gercekBaslangic, gercekBitis } = req.body;
@@ -3022,9 +3134,10 @@ app.post('/api/tasks/:id/asama-durum', async (req, res) => {
 
 // ===== GÖREV ASİSTANI (CHATBOT) =====
 // Kullanıcının görebildiği görevleri bağlam olarak LLM'e verir, serbest sohbetle yanıtlar.
-app.post('/api/chatbot', async (req, res) => {
+app.post('/api/chatbot', auth, async (req, res) => {
   try {
-    const { userId, role, department, message, history } = req.body;
+    const { message, history } = req.body;
+    const userId = req.user.id, role = req.user.role, department = req.user.department;
     if (!message || !String(message).trim()) {
       return res.status(400).json({ error: 'Mesaj boş olamaz.' });
     }
@@ -3104,9 +3217,10 @@ ${gorevMetni || 'Görev bulunmuyor.'}`;
 // ===== GÖREV ASİSTANI SONU =====
 
 // ===== GENEL ASİSTAN (LLM ile serbest sohbet) =====
-app.post('/api/asistan', async (req, res) => {
+app.post('/api/asistan', auth, async (req, res) => {
   try {
-    const { userId, role, name, department, messages } = req.body;
+    const { name, messages } = req.body;
+    const userId = req.user.id, role = req.user.role, department = req.user.department;
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'Mesaj gerekli.' });
     }
@@ -3168,6 +3282,142 @@ ${gorevMetni}`;
     res.json({ cevap });
   } catch (error) {
     res.status(500).json({ error: 'Asistan hatası: ' + error.message });
+  }
+});
+
+// ============================================================
+// --- STAJYER GİRİŞ/ÇIKIŞ TAKİBİ (YOKLAMA) ---
+// ============================================================
+
+// Stajyer "Giriş Yap" der: yeni bir oturum satırı açar (check_out_at NULL kalır).
+// Konum (lat/lng) tarayıcıdan opsiyonel gelir; verilmezse null kaydedilir.
+app.post('/api/attendance/checkin', async (req, res) => {
+  try {
+    const { internId, lat, lng } = req.body;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+
+    const openRes = await db.execute({
+      sql: `SELECT id FROM attendance_logs WHERE intern_id = ? AND check_out_at IS NULL`,
+      args: [internId]
+    });
+    if (openRes.rows.length > 0) {
+      return res.status(400).json({ error: 'Zaten açık bir giriş kaydınız var. Önce çıkış yapın.' });
+    }
+
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const result = await db.execute({
+      sql: `INSERT INTO attendance_logs (intern_id, check_in_at, check_in_lat, check_in_lng) VALUES (?, ?, ?, ?)`,
+      args: [internId, now, lat != null ? lat : null, lng != null ? lng : null]
+    });
+
+    // Sorumlu mühendise bildir (mevcut Türkçe bildirim sistemi: notifications tablosu)
+    try {
+      const uRes = await db.execute({ sql: `SELECT name, engineer_id FROM users WHERE id = ?`, args: [internId] });
+      const intern = uRes.rows[0];
+      if (intern && intern.engineer_id) {
+        const timeLabel = now.substring(11, 16);
+        const locNote = (lat != null && lng != null) ? ' (konum alındı)' : ' (konum alınamadı)';
+        await db.execute({
+          sql: `INSERT INTO notifications (user_id, task_id, tip, mesaj, okundu, created_at) VALUES (?, ?, ?, ?, 0, ?)`,
+          args: [intern.engineer_id, null, 'yoklama_giris', `${intern.name} ${timeLabel}'de giriş yaptı${locNote}.`, now]
+        });
+      }
+    } catch (notifErr) { console.error('Giriş bildirimi hatası:', notifErr.message); }
+
+    res.json({ id: Number(result.lastInsertRowid), checkInAt: now });
+  } catch (error) {
+    res.status(500).json({ error: 'Giriş kaydedilemedi: ' + error.message });
+  }
+});
+
+// Stajyer "Çıkış Yap" der: açık olan son oturum satırını kapatır.
+app.post('/api/attendance/checkout', async (req, res) => {
+  try {
+    const { internId, lat, lng } = req.body;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+
+    const openRes = await db.execute({
+      sql: `SELECT id FROM attendance_logs WHERE intern_id = ? AND check_out_at IS NULL ORDER BY id DESC LIMIT 1`,
+      args: [internId]
+    });
+    if (openRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Açık bir giriş kaydı bulunamadı. Önce giriş yapmalısınız.' });
+    }
+    const logId = openRes.rows[0].id;
+
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    await db.execute({
+      sql: `UPDATE attendance_logs SET check_out_at = ?, check_out_lat = ?, check_out_lng = ? WHERE id = ?`,
+      args: [now, lat != null ? lat : null, lng != null ? lng : null, logId]
+    });
+
+    try {
+      const uRes = await db.execute({ sql: `SELECT name, engineer_id FROM users WHERE id = ?`, args: [internId] });
+      const intern = uRes.rows[0];
+      if (intern && intern.engineer_id) {
+        const timeLabel = now.substring(11, 16);
+        const locNote = (lat != null && lng != null) ? ' (konum alındı)' : ' (konum alınamadı)';
+        await db.execute({
+          sql: `INSERT INTO notifications (user_id, task_id, tip, mesaj, okundu, created_at) VALUES (?, ?, ?, ?, 0, ?)`,
+          args: [intern.engineer_id, null, 'yoklama_cikis', `${intern.name} ${timeLabel}'de çıkış yaptı${locNote}.`, now]
+        });
+      }
+    } catch (notifErr) { console.error('Çıkış bildirimi hatası:', notifErr.message); }
+
+    res.json({ id: logId, checkOutAt: now });
+  } catch (error) {
+    res.status(500).json({ error: 'Çıkış kaydedilemedi: ' + error.message });
+  }
+});
+
+// Stajyerin şu anki durumu: açık bir oturumu var mı (giriş yapmış ama çıkış yapmamış)?
+app.get('/api/attendance/status', async (req, res) => {
+  try {
+    const { internId } = req.query;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+    const r = await db.execute({
+      sql: `SELECT * FROM attendance_logs WHERE intern_id = ? AND check_out_at IS NULL ORDER BY id DESC LIMIT 1`,
+      args: [internId]
+    });
+    res.json({ open: r.rows[0] || null });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Stajyerin kendi giriş/çıkış geçmişi (en yeniden en eskiye)
+app.get('/api/attendance/mine', async (req, res) => {
+  try {
+    const { internId } = req.query;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+    const r = await db.execute({
+      sql: `SELECT * FROM attendance_logs WHERE intern_id = ? ORDER BY id DESC LIMIT 30`,
+      args: [internId]
+    });
+    res.json(r.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Sorumlu mühendisin, kendisine bağlı tüm stajyerlerin giriş/çıkış geçmişini görmesi
+// (mühendis ana ekranındaki "Stajyer Giriş/Çıkış" alanı bunu kullanır — kalıcı takip listesidir).
+app.get('/api/attendance/team', async (req, res) => {
+  try {
+    const { engineerId } = req.query;
+    if (!engineerId) return res.status(400).json({ error: 'engineerId gerekli.' });
+    const r = await db.execute({
+      sql: `SELECT attendance_logs.*, users.name AS intern_name
+            FROM attendance_logs
+            JOIN users ON users.id = attendance_logs.intern_id
+            WHERE users.engineer_id = ?
+            ORDER BY attendance_logs.id DESC
+            LIMIT 50`,
+      args: [engineerId]
+    });
+    res.json(r.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
