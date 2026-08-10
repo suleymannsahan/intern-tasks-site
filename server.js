@@ -258,6 +258,24 @@ async function initDb() {
       )
     `);
 
+    // ============================================================
+    // STAJYER GİRİŞ/ÇIKIŞ TAKİBİ: her satır bir "gün içi oturum"; check_out alanları,
+    // stajyer çıkış yapana kadar NULL kalır. Konum, tarayıcının Geolocation API'sinden alınır.
+    // ============================================================
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS attendance_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        intern_id INTEGER NOT NULL,
+        check_in_at TEXT NOT NULL,
+        check_in_lat REAL,
+        check_in_lng REAL,
+        check_out_at TEXT,
+        check_out_lat REAL,
+        check_out_lng REAL,
+        FOREIGN KEY(intern_id) REFERENCES users(id)
+      )
+    `);
+
     console.log('Turso bulut veritabanı tabloları hazır.');
   } catch (err) {
     console.error('Veritabanı başlatma hatası:', err.message);
@@ -2123,6 +2141,135 @@ app.delete('/api/notifications', async (req, res) => {
     res.json({ message: 'ok' });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// --- STAJYER GİRİŞ/ÇIKIŞ TAKİBİ ---
+
+// Stajyer "Giriş Yap" der: yeni bir oturum satırı açar (check_out_at NULL kalır).
+// Konum (lat/lng) tarayıcıdan opsiyonel gelir; verilmezse null kaydedilir.
+app.post('/api/attendance/checkin', async (req, res) => {
+  try {
+    const { internId, lat, lng } = req.body;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+
+    const openRes = await db.execute({
+      sql: `SELECT id FROM attendance_logs WHERE intern_id = ? AND check_out_at IS NULL`,
+      args: [internId]
+    });
+    if (openRes.rows.length > 0) {
+      return res.status(400).json({ error: 'Zaten açık bir giriş kaydınız var. Önce çıkış yapın.' });
+    }
+
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const result = await db.execute({
+      sql: `INSERT INTO attendance_logs (intern_id, check_in_at, check_in_lat, check_in_lng) VALUES (?, ?, ?, ?)`,
+      args: [internId, now, lat != null ? lat : null, lng != null ? lng : null]
+    });
+
+    // Sorumlu mühendise bildir
+    try {
+      const uRes = await db.execute({ sql: `SELECT name, engineer_id FROM users WHERE id = ?`, args: [internId] });
+      const intern = uRes.rows[0];
+      if (intern && intern.engineer_id) {
+        const timeLabel = now.substring(11, 16);
+        const locNote = (lat != null && lng != null) ? ' (konum alındı)' : ' (konum alınamadı)';
+        await createNotification(intern.engineer_id, 'ATTENDANCE_CHECKIN', 'ATTENDANCE', 'Stajyer Giriş Yaptı', `${intern.name} ${timeLabel}'de giriş yaptı${locNote}.`, Number(result.lastInsertRowid));
+      }
+    } catch (notifErr) { console.error('Giriş bildirimi hatası:', notifErr.message); }
+
+    res.json({ id: Number(result.lastInsertRowid), checkInAt: now });
+  } catch (error) {
+    res.status(500).json({ error: 'Giriş kaydedilemedi: ' + error.message });
+  }
+});
+
+// Stajyer "Çıkış Yap" der: açık olan son oturum satırını kapatır.
+app.post('/api/attendance/checkout', async (req, res) => {
+  try {
+    const { internId, lat, lng } = req.body;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+
+    const openRes = await db.execute({
+      sql: `SELECT id FROM attendance_logs WHERE intern_id = ? AND check_out_at IS NULL ORDER BY id DESC LIMIT 1`,
+      args: [internId]
+    });
+    if (openRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Açık bir giriş kaydı bulunamadı. Önce giriş yapmalısınız.' });
+    }
+    const logId = openRes.rows[0].id;
+
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    await db.execute({
+      sql: `UPDATE attendance_logs SET check_out_at = ?, check_out_lat = ?, check_out_lng = ? WHERE id = ?`,
+      args: [now, lat != null ? lat : null, lng != null ? lng : null, logId]
+    });
+
+    try {
+      const uRes = await db.execute({ sql: `SELECT name, engineer_id FROM users WHERE id = ?`, args: [internId] });
+      const intern = uRes.rows[0];
+      if (intern && intern.engineer_id) {
+        const timeLabel = now.substring(11, 16);
+        const locNote = (lat != null && lng != null) ? ' (konum alındı)' : ' (konum alınamadı)';
+        await createNotification(intern.engineer_id, 'ATTENDANCE_CHECKOUT', 'ATTENDANCE', 'Stajyer Çıkış Yaptı', `${intern.name} ${timeLabel}'de çıkış yaptı${locNote}.`, logId);
+      }
+    } catch (notifErr) { console.error('Çıkış bildirimi hatası:', notifErr.message); }
+
+    res.json({ id: logId, checkOutAt: now });
+  } catch (error) {
+    res.status(500).json({ error: 'Çıkış kaydedilemedi: ' + error.message });
+  }
+});
+
+// Stajyerin şu anki durumu: açık bir oturumu var mı (giriş yapmış ama çıkış yapmamış)?
+app.get('/api/attendance/status', async (req, res) => {
+  try {
+    const { internId } = req.query;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+    const r = await db.execute({
+      sql: `SELECT * FROM attendance_logs WHERE intern_id = ? AND check_out_at IS NULL ORDER BY id DESC LIMIT 1`,
+      args: [internId]
+    });
+    res.json({ open: r.rows[0] || null });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Stajyerin kendi giriş/çıkış geçmişi (en yeniden en eskiye)
+app.get('/api/attendance/mine', async (req, res) => {
+  try {
+    const { internId } = req.query;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+    const r = await db.execute({
+      sql: `SELECT * FROM attendance_logs WHERE intern_id = ? ORDER BY id DESC LIMIT 30`,
+      args: [internId]
+    });
+    res.json(r.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Sorumlu mühendisin, kendisine bağlı tüm stajyerlerin giriş/çıkış geçmişini görmesi
+// (bildirim panelindeki "Stajyer Giriş/Çıkış" alanı bunu kullanır — bildirimlerin aksine
+// görüntülenince silinmez, kalıcı bir takip listesidir).
+app.get('/api/attendance/team', async (req, res) => {
+  try {
+    const { engineerId } = req.query;
+    if (!engineerId) return res.status(400).json({ error: 'engineerId gerekli.' });
+    const r = await db.execute({
+      sql: `SELECT attendance_logs.*, users.name AS intern_name
+            FROM attendance_logs
+            JOIN users ON users.id = attendance_logs.intern_id
+            WHERE users.engineer_id = ?
+            ORDER BY attendance_logs.id DESC
+            LIMIT 50`,
+      args: [engineerId]
+    });
+    res.json(r.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
