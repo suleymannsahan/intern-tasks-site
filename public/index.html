@@ -647,20 +647,33 @@
               </div>
             </div>
 
-            <!-- TALEP LİSTESİ (yan yana 2'şerli, sağ/sol oklarla kaydırılır) -->
-            <div>
-              <div class="flex justify-between items-center mb-3">
-                <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-list text-cyan-500"></i>Talepler</h4>
-                <div class="flex items-center gap-2">
-                  <button type="button" id="meetingPrevBtn" onclick="scrollMeetingCarousel(-1)" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-cyan-500/10 hover:text-cyan-600 dark:hover:text-cyan-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                    <i class="fa-solid fa-chevron-left"></i>
-                  </button>
-                  <button type="button" id="meetingNextBtn" onclick="scrollMeetingCarousel(1)" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-cyan-500/10 hover:text-cyan-600 dark:hover:text-cyan-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
-                    <i class="fa-solid fa-chevron-right"></i>
-                  </button>
+            <!-- TALEPLER: Bekleyen Yeni Talepler ve Reddedilen Talepler, ayrı ayrı aşağı açılır panellerde -->
+            <div class="space-y-3">
+              <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                <button type="button" onclick="toggleMeetingGroupPanel('pending')" class="w-full flex items-center justify-between gap-2 p-4 text-left">
+                  <h4 class="font-bold text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                    <i class="fa-solid fa-hourglass-half"></i>Bekleyen Yeni Talepler
+                    <span id="meetingPendingCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">0</span>
+                  </h4>
+                  <i id="meetingPendingChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                </button>
+                <div id="meetingPendingBody" class="hidden px-4 pb-4">
+                  <div id="meetingPendingList" class="space-y-2 scroll-panel max-h-[420px] pr-1"></div>
                 </div>
               </div>
-              <div id="meetingRequestsList" class="flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2" style="scrollbar-width: thin;"></div>
+
+              <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                <button type="button" onclick="toggleMeetingGroupPanel('rejected')" class="w-full flex items-center justify-between gap-2 p-4 text-left">
+                  <h4 class="font-bold text-sm text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                    <i class="fa-solid fa-ban"></i>Reddedilen Talepler
+                    <span id="meetingRejectedCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30">0</span>
+                  </h4>
+                  <i id="meetingRejectedChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                </button>
+                <div id="meetingRejectedBody" class="hidden px-4 pb-4">
+                  <div id="meetingRejectedList" class="space-y-2 scroll-panel max-h-[420px] pr-1"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2324,6 +2337,17 @@
       if (chevron) chevron.classList.toggle('rotate-180');
     }
 
+    // Toplantı modalındaki "Bekleyen Yeni Talepler" / "Reddedilen Talepler" panellerini açar/kapatır
+    function toggleMeetingGroupPanel(kind) {
+      const bodyId = kind === 'pending' ? 'meetingPendingBody' : 'meetingRejectedBody';
+      const chevronId = kind === 'pending' ? 'meetingPendingChevron' : 'meetingRejectedChevron';
+      const body = document.getElementById(bodyId);
+      const chevron = document.getElementById(chevronId);
+      if (!body) return;
+      body.classList.toggle('hidden');
+      if (chevron) chevron.classList.toggle('rotate-180');
+    }
+
     function toggleMeetingsModal() {
       const modal = document.getElementById('meetingsModal');
       // Sayfa modunda açıldıysa (Ekip Lideri/Müdür kutucuğu): kapatınca ana ekrana dön
@@ -2336,19 +2360,6 @@
       if (!modal.classList.contains('hidden')) {
         if (typeof populateMeetingTargetRoles === 'function') populateMeetingTargetRoles();
         if (typeof loadMeetings === 'function') loadMeetings();
-
-        // Carousel scroll dinleyicisini bir kez kur ve okları güncelle
-        const track = document.getElementById('meetingRequestsList');
-        if (track && !track.dataset.scrollBound) {
-          track.addEventListener('scroll', () => {
-            if (typeof updateMeetingCarouselControls === 'function') updateMeetingCarouselControls();
-          });
-          track.dataset.scrollBound = '1';
-        }
-        // Modal görünür olduktan sonra genişlik ölçülebilir; okları güncelle
-        setTimeout(() => {
-          if (typeof updateMeetingCarouselControls === 'function') updateMeetingCarouselControls();
-        }, 50);
       }
     }
 
@@ -4750,33 +4761,6 @@
       return hasTime ? `${datePart} ${pad(d.getHours())}:${pad(d.getMinutes())}` : datePart;
     }
 
-    // Toplantı talepleri carousel'ini sağa/sola kaydırır (bir "sayfa" = görünür genişlik)
-    function scrollMeetingCarousel(direction) {
-      const track = document.getElementById('meetingRequestsList');
-      if (!track) return;
-      const amount = track.clientWidth || 300;
-      track.scrollBy({ left: direction * amount, behavior: 'smooth' });
-    }
-
-    // Kaydırma oklarının aktif/pasif durumunu günceller
-    function updateMeetingCarouselControls() {
-      const track = document.getElementById('meetingRequestsList');
-      const prevBtn = document.getElementById('meetingPrevBtn');
-      const nextBtn = document.getElementById('meetingNextBtn');
-      if (!track || !prevBtn || !nextBtn) return;
-
-      const canScroll = track.scrollWidth > track.clientWidth + 4;
-      const atStart = track.scrollLeft <= 2;
-      const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 2;
-
-      // Kaydırılacak içerik yoksa okları gizle
-      prevBtn.style.display = canScroll ? '' : 'none';
-      nextBtn.style.display = canScroll ? '' : 'none';
-
-      prevBtn.disabled = atStart;
-      nextBtn.disabled = atEnd;
-    }
-
     function updateMeetingsBadge(count) {
       const badge = document.getElementById('meetingsBadgeCount');
       if (!badge) return;
@@ -4854,9 +4838,65 @@
     // Son yüklenen toplantı taleplerinin önbelleği (düzenleme modalı kimlikten veri bulmak için kullanır)
     let meetingsListCache = [];
 
+    // İnceleyenin, talep sahibinin talebini onaylayıp/reddedip edemeyeceğini belirler.
+    // Kural: İnceleyen kişi, talep edenden DAHA DÜŞÜK roldeyse butonlar KALKAR.
+    // Yani inceleyen, talep edene eşit veya ondan daha yüksek roldeyse butonlar görünür.
+    // (Örn. ekip lideri, müdürün talebini onaylayamaz/reddedemez.)
+    function canReviewMeeting(m) {
+      const canReviewRole = ['MANAGER', 'LEADER', 'ADMIN', 'HR'].includes(currentUser.role);
+      if (!canReviewRole) return false;
+      if (m.status !== 'PENDING') return false;
+
+      // Admin/İK, hiyerarşi dışıdır: tüm talepleri inceleyebilir
+      if (currentUser.role === 'ADMIN' || currentUser.role === 'HR') return true;
+
+      const reqIdx = ROLE_HIERARCHY.indexOf(m.requester_role);
+      const myIdx = ROLE_HIERARCHY.indexOf(currentUser.role);
+      if (reqIdx === -1 || myIdx === -1) return false;
+
+      // Index küçük = daha yüksek rol. İnceleyen (myIdx) talep edene (reqIdx) eşit veya
+      // daha yüksek rolde olmalı => myIdx <= reqIdx.
+      return myIdx <= reqIdx;
+    }
+
+    // Tek bir toplantı talebi kartını üretir (hem "Bekleyen" hem "Reddedilen" listesinde kullanılır)
+    function renderMeetingCard(m) {
+      const rolesText = m.target_roles
+        ? m.target_roles.split(',').map(r => ROLE_LABELS_TR[r.trim()] || r.trim()).join(', ')
+        : '';
+      const showReview = canReviewMeeting(m);
+      return `
+      <div class="bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
+        <div class="flex justify-between items-start gap-2 mb-1.5">
+          <div>
+            <div class="font-semibold text-sm text-slate-900 dark:text-slate-100">${m.subject}</div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400">${m.requester_name || '-'}${m.requester_role ? ' (' + (ROLE_LABELS_TR[m.requester_role] || m.requester_role) + ')' : ''}${m.department ? ' · ' + (DEPARTMENT_LABELS[m.department] || m.department) : ''}</div>
+            ${m.preferred_date ? `<div class="text-[11px] text-slate-500 dark:text-slate-400"><i class="fa-regular fa-calendar me-1"></i>${formatMeetingDate(m.preferred_date)}</div>` : ''}
+            ${rolesText ? `<div class="text-[11px] text-cyan-600 dark:text-cyan-400 mt-0.5"><i class="fa-solid fa-bell me-1"></i>Çağrılanlar: ${rolesText}</div>` : ''}
+          </div>
+          ${MEETING_STATUS_BADGES[m.status] || m.status}
+        </div>
+        ${m.description ? `<p class="text-xs text-slate-600 dark:text-slate-300 mb-2">${m.description}</p>` : ''}
+        ${m.review_comment ? `<p class="text-[11px] text-slate-400 italic mb-2">Not: ${m.review_comment}</p>` : ''}
+        ${showReview ? `
+          <div class="flex gap-2 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+            <button onclick="reviewMeetingRequest(${m.id}, 'APPROVED')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-1.5 rounded-xl transition-all shadow-md">Onayla</button>
+            <button onclick="reviewMeetingRequest(${m.id}, 'REJECTED')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold py-1.5 rounded-xl transition-all shadow-md">Reddet</button>
+            <button onclick="openEditMeetingModal(${m.id})" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all" title="İçeriği Düzenle"><i class="fa-solid fa-pen"></i></button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+    }
+
+    // Toplantı taleplerini "Bekleyen Yeni Talepler" ve "Reddedilen Talepler" olarak iki ayrı
+    // (aşağı açılır) panele doldurur.
     async function loadMeetings() {
-      const container = document.getElementById('meetingRequestsList');
-      if (!container) return;
+      const pendingList = document.getElementById('meetingPendingList');
+      const rejectedList = document.getElementById('meetingRejectedList');
+      const pendingCountEl = document.getElementById('meetingPendingCount');
+      const rejectedCountEl = document.getElementById('meetingRejectedCount');
+      if (!pendingList || !rejectedList) return;
 
       try {
         let url = `${API_BASE_URL}/api/meetings?userId=${currentUser.id}&role=${currentUser.role}`;
@@ -4867,75 +4907,29 @@
         const meetings = await res.json();
         meetingsListCache = Array.isArray(meetings) ? meetings : [];
 
-        if (!Array.isArray(meetings) || meetings.length === 0) {
-          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-6 w-full">Toplantı talebi bulunmuyor.</p>`;
-          updateMeetingsBadge(0);
-          if (typeof updateMeetingCarouselControls === 'function') updateMeetingCarouselControls();
-          return;
-        }
-
-        const canReviewRole = ['MANAGER', 'LEADER', 'ADMIN', 'HR'].includes(currentUser.role);
-        const pendingCount = meetings.filter(m => m.status === 'PENDING').length;
-        updateMeetingsBadge(pendingCount);
-
         // Tarihe göre en yeniden en eskiye sırala (tercih edilen tarih yoksa oluşturulma tarihine göre)
         const sortKey = (m) => m.preferred_date || m.created_at || '';
-        const sortedMeetings = [...meetings].sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+        const sortFn = (a, b) => sortKey(b).localeCompare(sortKey(a));
 
-        // İnceleyenin, talep sahibinin talebini onaylayıp/reddedip edemeyeceğini belirler.
-        // Kural: İnceleyen kişi, talep edenden DAHA DÜŞÜK roldeyse butonlar KALKAR.
-        // Yani inceleyen, talep edene eşit veya ondan daha yüksek roldeyse butonlar görünür.
-        // (Örn. ekip lideri, müdürün talebini onaylayamaz/reddedemez.)
-        function canReviewMeeting(m) {
-          if (!canReviewRole) return false;
-          if (m.status !== 'PENDING') return false;
+        const pending = meetingsListCache.filter(m => m.status === 'PENDING').sort(sortFn);
+        const rejected = meetingsListCache.filter(m => m.status === 'REJECTED').sort(sortFn);
 
-          // Admin/İK, hiyerarşi dışıdır: tüm talepleri inceleyebilir
-          if (currentUser.role === 'ADMIN' || currentUser.role === 'HR') return true;
+        updateMeetingsBadge(pending.length);
+        if (pendingCountEl) pendingCountEl.textContent = pending.length;
+        if (rejectedCountEl) rejectedCountEl.textContent = rejected.length;
 
-          const reqIdx = ROLE_HIERARCHY.indexOf(m.requester_role);
-          const myIdx = ROLE_HIERARCHY.indexOf(currentUser.role);
-          if (reqIdx === -1 || myIdx === -1) return false;
+        pendingList.innerHTML = pending.length > 0
+          ? pending.map(renderMeetingCard).join('')
+          : `<p class="text-xs text-slate-400 text-center py-4">Bekleyen talep bulunmuyor.</p>`;
 
-          // Index küçük = daha yüksek rol. İnceleyen (myIdx) talep edene (reqIdx) eşit veya
-          // daha yüksek rolde olmalı => myIdx <= reqIdx.
-          return myIdx <= reqIdx;
-        }
-
-        container.innerHTML = sortedMeetings.map(m => {
-          const rolesText = m.target_roles
-            ? m.target_roles.split(',').map(r => ROLE_LABELS_TR[r.trim()] || r.trim()).join(', ')
-            : '';
-          const showReview = canReviewMeeting(m);
-          return `
-          <div class="meeting-slide shrink-0 w-full sm:w-[calc(50%-0.375rem)] bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
-            <div class="flex justify-between items-start gap-2 mb-1.5">
-              <div>
-                <div class="font-semibold text-sm text-slate-900 dark:text-slate-100">${m.subject}</div>
-                <div class="text-[11px] text-slate-500 dark:text-slate-400">${m.requester_name || '-'}${m.requester_role ? ' (' + (ROLE_LABELS_TR[m.requester_role] || m.requester_role) + ')' : ''}${m.department ? ' · ' + (DEPARTMENT_LABELS[m.department] || m.department) : ''}</div>
-                ${m.preferred_date ? `<div class="text-[11px] text-slate-500 dark:text-slate-400"><i class="fa-regular fa-calendar me-1"></i>${formatMeetingDate(m.preferred_date)}</div>` : ''}
-                ${rolesText ? `<div class="text-[11px] text-cyan-600 dark:text-cyan-400 mt-0.5"><i class="fa-solid fa-bell me-1"></i>Çağrılanlar: ${rolesText}</div>` : ''}
-              </div>
-              ${MEETING_STATUS_BADGES[m.status] || m.status}
-            </div>
-            ${m.description ? `<p class="text-xs text-slate-600 dark:text-slate-300 mb-2">${m.description}</p>` : ''}
-            ${m.review_comment ? `<p class="text-[11px] text-slate-400 italic mb-2">Not: ${m.review_comment}</p>` : ''}
-            ${showReview ? `
-              <div class="flex gap-2 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                <button onclick="reviewMeetingRequest(${m.id}, 'APPROVED')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-1.5 rounded-xl transition-all shadow-md">Onayla</button>
-                <button onclick="reviewMeetingRequest(${m.id}, 'REJECTED')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold py-1.5 rounded-xl transition-all shadow-md">Reddet</button>
-                <button onclick="openEditMeetingModal(${m.id})" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all" title="İçeriği Düzenle"><i class="fa-solid fa-pen"></i></button>
-              </div>
-            ` : ''}
-          </div>
-        `;
-        }).join('');
-
-        // Kaydırma oklarının görünürlüğünü güncelle
-        if (typeof updateMeetingCarouselControls === 'function') updateMeetingCarouselControls();
+        rejectedList.innerHTML = rejected.length > 0
+          ? rejected.map(renderMeetingCard).join('')
+          : `<p class="text-xs text-slate-400 text-center py-4">Reddedilen talep bulunmuyor.</p>`;
       } catch (err) {
         console.error("Toplantı talepleri alınamadı:", err);
-        container.innerHTML = `<p class="text-xs text-rose-500 text-center py-6">Veriler yüklenirken hata oluştu.</p>`;
+        const errHtml = `<p class="text-xs text-rose-500 text-center py-4">Veriler yüklenirken hata oluştu.</p>`;
+        pendingList.innerHTML = errHtml;
+        rejectedList.innerHTML = errHtml;
       }
     }
 
@@ -6631,14 +6625,6 @@
         if (modal) modal.classList.remove('hidden');
         if (typeof populateMeetingTargetRoles === 'function') populateMeetingTargetRoles();
         if (typeof loadMeetings === 'function') loadMeetings();
-        const track = document.getElementById('meetingRequestsList');
-        if (track && !track.dataset.scrollBound) {
-          track.addEventListener('scroll', () => {
-            if (typeof updateMeetingCarouselControls === 'function') updateMeetingCarouselControls();
-          });
-          track.dataset.scrollBound = '1';
-        }
-        if (typeof updateMeetingCarouselControls === 'function') setTimeout(updateMeetingCarouselControls, 0);
       });
     }
 
@@ -6722,14 +6708,6 @@
         if (modal) modal.classList.remove('hidden');
         if (typeof populateMeetingTargetRoles === 'function') populateMeetingTargetRoles();
         if (typeof loadMeetings === 'function') loadMeetings();
-        const track = document.getElementById('meetingRequestsList');
-        if (track && !track.dataset.scrollBound) {
-          track.addEventListener('scroll', () => {
-            if (typeof updateMeetingCarouselControls === 'function') updateMeetingCarouselControls();
-          });
-          track.dataset.scrollBound = '1';
-        }
-        if (typeof updateMeetingCarouselControls === 'function') setTimeout(updateMeetingCarouselControls, 0);
       }, 'adminHomeSection');
     }
 
@@ -6789,14 +6767,6 @@
         if (modal) modal.classList.remove('hidden');
         if (typeof populateMeetingTargetRoles === 'function') populateMeetingTargetRoles();
         if (typeof loadMeetings === 'function') loadMeetings();
-        const track = document.getElementById('meetingRequestsList');
-        if (track && !track.dataset.scrollBound) {
-          track.addEventListener('scroll', () => {
-            if (typeof updateMeetingCarouselControls === 'function') updateMeetingCarouselControls();
-          });
-          track.dataset.scrollBound = '1';
-        }
-        if (typeof updateMeetingCarouselControls === 'function') setTimeout(updateMeetingCarouselControls, 0);
       }, 'engineerHomeSection');
     }
 
@@ -6848,14 +6818,6 @@
         const modal = document.getElementById('meetingsModal');
         if (modal) modal.classList.remove('hidden');
         if (typeof loadMeetings === 'function') loadMeetings();
-        const track = document.getElementById('meetingRequestsList');
-        if (track && !track.dataset.scrollBound) {
-          track.addEventListener('scroll', () => {
-            if (typeof updateMeetingCarouselControls === 'function') updateMeetingCarouselControls();
-          });
-          track.dataset.scrollBound = '1';
-        }
-        if (typeof updateMeetingCarouselControls === 'function') setTimeout(updateMeetingCarouselControls, 0);
       }, 'technicianHomeSection');
     }
 
