@@ -2,6 +2,7 @@ const express = require('express');
 const { createClient } = require('@libsql/client');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const path = require('path');
 const gcal = require('./googleCalendar');
 
@@ -32,7 +33,13 @@ async function initDbMigration() {
     { name: 'google_refresh_token', type: 'TEXT' },
     { name: 'google_calendar_connected', type: 'INTEGER DEFAULT 0' },
     // Stajyerin sorumlu olduğu mühendis (birimindeki mühendislerden seçilir)
-    { name: 'engineer_id', type: 'INTEGER' }
+    { name: 'engineer_id', type: 'INTEGER' },
+    // Şifre sıfırlama akışı: e-postaya gönderilen doğrulama kodu ve kod doğrulandıktan
+    // sonra son adımda (yeni şifre belirleme) kullanılan tek seferlik jeton
+    { name: 'reset_code', type: 'TEXT' },
+    { name: 'reset_code_expires', type: 'TEXT' },
+    { name: 'reset_token', type: 'TEXT' },
+    { name: 'reset_token_expires', type: 'TEXT' }
   ];
 
   for (const col of columnsToAdd) {
@@ -753,18 +760,145 @@ app.patch('/api/users/:id/approve', async (req, res) => {
 });
 
 // Şifre Sıfırlama
-app.post('/api/reset-password', async (req, res) => {
+// --- ŞİFRE SIFIRLAMA (3 adım: kullanıcı adı+e-posta doğrula -> e-postaya kod gönder ->
+//     kodu doğrula -> yeni şifreyi kaydet) ---
+
+// Doğrulama kodu e-postasını Brevo üzerinden gönderir; mevcut görev bildirimi e-postalarıyla
+// aynı gönderici/şablon dilini kullanır.
+async function sendPasswordResetCodeEmail(toEmail, toName, code) {
+  const companyLogoUrl = "https://i.ibb.co/xtFPW7KP/Y-logo.png";
+  await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': process.env.BREVO_API_KEY,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { name: "Görev & Takip Sistemi", email: "semresahann@gmail.com" },
+      to: [{ email: toEmail, name: toName }],
+      subject: `Şifre Sıfırlama Doğrulama Kodu: ${code}`,
+      htmlContent: `
+        <div style="background-color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 20px; color: #0f172a;">
+          <div style="max-width: 480px; margin: 0 auto; background-color: #0f172a; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px; text-align: center;">
+            <img src="${companyLogoUrl}" alt="Logo" style="height: 44px; width: auto; margin-bottom: 16px;" />
+            <h2 style="color: #0284c7; margin: 0 0 12px; font-size: 18px; font-weight: 700;">Şifre Sıfırlama Talebi</h2>
+            <p style="font-size: 14px; line-height: 1.6; color: #ffffff; margin-bottom: 20px;">
+              Merhaba <strong style="color: #38bdf8;">${toName}</strong>, şifrenizi sıfırlamak için aşağıdaki doğrulama kodunu kullanın:
+            </p>
+            <div style="background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; font-size: 32px; letter-spacing: 8px; font-weight: 700; color: #38bdf8; margin-bottom: 20px;">
+              ${code}
+            </div>
+            <p style="font-size: 12px; color: #94a3b8; margin: 0;">Bu kod 10 dakika içinde geçerliliğini yitirir. Bu talebi siz oluşturmadıysanız bu e-postayı yok sayabilirsiniz.</p>
+          </div>
+        </div>
+      `
+    })
+  });
+}
+
+// ADIM 1: Kullanıcı adı + e-posta veritabanında eşleşiyor mu kontrol edilir; eşleşiyorsa
+// e-postaya 6 haneli doğrulama kodu gönderilir.
+app.post('/api/password-reset/request', async (req, res) => {
   try {
-    const { email, newPassword } = req.body;
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const { username, email } = req.body;
+    if (!username || !email) return res.status(400).json({ error: 'Kullanıcı adı ve e-posta gereklidir.' });
 
     const result = await db.execute({
-      sql: `UPDATE users SET password = ? WHERE email = ?`,
-      args: [hashedPassword, email]
+      sql: `SELECT id, name, email FROM users WHERE username = ? AND email = ?`,
+      args: [username.trim(), email.trim()]
+    });
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Bu kullanıcı adı ve e-posta eşleşen bir hesap bulunamadı.' });
+    }
+    const user = result.rows[0];
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    await db.execute({
+      sql: `UPDATE users SET reset_code = ?, reset_code_expires = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?`,
+      args: [code, expires, user.id]
     });
 
-    if (result.rowsAffected === 0) return res.status(400).json({ error: 'Kullanıcı bulunamadı.' });
-    res.json({ message: 'Şifre güncellendi.' });
+    try {
+      await sendPasswordResetCodeEmail(user.email, user.name, code);
+    } catch (mailErr) {
+      console.error('Doğrulama kodu e-postası gönderilemedi:', mailErr.message);
+      return res.status(500).json({ error: 'Doğrulama kodu gönderilemedi. Lütfen daha sonra tekrar deneyin.' });
+    }
+
+    res.json({ message: 'Doğrulama kodu e-posta adresinize gönderildi.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
+  }
+});
+
+// ADIM 2: E-postaya gönderilen kod doğrulanır; başarılıysa tek seferlik, kısa ömürlü bir
+// jeton üretilir (kod tekrar kullanılamasın diye temizlenir) — son adımda bu jeton istenir.
+app.post('/api/password-reset/verify-code', async (req, res) => {
+  try {
+    const { username, email, code } = req.body;
+    if (!username || !email || !code) return res.status(400).json({ error: 'Kod gereklidir.' });
+
+    const result = await db.execute({
+      sql: `SELECT id, reset_code, reset_code_expires FROM users WHERE username = ? AND email = ?`,
+      args: [username.trim(), email.trim()]
+    });
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Hesap bulunamadı.' });
+    const user = result.rows[0];
+
+    if (!user.reset_code || user.reset_code !== String(code).trim()) {
+      return res.status(400).json({ error: 'Doğrulama kodu hatalı.' });
+    }
+    if (!user.reset_code_expires || new Date(user.reset_code_expires).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Doğrulama kodunun süresi doldu. Lütfen tekrar kod isteyin.' });
+    }
+
+    const token = crypto.randomBytes(24).toString('hex');
+    const tokenExpires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    await db.execute({
+      sql: `UPDATE users SET reset_code = NULL, reset_code_expires = NULL, reset_token = ?, reset_token_expires = ? WHERE id = ?`,
+      args: [token, tokenExpires, user.id]
+    });
+
+    res.json({ token });
+  } catch (error) {
+    res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
+  }
+});
+
+// ADIM 3: ADIM 2'den alınan jeton ile yeni şifre kaydedilir.
+app.post('/api/password-reset/complete', async (req, res) => {
+  try {
+    const { username, email, token, newPassword } = req.body;
+    if (!username || !email || !token || !newPassword) {
+      return res.status(400).json({ error: 'Eksik bilgi.' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Şifre en az 6 karakter olmalıdır.' });
+    }
+
+    const result = await db.execute({
+      sql: `SELECT id, reset_token, reset_token_expires FROM users WHERE username = ? AND email = ?`,
+      args: [username.trim(), email.trim()]
+    });
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Hesap bulunamadı.' });
+    const user = result.rows[0];
+
+    if (!user.reset_token || user.reset_token !== token) {
+      return res.status(400).json({ error: 'Doğrulama oturumu geçersiz. Lütfen baştan başlayın.' });
+    }
+    if (!user.reset_token_expires || new Date(user.reset_token_expires).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Doğrulama oturumunun süresi doldu. Lütfen baştan başlayın.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.execute({
+      sql: `UPDATE users SET password = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?`,
+      args: [hashedPassword, user.id]
+    });
+
+    res.json({ message: 'Şifreniz başarıyla güncellendi.' });
   } catch (error) {
     res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
   }
@@ -1197,11 +1331,18 @@ app.delete('/api/admin/users/:id', async (req, res) => {
 
     // İlişkili tüm kayıtları sırasıyla temizle (foreign key hatası almamak için)
     for (const taskId of taskIds) {
+      await removeTaskFromGoogle(taskId); // Google Takvim etkinliğini de temizle
       await db.execute({ sql: `DELETE FROM task_revisions WHERE task_id = ?`, args: [taskId] });
     }
     await db.execute({ sql: `DELETE FROM daily_logs WHERE intern_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM tasks WHERE assigned_to = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM meeting_requests WHERE requested_by = ?`, args: [userId] });
+    await db.execute({ sql: `DELETE FROM notifications WHERE user_id = ?`, args: [userId] });
+    await db.execute({ sql: `DELETE FROM attendance_logs WHERE intern_id = ?`, args: [userId] });
+    // Sahip olduğu projeler silinmez, sadece sorumlu kişi bağlantısı kaldırılır
+    await db.execute({ sql: `UPDATE projects SET owner_id = NULL WHERE owner_id = ?`, args: [userId] });
+    // Bu kişiyi sorumlu mühendis olarak gösteren stajyerlerin bağlantısı temizlenir
+    await db.execute({ sql: `UPDATE users SET engineer_id = NULL WHERE engineer_id = ?`, args: [userId] });
 
     const result = await db.execute({
       sql: `DELETE FROM users WHERE id = ?`,
@@ -1508,6 +1649,12 @@ app.delete('/api/users/:id', async (req, res) => {
     await db.execute({ sql: `DELETE FROM daily_logs WHERE intern_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM tasks WHERE assigned_to = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM meeting_requests WHERE requested_by = ?`, args: [userId] });
+    await db.execute({ sql: `DELETE FROM notifications WHERE user_id = ?`, args: [userId] });
+    await db.execute({ sql: `DELETE FROM attendance_logs WHERE intern_id = ?`, args: [userId] });
+    // Sahip olduğu projeler silinmez, sadece sorumlu kişi bağlantısı kaldırılır
+    await db.execute({ sql: `UPDATE projects SET owner_id = NULL WHERE owner_id = ?`, args: [userId] });
+    // Bu kişiyi sorumlu mühendis olarak gösteren stajyerlerin bağlantısı temizlenir
+    await db.execute({ sql: `UPDATE users SET engineer_id = NULL WHERE engineer_id = ?`, args: [userId] });
     const result = await db.execute({ sql: `DELETE FROM users WHERE id = ?`, args: [userId] });
 
     if (result.rowsAffected === 0) return res.status(404).json({ error: 'Silinecek kullanıcı bulunamadı.' });
@@ -1552,8 +1699,18 @@ app.delete('/api/users/profile', async (req, res) => {
       return res.status(400).json({ error: 'Kullanıcı ID eksik!' });
     }
 
+    const ownTasksResult = await db.execute({ sql: `SELECT id FROM tasks WHERE assigned_to = ?`, args: [userId] });
+    for (const t of ownTasksResult.rows) {
+      await removeTaskFromGoogle(t.id); // Google Takvim etkinliğini de temizle
+      await db.execute({ sql: `DELETE FROM task_revisions WHERE task_id = ?`, args: [t.id] });
+    }
     await db.execute({ sql: `DELETE FROM daily_logs WHERE intern_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM tasks WHERE assigned_to = ?`, args: [userId] });
+    await db.execute({ sql: `DELETE FROM meeting_requests WHERE requested_by = ?`, args: [userId] });
+    await db.execute({ sql: `DELETE FROM notifications WHERE user_id = ?`, args: [userId] });
+    await db.execute({ sql: `DELETE FROM attendance_logs WHERE intern_id = ?`, args: [userId] });
+    await db.execute({ sql: `UPDATE projects SET owner_id = NULL WHERE owner_id = ?`, args: [userId] });
+    await db.execute({ sql: `UPDATE users SET engineer_id = NULL WHERE engineer_id = ?`, args: [userId] });
     const result = await db.execute({ sql: `DELETE FROM users WHERE id = ?`, args: [userId] });
 
     if (result.rowsAffected === 0) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });

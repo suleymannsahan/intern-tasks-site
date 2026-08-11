@@ -2021,15 +2021,48 @@
   <div id="resetModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
     <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
       <h3 class="font-bold text-lg mb-2">Şifre Sıfırlama</h3>
-      <p class="text-xs text-slate-400 mb-4">E-posta adresinizi girerek yeni şifrenizi belirleyin.</p>
-      <form onsubmit="handleResetPassword(event)" class="space-y-3">
-        <input type="email" id="resetEmail" placeholder="E-Posta" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
-        <input type="password" id="resetNewPass" placeholder="Yeni Şifre" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" onclick="closeResetModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-xs rounded-xl">İptal</button>
-          <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-xs rounded-xl text-white font-semibold">Güncelle</button>
-        </div>
-      </form>
+
+      <!-- ADIM 1: Kullanıcı adı + e-posta doğrulama -->
+      <div id="resetStep1">
+        <p class="text-xs text-slate-400 mb-4">Kullanıcı adınızı ve e-posta adresinizi girin; hesabınız eşleşirse e-postanıza bir doğrulama kodu göndereceğiz.</p>
+        <form onsubmit="handleResetRequestCode(event)" class="space-y-3">
+          <input type="text" id="resetUsername" placeholder="Kullanıcı Adı" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+          <input type="email" id="resetEmail" placeholder="E-Posta" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" onclick="closeResetModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-xs rounded-xl">İptal</button>
+            <button type="submit" id="resetStep1Btn" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-xs rounded-xl text-white font-semibold">Kod Gönder</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- ADIM 2: E-postaya gelen doğrulama kodu -->
+      <div id="resetStep2" class="hidden">
+        <p class="text-xs text-slate-400 mb-4"><span id="resetStep2Email" class="font-semibold text-slate-600 dark:text-slate-300"></span> adresine gönderdiğimiz 6 haneli kodu girin.</p>
+        <form onsubmit="handleResetVerifyCode(event)" class="space-y-3">
+          <input type="text" id="resetCode" placeholder="6 Haneli Kod" required maxlength="6" inputmode="numeric" pattern="[0-9]{6}" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-center tracking-[0.5em] font-bold">
+          <div class="flex justify-between items-center">
+            <button type="button" onclick="handleResetRequestCode(null, true)" class="text-[11px] text-cyan-600 dark:text-cyan-400 hover:underline">Kodu tekrar gönder</button>
+            <button type="button" onclick="resetToStep(1)" class="text-[11px] text-slate-400 hover:underline">Geri dön</button>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" onclick="closeResetModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-xs rounded-xl">İptal</button>
+            <button type="submit" id="resetStep2Btn" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-xs rounded-xl text-white font-semibold">Kodu Doğrula</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- ADIM 3: Yeni şifre (2 kez) -->
+      <div id="resetStep3" class="hidden">
+        <p class="text-xs text-slate-400 mb-4">Kimliğiniz doğrulandı. Yeni şifrenizi belirleyin.</p>
+        <form onsubmit="handleResetComplete(event)" class="space-y-3">
+          <input type="password" id="resetNewPass" placeholder="Yeni Şifre" required minlength="6" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+          <input type="password" id="resetNewPassConfirm" placeholder="Yeni Şifre (Tekrar)" required minlength="6" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" onclick="closeResetModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-xs rounded-xl">İptal</button>
+            <button type="submit" id="resetStep3Btn" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-xs rounded-xl text-white font-semibold">Şifreyi Güncelle</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 
@@ -5673,7 +5706,10 @@
       }
     }
 
-    function openResetModal() { document.getElementById('resetModal').classList.remove('hidden'); }
+    function openResetModal() {
+      document.getElementById('resetModal').classList.remove('hidden');
+      resetToStep(1);
+    }
     function closeResetModal() { document.getElementById('resetModal').classList.add('hidden'); }
     function closeLogModal() { document.getElementById('logModal').classList.add('hidden'); }
     function closeRevisionModal() { document.getElementById('revisionModal').classList.add('hidden'); }
@@ -5924,20 +5960,121 @@
       if (typeof finishPostLoginIntroFn === 'function') finishPostLoginIntroFn();
     }
 
-    async function handleResetPassword(e) {
-      e.preventDefault();
-      const email = document.getElementById('resetEmail').value;
-      const newPassword = document.getElementById('resetNewPass').value;
+    // Şifre sıfırlama akışı: adım 2'de doğrulanan kod karşılığında alınan jetonu, adım 3
+    // tamamlanana kadar bellekte tutar (kalıcı depoya yazılmaz).
+    let resetVerifiedToken = null;
 
-      const res = await fetch(`${API_BASE_URL}/api/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, newPassword })
+    // Modaldaki 3 adımdan birini gösterir, diğerlerini gizler
+    function resetToStep(step) {
+      [1, 2, 3].forEach(n => {
+        const el = document.getElementById(`resetStep${n}`);
+        if (el) el.classList.toggle('hidden', n !== step);
       });
+      if (step === 1) {
+        resetVerifiedToken = null;
+        const codeEl = document.getElementById('resetCode');
+        if (codeEl) codeEl.value = '';
+      }
+    }
 
-      if (res.ok) {
-        alert("Şifreniz güncellendi!");
+    // ADIM 1 (ve "Kodu tekrar gönder"): kullanıcı adı + e-posta doğrulanır, koda gönderilir
+    async function handleResetRequestCode(e, isResend) {
+      if (e) e.preventDefault();
+      const username = document.getElementById('resetUsername').value.trim();
+      const email = document.getElementById('resetEmail').value.trim();
+      if (!username || !email) return;
+
+      const btn = document.getElementById(isResend ? null : 'resetStep1Btn');
+      if (btn) { btn.disabled = true; btn.innerText = 'Gönderiliyor...'; }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/password-reset/request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { alert(data.error || 'Kod gönderilemedi.'); return; }
+
+        const emailLabel = document.getElementById('resetStep2Email');
+        if (emailLabel) emailLabel.innerText = email;
+        resetToStep(2);
+        if (isResend) alert('Doğrulama kodu tekrar gönderildi.');
+      } catch (err) {
+        alert('Sunucuya bağlanırken bir sorun oluştu.');
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = 'Kod Gönder'; }
+      }
+    }
+
+    // ADIM 2: E-postaya gelen kod doğrulanır; başarılıysa adım 3'e geçilir
+    async function handleResetVerifyCode(e) {
+      e.preventDefault();
+      const username = document.getElementById('resetUsername').value.trim();
+      const email = document.getElementById('resetEmail').value.trim();
+      const code = document.getElementById('resetCode').value.trim();
+
+      const btn = document.getElementById('resetStep2Btn');
+      if (btn) { btn.disabled = true; btn.innerText = 'Doğrulanıyor...'; }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/password-reset/verify-code`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, code })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { alert(data.error || 'Kod doğrulanamadı.'); return; }
+
+        resetVerifiedToken = data.token;
+        resetToStep(3);
+      } catch (err) {
+        alert('Sunucuya bağlanırken bir sorun oluştu.');
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = 'Kodu Doğrula'; }
+      }
+    }
+
+    // ADIM 3: Yeni şifre iki kez alınır, eşleşiyorsa jetonla birlikte sunucuya gönderilir
+    async function handleResetComplete(e) {
+      e.preventDefault();
+      const username = document.getElementById('resetUsername').value.trim();
+      const email = document.getElementById('resetEmail').value.trim();
+      const newPassword = document.getElementById('resetNewPass').value;
+      const newPasswordConfirm = document.getElementById('resetNewPassConfirm').value;
+
+      if (newPassword !== newPasswordConfirm) {
+        alert('Girdiğiniz şifreler birbiriyle eşleşmiyor.');
+        return;
+      }
+      if (!resetVerifiedToken) {
+        alert('Doğrulama oturumu bulunamadı. Lütfen baştan başlayın.');
+        resetToStep(1);
+        return;
+      }
+
+      const btn = document.getElementById('resetStep3Btn');
+      if (btn) { btn.disabled = true; btn.innerText = 'Kaydediliyor...'; }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/password-reset/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, token: resetVerifiedToken, newPassword })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { alert(data.error || 'Şifre güncellenemedi.'); return; }
+
+        alert('Şifreniz başarıyla güncellendi! Yeni şifrenizle giriş yapabilirsiniz.');
         closeResetModal();
+        document.getElementById('resetUsername').value = '';
+        document.getElementById('resetEmail').value = '';
+        document.getElementById('resetNewPass').value = '';
+        document.getElementById('resetNewPassConfirm').value = '';
+      } catch (err) {
+        alert('Sunucuya bağlanırken bir sorun oluştu.');
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = 'Şifreyi Güncelle'; }
       }
     }
 
@@ -7221,6 +7358,10 @@
       const subRoles = getSubordinateRoles(currentUser.role);
 
       const relevant = (tasksList || []).filter(t => {
+        // Mühendis için "Görevler" listesi yalnızca kendisine ait görevleri gösterir,
+        // teknisyen/stajyer gibi başkalarının görevlerini değil.
+        if (currentUser.role === 'ENGINEER') return t.assigned_to == currentUser.id;
+
         const arole = getAssigneeRole(t);
         // Belirli bir rol seçiliyse sadece o roldeki (kendi biriminde altındaki) kişilerin görevleri
         if (leaderTasksRoleFilterValue) return arole === leaderTasksRoleFilterValue;
