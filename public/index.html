@@ -7142,12 +7142,21 @@
       closeNotificationsPanel();
       renderNotificationsPanel();
       refreshNotifBoxBadges();
+      const aiBtn = document.getElementById('aiChatWidgetBtn');
+      const aiPanel = document.getElementById('aiChatPanel');
+      if (aiBtn) aiBtn.classList.add('hidden');
+      if (aiPanel) aiPanel.classList.add('hidden');
+      aiChatHistory = [];
+      const aiMsgBox = document.getElementById('aiChatMessages');
+      if (aiMsgBox) aiMsgBox.innerHTML = '';
     }
 
     async function showDashboard() {
       // Ekran geçişleri
       document.getElementById('authContainer').classList.add('hidden');
       document.getElementById('dashboardContainer').classList.remove('hidden');
+      const aiBtn = document.getElementById('aiChatWidgetBtn');
+      if (aiBtn) aiBtn.classList.remove('hidden');
 
       // Ad Soyad Yazdır
       document.getElementById('userInfoName').innerText = currentUser.name;
@@ -9248,6 +9257,8 @@
           </div>
         </div>
 
+        ${renderIsPlaniSection(task)}
+
         ${internButtons}
         ${managerReviewButtons}
       `;
@@ -9258,6 +9269,193 @@
     function closeTaskDetailModal() {
       const m = document.getElementById('taskDetailModal');
       if (m) m.classList.add('hidden');
+    }
+
+    // ============================================================
+    // AKILLI İŞ PLANI (yapay zeka destekli 6 aşamalı iş planı) — görev detayında gösterilir.
+    // Oluşturma/güncelleme/sıfırlama: ADMIN, MANAGER, LEADER, ENGINEER. Aşama tamamlama: göreve
+    // atanan kişi. Aşama onaylama/reddetme: görevi veren kişi ya da yönetici rolleri.
+    // ============================================================
+    const IS_PLANI_YETKILI_ROLLER = ['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'];
+    const IS_PLANI_DURUM_ETIKET = {
+      bekliyor: { label: 'Bekliyor', cls: 'bg-slate-500/10 text-slate-500 border-slate-500/30' },
+      devam: { label: 'Devam Ediyor', cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
+      onay_bekliyor: { label: 'Onay Bekliyor', cls: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/30' },
+      bitti: { label: 'Tamamlandı', cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' }
+    };
+
+    function renderIsPlaniSection(task) {
+      const canManage = IS_PLANI_YETKILI_ROLLER.includes(currentUser.role);
+      const isAssignee = task.assigned_to === currentUser.id;
+      if (!canManage && !isAssignee) return '';
+
+      if (!task.is_plani) {
+        if (!canManage) return '';
+        const bugun = new Date().toISOString().substring(0, 10);
+        const bitisVarsayilan = /^\d{4}-\d{2}-\d{2}$/.test(task.end_date || '') ? task.end_date : '';
+        return `
+          <div class="bg-violet-500/5 border border-violet-300 dark:border-violet-900/40 rounded-xl p-4">
+            <div class="text-xs font-bold text-violet-600 dark:text-violet-300 mb-2"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Akıllı İş Planı</div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">Bu görev için yapay zekâ destekli 6 aşamalı bir iş planı oluşturabilirsiniz (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon).</p>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+              <select id="isPlaniKategori" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+                <option value="1">Küçük (3 ay)</option>
+                <option value="2">Orta (4 ay)</option>
+                <option value="3">Büyük (5 ay)</option>
+                <option value="4">Çok Büyük (6 ay)</option>
+              </select>
+              <input type="date" id="isPlaniDokumanTarihi" value="${bugun}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              <input type="date" id="isPlaniBitisTarihi" value="${bitisVarsayilan}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+            </div>
+            <button onclick="handleGenerateIsPlani(${task.id})" class="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
+              <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Plan Oluştur
+            </button>
+          </div>
+        `;
+      }
+
+      let plan;
+      try { plan = JSON.parse(task.is_plani); } catch (e) { return ''; }
+      const adimlar = plan.adimlar || [];
+
+      const stagesHtml = adimlar.map((a, i) => {
+        const durum = a.durum || 'bekliyor';
+        const etiket = IS_PLANI_DURUM_ETIKET[durum] || IS_PLANI_DURUM_ETIKET.bekliyor;
+        const oncekiBitti = (i === 0) || (adimlar[i - 1] && adimlar[i - 1].durum === 'bitti');
+
+        let actionHtml = '';
+        if (durum === 'onay_bekliyor') {
+          const yoneticiRol = ['ADMIN', 'MANAGER', 'LEADER'].includes(currentUser.role);
+          const onaylayabilir = currentUser.name === task.created_by || yoneticiRol;
+          if (onaylayabilir) {
+            actionHtml = `
+              <div class="flex gap-1.5 mt-2">
+                <button onclick="handleIsPlaniStageAction(${task.id}, ${i}, 'onayla')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold py-1.5 rounded-lg">Onayla</button>
+                <button onclick="handleIsPlaniStageAction(${task.id}, ${i}, 'reddet')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold py-1.5 rounded-lg">Reddet</button>
+              </div>
+            `;
+          }
+        } else if ((durum === 'bekliyor' || durum === 'devam') && oncekiBitti && isAssignee) {
+          actionHtml = `
+            <button onclick="handleIsPlaniStageAction(${task.id}, ${i}, 'bitir')" class="mt-2 w-full bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-semibold py-1.5 rounded-lg">
+              <i class="fa-solid fa-check me-1"></i> Aşamayı Tamamladım
+            </button>
+          `;
+        }
+
+        return `
+          <div class="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold text-slate-700 dark:text-slate-200">${i + 1}. ${a.ad}</span>
+              <span class="px-2 py-0.5 text-[10px] rounded-md font-bold border ${etiket.cls}">${etiket.label}</span>
+            </div>
+            <div class="text-[10px] text-slate-400 mt-1">${a.baslangic} → ${a.bitis} (${a.gun} gün)</div>
+            ${a.aciklama ? `<div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic">${a.aciklama}</div>` : ''}
+            ${actionHtml}
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="bg-violet-500/5 border border-violet-300 dark:border-violet-900/40 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-xs font-bold text-violet-600 dark:text-violet-300"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Akıllı İş Planı</div>
+            ${IS_PLANI_YETKILI_ROLLER.includes(currentUser.role) ? `
+              <div class="flex gap-1.5">
+                <button onclick="handleIsPlaniGuncelle(${task.id})" class="text-[10px] text-cyan-600 dark:text-cyan-400 font-semibold hover:underline">Bitişi Güncelle</button>
+                <button onclick="handleIsPlaniSifirla(${task.id})" class="text-[10px] text-rose-500 font-semibold hover:underline">Sıfırla</button>
+              </div>
+            ` : ''}
+          </div>
+          <div class="space-y-2">${stagesHtml}</div>
+        </div>
+      `;
+    }
+
+    async function handleGenerateIsPlani(taskId) {
+      const task = (tasksList || []).find(t => t.id == taskId);
+      if (!task) return;
+      const kategori = document.getElementById('isPlaniKategori').value;
+      const dokumanTarihi = document.getElementById('isPlaniDokumanTarihi').value;
+      const bitisTarihi = document.getElementById('isPlaniBitisTarihi').value;
+      if (!dokumanTarihi || !bitisTarihi) { alert('Döküman ve bitiş tarihini seçiniz.'); return; }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/is-plani`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kartIsmi: task.title, kategori, dokumanTarihi, bitisTarihi, userRole: currentUser.role })
+        });
+        const plan = await res.json();
+        if (!res.ok) { alert('Hata: ' + (plan.error || 'Plan oluşturulamadı.')); return; }
+
+        const saveRes = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-kaydet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan, userRole: currentUser.role })
+        });
+        if (!saveRes.ok) { const d = await saveRes.json(); alert('Hata: ' + (d.error || 'Plan kaydedilemedi.')); return; }
+
+        await loadTasks();
+        openTaskDetailModal(taskId);
+      } catch (err) {
+        console.error('İş planı oluşturma hatası:', err);
+        alert('İş planı oluşturulurken bir hata oluştu.');
+      }
+    }
+
+    async function handleIsPlaniStageAction(taskId, asamaIndex, islem) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/asama-durum`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            asamaIndex, islem, kullanici: currentUser.name,
+            userId: currentUser.id, userRole: currentUser.role
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert('Hata: ' + (data.error || 'İşlem yapılamadı.')); return; }
+        await loadTasks();
+        openTaskDetailModal(taskId);
+      } catch (err) {
+        console.error('Aşama durumu hatası:', err);
+        alert('Aşama durumu güncellenirken bir hata oluştu.');
+      }
+    }
+
+    async function handleIsPlaniSifirla(taskId) {
+      if (!confirm('İş planını sıfırlamak istediğinize emin misiniz? (Geçmiş kayıtlara dokunulmaz)')) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-sil`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userRole: currentUser.role })
+        });
+        if (!res.ok) { const d = await res.json(); alert('Hata: ' + (d.error || 'Sıfırlanamadı.')); return; }
+        await loadTasks();
+        openTaskDetailModal(taskId);
+      } catch (err) {
+        console.error('İş planı sıfırlama hatası:', err);
+      }
+    }
+
+    async function handleIsPlaniGuncelle(taskId) {
+      const yeniBitis = prompt('Yeni bitiş tarihini girin (YYYY-AA-GG):');
+      if (!yeniBitis) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-guncelle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ yeniBitis, userRole: currentUser.role })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert('Hata: ' + (data.error || 'Güncellenemedi.')); return; }
+        await loadTasks();
+        openTaskDetailModal(taskId);
+      } catch (err) {
+        console.error('İş planı güncelleme hatası:', err);
+      }
     }
 
     async function completeTask(taskId) {
@@ -10003,6 +10201,101 @@
       // currentUser hazırsa durum sorgusunu geciktirerek çalıştır
       setTimeout(() => { if (typeof refreshGoogleCalendarStatus === 'function') refreshGoogleCalendarStatus(); }, 500);
     })();
+
+    // ============================================================
+    // GÖREV ASİSTANI (yapay zeka sohbet balonu) — giriş yapıldığında görünür, tüm rollerde
+    // kullanılabilir. Kullanıcının görebildiği görevleri bağlam alır (/api/chatbot).
+    // ============================================================
+    let aiChatHistory = [];
+    let aiChatBusy = false;
+
+    function toggleAiChatWidget() {
+      const panel = document.getElementById('aiChatPanel');
+      if (!panel) return;
+      panel.classList.toggle('hidden');
+      if (!panel.classList.contains('hidden')) {
+        const input = document.getElementById('aiChatInput');
+        if (input) input.focus();
+      }
+    }
+
+    function appendAiChatBubble(role, text) {
+      const box = document.getElementById('aiChatMessages');
+      if (!box) return;
+      const bubble = document.createElement('div');
+      bubble.className = role === 'user'
+        ? 'ml-auto max-w-[85%] bg-cyan-600 text-white text-xs rounded-2xl rounded-br-sm px-3 py-2 whitespace-pre-wrap break-words'
+        : 'mr-auto max-w-[85%] bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-xs rounded-2xl rounded-bl-sm px-3 py-2 whitespace-pre-wrap break-words';
+      bubble.innerText = text;
+      box.appendChild(bubble);
+      box.scrollTop = box.scrollHeight;
+      return bubble;
+    }
+
+    async function sendAiChatMessage() {
+      if (aiChatBusy) return;
+      const input = document.getElementById('aiChatInput');
+      const message = (input.value || '').trim();
+      if (!message) return;
+      input.value = '';
+
+      appendAiChatBubble('user', message);
+      const typingBubble = appendAiChatBubble('assistant', 'Yazıyor...');
+      aiChatBusy = true;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/chatbot`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            role: currentUser.role,
+            department: currentUser.department,
+            message,
+            history: aiChatHistory
+          })
+        });
+        const data = await res.json();
+        const reply = res.ok ? (data.reply || 'Üzgünüm, bir yanıt üretemedim.') : ('Hata: ' + (data.error || 'Asistan şu anda kullanılamıyor.'));
+        typingBubble.innerText = reply;
+        aiChatHistory.push({ role: 'user', content: message });
+        aiChatHistory.push({ role: 'assistant', content: reply });
+        if (aiChatHistory.length > 16) aiChatHistory = aiChatHistory.slice(-16);
+      } catch (err) {
+        console.error('Görev asistanı hatası:', err);
+        typingBubble.innerText = 'Asistana ulaşılamadı. Lütfen daha sonra tekrar deneyin.';
+      } finally {
+        aiChatBusy = false;
+        const box = document.getElementById('aiChatMessages');
+        if (box) box.scrollTop = box.scrollHeight;
+      }
+    }
+
+    function handleAiChatKeydown(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendAiChatMessage();
+      }
+    }
   </script>
+
+  <!-- Görev Asistanı: sabit konumlu sohbet balonu (giriş yapılınca görünür olur) -->
+  <button id="aiChatWidgetBtn" onclick="toggleAiChatWidget()" class="hidden fixed bottom-5 right-5 z-[70] w-14 h-14 rounded-full bg-gradient-to-br from-cyan-600 to-violet-600 text-white shadow-2xl flex items-center justify-center hover:scale-105 transition-transform" title="Görev Asistanı">
+    <i class="fa-solid fa-robot text-xl"></i>
+  </button>
+
+  <div id="aiChatPanel" class="hidden fixed bottom-24 right-5 z-[70] w-80 sm:w-96 max-w-[92vw] h-[28rem] max-h-[75vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-cyan-600 to-violet-600 text-white">
+      <div class="flex items-center gap-2 text-sm font-bold"><i class="fa-solid fa-robot"></i> Görev Asistanı</div>
+      <button onclick="toggleAiChatWidget()" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="aiChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
+    <div class="p-2.5 border-t border-slate-200 dark:border-slate-800 flex items-end gap-2">
+      <textarea id="aiChatInput" onkeydown="handleAiChatKeydown(event)" rows="1" placeholder="Görevlerinizle ilgili bir şey sorun..." class="flex-1 resize-none bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-cyan-500"></textarea>
+      <button onclick="sendAiChatMessage()" class="w-9 h-9 shrink-0 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white flex items-center justify-center">
+        <i class="fa-solid fa-paper-plane text-xs"></i>
+      </button>
+    </div>
+  </div>
 </body>
 </html>

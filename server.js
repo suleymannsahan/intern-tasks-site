@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const path = require('path');
 const gcal = require('./googleCalendar');
+const ai = require('./ai');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -346,6 +347,7 @@ async function initDb() {
 }
 
 initDb();
+ai.initAiSchema(db);
 
 // ============================================================
 // BİLDİRİM YARDIMCILARI
@@ -1223,6 +1225,9 @@ app.post('/api/tasks', async (req, res) => {
 const isAdmin = (role) => role === 'ADMIN' || role === 'HR';
 // Firma/Proje yönetiminde kendi biriminle sınırlı erişimi olan roller (Müdür, Ekip Lideri)
 const isDeptLockedRole = (role) => role === 'MANAGER' || role === 'LEADER';
+
+// Yapay zeka özellikleri (Akıllı İş Planı, Görev Asistanı, Genel Asistan) — ai.js içinde, izole.
+app.use('/api', ai.createAiRouter(db, { isAdmin }));
 
 // --- SİSTEM AYARLARI ---
 
