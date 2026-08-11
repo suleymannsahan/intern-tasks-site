@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Görev & Takip Paneli</title>
+  <title>Görevlendirme & Takip Paneli</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -993,6 +993,10 @@
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-gear"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Ayarlar</span>
               </button>
+              <button type="button" onclick="openAdminReportsPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-chart-column"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Raporlar</span>
+              </button>
             </div>
 
             <!-- SAĞ TARAF: hatırlatıcılar (mobilde en üstte / admin-İK'de çalışan sayılarının hemen altında görünür) -->
@@ -1164,6 +1168,131 @@
 
           <div class="flex justify-end">
             <button type="button" onclick="handleSaveSystemSettings()" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-cyan-500/20"><i class="fa-solid fa-floppy-disk me-1.5"></i>Tüm Ayarları Kaydet</button>
+          </div>
+        </section>
+
+        <!-- ADMİN/İK: RAPORLAR -->
+        <section id="reportsPageSection" class="hidden space-y-6">
+          <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-3">
+            <button type="button" onclick="closeLeaderSubPage()" class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-500 hover:border-cyan-500 transition-all">
+              <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            <span class="flex items-center gap-2"><i class="fa-solid fa-chart-column text-cyan-500"></i> Raporlar</span>
+          </h3>
+
+          <!-- 1. GÖREV RAPORU -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleReportPanel('reportTasks')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-list-check text-cyan-500"></i>Görev Raporu</h4>
+              <i id="reportTasksChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="reportTasksBody" class="hidden px-5 pb-5 space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Birim</label>
+                  <select id="reportTasksDept" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs">
+                    <option value="">Tüm Birimler</option>
+                    <option value="ELEKTRONIK">Elektronik</option>
+                    <option value="YAZILIM">Yazılım</option>
+                    <option value="MEKANIK">Mekanik</option>
+                    <option value="INSAN_KAYNAKLARI">İnsan Kaynakları</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Bitiş Tarihi (başlangıç)</label>
+                  <input type="date" id="reportTasksStart" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs">
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Bitiş Tarihi (sonu)</label>
+                  <input type="date" id="reportTasksEnd" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs">
+                </div>
+                <div class="flex gap-2">
+                  <button type="button" onclick="loadTaskReport()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">Görüntüle</button>
+                  <button type="button" onclick="exportTaskReportPDF()" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold px-3 py-2 rounded-xl transition-all" title="PDF İndir"><i class="fa-solid fa-file-pdf"></i></button>
+                </div>
+              </div>
+              <div id="reportTasksSummary" class="grid grid-cols-2 sm:grid-cols-5 gap-2"></div>
+              <div id="reportTasksTable" class="overflow-x-auto scroll-panel max-h-[400px]"></div>
+            </div>
+          </div>
+
+          <!-- 2. DEVAM / YOKLAMA RAPORU -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleReportPanel('reportAttendance')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-right-to-bracket text-cyan-500"></i>Devam / Yoklama Raporu</h4>
+              <i id="reportAttendanceChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="reportAttendanceBody" class="hidden px-5 pb-5 space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Birim</label>
+                  <select id="reportAttendanceDept" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs">
+                    <option value="">Tüm Birimler</option>
+                    <option value="ELEKTRONIK">Elektronik</option>
+                    <option value="YAZILIM">Yazılım</option>
+                    <option value="MEKANIK">Mekanik</option>
+                    <option value="INSAN_KAYNAKLARI">İnsan Kaynakları</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Tarih (başlangıç)</label>
+                  <input type="date" id="reportAttendanceStart" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs">
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Tarih (sonu)</label>
+                  <input type="date" id="reportAttendanceEnd" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs">
+                </div>
+                <div class="flex gap-2">
+                  <button type="button" onclick="loadAttendanceReport()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">Görüntüle</button>
+                  <button type="button" onclick="exportAttendanceReportPDF()" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold px-3 py-2 rounded-xl transition-all" title="PDF İndir"><i class="fa-solid fa-file-pdf"></i></button>
+                </div>
+              </div>
+              <div id="reportAttendanceSummary" class="grid grid-cols-2 gap-2"></div>
+              <div id="reportAttendanceTable" class="overflow-x-auto scroll-panel max-h-[400px]"></div>
+            </div>
+          </div>
+
+          <!-- 3. PROJE İLERLEME RAPORU -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleReportPanel('reportProjects')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-diagram-project text-cyan-500"></i>Proje İlerleme Raporu</h4>
+              <i id="reportProjectsChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="reportProjectsBody" class="hidden px-5 pb-5 space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Birim</label>
+                  <select id="reportProjectsDept" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs">
+                    <option value="">Tüm Birimler</option>
+                    <option value="ELEKTRONIK">Elektronik</option>
+                    <option value="YAZILIM">Yazılım</option>
+                    <option value="MEKANIK">Mekanik</option>
+                  </select>
+                </div>
+                <div class="sm:col-span-2 flex gap-2">
+                  <button type="button" onclick="loadProjectReport()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">Görüntüle</button>
+                  <button type="button" onclick="exportProjectReportPDF()" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold px-3 py-2 rounded-xl transition-all" title="PDF İndir"><i class="fa-solid fa-file-pdf"></i></button>
+                </div>
+              </div>
+              <div id="reportProjectsSummary" class="grid grid-cols-3 gap-2"></div>
+              <div id="reportProjectsTable" class="overflow-x-auto scroll-panel max-h-[400px]"></div>
+            </div>
+          </div>
+
+          <!-- 4. PERSONEL RAPORU -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleReportPanel('reportPersonnel')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-users text-cyan-500"></i>Personel Raporu</h4>
+              <i id="reportPersonnelChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="reportPersonnelBody" class="hidden px-5 pb-5 space-y-4">
+              <div class="flex justify-end gap-2">
+                <button type="button" onclick="loadPersonnelReport()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all">Görüntüle</button>
+                <button type="button" onclick="exportPersonnelReportPDF()" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold px-3 py-2 rounded-xl transition-all" title="PDF İndir"><i class="fa-solid fa-file-pdf"></i></button>
+              </div>
+              <div id="reportPersonnelSummary" class="grid grid-cols-2 gap-2"></div>
+              <div id="reportPersonnelTable" class="overflow-x-auto scroll-panel max-h-[400px]"></div>
+            </div>
           </div>
         </section>
 
@@ -5662,6 +5791,394 @@
       }
     }
 
+    // ============================================================
+    // RAPORLAR PANELİ (Admin/İK): her rapor ekranda tablo olarak görüntülenebilir ve/veya
+    // PDF olarak indirilebilir (indirme sırasında ekranda veri yoksa önce otomatik yüklenir).
+    // ============================================================
+    let reportsCache = { tasks: null, attendance: null, projects: null, personnel: null };
+
+    function toggleReportPanel(key) {
+      const body = document.getElementById(`${key}Body`);
+      const chevron = document.getElementById(`${key}Chevron`);
+      if (!body) return;
+      body.classList.toggle('hidden');
+      if (chevron) chevron.classList.toggle('rotate-180');
+    }
+
+    // Rapor sayfalarındaki "Toplam/Aktif/Geciken..." özet kutucuklarını çizer
+    function renderReportSummaryCards(containerId, items) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      el.innerHTML = items.map(it => `
+        <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-center">
+          <div class="text-lg font-bold ${it.color || 'text-slate-800 dark:text-slate-100'}">${it.value}</div>
+          <div class="text-[10px] text-slate-500 dark:text-slate-400">${it.label}</div>
+        </div>
+      `).join('');
+    }
+
+    // Rapor sonuçlarını basit bir HTML tablo olarak çizer
+    function renderReportTable(containerId, columns, rows) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      if (!rows || rows.length === 0) {
+        el.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">Kayıt bulunamadı.</p>`;
+        return;
+      }
+      el.innerHTML = `
+        <table class="w-full text-left border-collapse text-xs">
+          <thead class="sticky top-0 bg-white dark:bg-slate-800">
+            <tr class="border-b border-slate-200 dark:border-slate-700 text-slate-400">
+              ${columns.map(c => `<th class="py-2 px-2 font-semibold">${escapeHtmlProj(c.label)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+            ${rows.map(row => `
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                ${columns.map(c => `<td class="py-2 px-2 text-slate-700 dark:text-slate-200">${row[c.key] != null ? escapeHtmlProj(String(row[c.key])) : '-'}</td>`).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    // Genel amaçlı tablo tabanlı PDF raporu üretir (görev/devam/proje/personel raporlarının hepsi
+    // bunu kullanır); üst başlık şeridi + özet kutusu + sayfalara bölünebilen tablo + alt bilgi.
+    function buildTablePDF(reportTitle, summaryItems, columns, rows, filename) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, 210, 30, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(fixTurkishChars(reportTitle), 15, 18);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(fixTurkishChars(`Tarih: ${new Date().toLocaleDateString('tr-TR')}`), 160, 18);
+
+      let y = 40;
+      doc.setTextColor(15, 23, 42);
+
+      if (summaryItems && summaryItems.length > 0) {
+        doc.setFillColor(241, 245, 249);
+        doc.rect(15, y, 180, 16, 'F');
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        const colWidth = 180 / summaryItems.length;
+        summaryItems.forEach((item, i) => {
+          doc.text(fixTurkishChars(`${item.label}: ${item.value}`), 17 + i * colWidth, y + 10);
+        });
+        y += 24;
+      }
+
+      const scale = 180 / columns.reduce((a, c) => a + c.width, 0);
+      const scaledWidths = columns.map(c => c.width * scale);
+
+      function drawHeaderRow() {
+        doc.setFillColor(30, 41, 59);
+        doc.rect(15, y, 180, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        let x = 15;
+        columns.forEach((col, i) => {
+          doc.text(fixTurkishChars(col.label), x + 2, y + 5.5);
+          x += scaledWidths[i];
+        });
+        y += 8;
+        doc.setTextColor(15, 23, 42);
+      }
+
+      drawHeaderRow();
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+
+      rows.forEach((row, rIdx) => {
+        if (y > 275) {
+          doc.addPage();
+          y = 20;
+          drawHeaderRow();
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+        }
+        if (rIdx % 2 === 0) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(15, y, 180, 7, 'F');
+        }
+        let x = 15;
+        columns.forEach((col, i) => {
+          const val = row[col.key] != null ? String(row[col.key]) : '-';
+          doc.text(fixTurkishChars(val), x + 2, y + 5);
+          x += scaledWidths[i];
+        });
+        y += 7;
+      });
+
+      if (rows.length === 0) {
+        doc.setFont('helvetica', 'italic');
+        doc.text(fixTurkishChars('Kayit bulunamadi.'), 18, y + 6);
+      }
+
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(fixTurkishChars('Gorevlendirme & Takip Sistemi Otomatik Raporudur.'), 15, 290);
+        doc.text(`Sayfa ${i} / ${pageCount}`, 180, 290);
+      }
+
+      doc.save(filename);
+    }
+
+    // --- 1. GÖREV RAPORU ---
+    async function loadTaskReport() {
+      const dept = document.getElementById('reportTasksDept').value;
+      const startDate = document.getElementById('reportTasksStart').value;
+      const endDate = document.getElementById('reportTasksEnd').value;
+      try {
+        let url = `${API_BASE_URL}/api/reports/tasks?userRole=${currentUser.role}`;
+        if (dept) url += `&department=${encodeURIComponent(dept)}`;
+        if (startDate) url += `&startDate=${startDate}`;
+        if (endDate) url += `&endDate=${endDate}`;
+        const res = await fetch(url);
+        const data = await safeJson(res);
+        if (!res.ok) { showToast((data && data.error) || 'Rapor yüklenemedi.', 'error'); return; }
+        reportsCache.tasks = data;
+
+        renderReportSummaryCards('reportTasksSummary', [
+          { label: 'Toplam Görev', value: data.summary.total },
+          { label: 'Tamamlanan', value: data.summary.completed, color: 'text-emerald-500' },
+          { label: 'Aktif', value: data.summary.active, color: 'text-amber-500' },
+          { label: 'Geciken', value: data.summary.overdue, color: 'text-rose-500' },
+          { label: 'Revizyon', value: data.summary.revisions, color: 'text-cyan-500' }
+        ]);
+
+        renderReportTable('reportTasksTable', [
+          { key: 'name', label: 'Ad Soyad' },
+          { key: 'roleLabel', label: 'Rol' },
+          { key: 'deptLabel', label: 'Birim' },
+          { key: 'total', label: 'Toplam' },
+          { key: 'completed', label: 'Tamamlanan' },
+          { key: 'active', label: 'Aktif' },
+          { key: 'overdue', label: 'Geciken' },
+          { key: 'revisions', label: 'Revizyon' }
+        ], data.byPerson.map(p => ({ ...p, roleLabel: ROLE_LABELS_TR[p.role] || p.role, deptLabel: DEPARTMENT_LABELS[p.department] || p.department })));
+      } catch (e) {
+        showToast('Rapor yüklenirken hata oluştu.', 'error');
+      }
+    }
+
+    async function exportTaskReportPDF() {
+      if (!reportsCache.tasks) await loadTaskReport();
+      const data = reportsCache.tasks;
+      if (!data) return;
+      buildTablePDF(
+        'GOREV RAPORU',
+        [
+          { label: 'Toplam', value: data.summary.total },
+          { label: 'Tamamlanan', value: data.summary.completed },
+          { label: 'Aktif', value: data.summary.active },
+          { label: 'Geciken', value: data.summary.overdue },
+          { label: 'Revizyon', value: data.summary.revisions }
+        ],
+        [
+          { key: 'name', label: 'Ad Soyad', width: 35 },
+          { key: 'roleLabel', label: 'Rol', width: 25 },
+          { key: 'deptLabel', label: 'Birim', width: 25 },
+          { key: 'total', label: 'Toplam', width: 20 },
+          { key: 'completed', label: 'Tamam.', width: 20 },
+          { key: 'active', label: 'Aktif', width: 20 },
+          { key: 'overdue', label: 'Geciken', width: 20 },
+          { key: 'revisions', label: 'Rev.', width: 20 }
+        ],
+        data.byPerson.map(p => ({ ...p, roleLabel: ROLE_LABELS_TR[p.role] || p.role, deptLabel: DEPARTMENT_LABELS[p.department] || p.department })),
+        `Gorev_Raporu_${new Date().toISOString().substring(0, 10)}.pdf`
+      );
+    }
+
+    // --- 2. DEVAM / YOKLAMA RAPORU ---
+    async function loadAttendanceReport() {
+      const dept = document.getElementById('reportAttendanceDept').value;
+      const startDate = document.getElementById('reportAttendanceStart').value;
+      const endDate = document.getElementById('reportAttendanceEnd').value;
+      try {
+        let url = `${API_BASE_URL}/api/reports/attendance?userRole=${currentUser.role}`;
+        if (dept) url += `&department=${encodeURIComponent(dept)}`;
+        if (startDate) url += `&startDate=${startDate}`;
+        if (endDate) url += `&endDate=${endDate}`;
+        const res = await fetch(url);
+        const data = await safeJson(res);
+        if (!res.ok) { showToast((data && data.error) || 'Rapor yüklenemedi.', 'error'); return; }
+        reportsCache.attendance = data;
+
+        renderReportSummaryCards('reportAttendanceSummary', [
+          { label: 'Toplam Giriş', value: data.summary.totalSessions },
+          { label: 'Stajyer Sayısı', value: data.summary.totalInterns }
+        ]);
+
+        renderReportTable('reportAttendanceTable', [
+          { key: 'name', label: 'Ad Soyad' },
+          { key: 'deptLabel', label: 'Birim' },
+          { key: 'sessions', label: 'Giriş Sayısı' },
+          { key: 'totalHours', label: 'Toplam Saat' },
+          { key: 'lastCheckInLabel', label: 'Son Giriş' }
+        ], data.byPerson.map(p => ({ ...p, deptLabel: DEPARTMENT_LABELS[p.department] || p.department, lastCheckInLabel: p.lastCheckIn ? p.lastCheckIn.substring(0, 16) : '-' })));
+      } catch (e) {
+        showToast('Rapor yüklenirken hata oluştu.', 'error');
+      }
+    }
+
+    async function exportAttendanceReportPDF() {
+      if (!reportsCache.attendance) await loadAttendanceReport();
+      const data = reportsCache.attendance;
+      if (!data) return;
+      buildTablePDF(
+        'DEVAM / YOKLAMA RAPORU',
+        [
+          { label: 'Toplam Giris', value: data.summary.totalSessions },
+          { label: 'Stajyer Sayisi', value: data.summary.totalInterns }
+        ],
+        [
+          { key: 'name', label: 'Ad Soyad', width: 35 },
+          { key: 'deptLabel', label: 'Birim', width: 30 },
+          { key: 'sessions', label: 'Giris', width: 20 },
+          { key: 'totalHours', label: 'Saat', width: 20 },
+          { key: 'lastCheckInLabel', label: 'Son Giris', width: 35 }
+        ],
+        data.byPerson.map(p => ({ ...p, deptLabel: DEPARTMENT_LABELS[p.department] || p.department, lastCheckInLabel: p.lastCheckIn ? p.lastCheckIn.substring(0, 16) : '-' })),
+        `Devam_Raporu_${new Date().toISOString().substring(0, 10)}.pdf`
+      );
+    }
+
+    // --- 3. PROJE İLERLEME RAPORU ---
+    const REPORT_PROJECT_STATUS_TR = { ACTIVE: 'Aktif', COMPLETED: 'Tamamlandı', CANCELLED: 'İptal' };
+
+    async function loadProjectReport() {
+      const dept = document.getElementById('reportProjectsDept').value;
+      try {
+        let url = `${API_BASE_URL}/api/reports/projects?userRole=${currentUser.role}`;
+        if (dept) url += `&department=${encodeURIComponent(dept)}`;
+        const res = await fetch(url);
+        const data = await safeJson(res);
+        if (!res.ok) { showToast((data && data.error) || 'Rapor yüklenemedi.', 'error'); return; }
+        reportsCache.projects = data;
+
+        renderReportSummaryCards('reportProjectsSummary', [
+          { label: 'Toplam Proje', value: data.summary.total },
+          { label: 'Aktif', value: data.summary.active, color: 'text-amber-500' },
+          { label: 'Geciken', value: data.summary.overdue, color: 'text-rose-500' }
+        ]);
+
+        renderReportTable('reportProjectsTable', [
+          { key: 'name', label: 'Proje' },
+          { key: 'company', label: 'Firma' },
+          { key: 'deptLabel', label: 'Birim' },
+          { key: 'owner', label: 'Sorumlu' },
+          { key: 'plannedLabel', label: 'Planlanan' },
+          { key: 'actualLabel', label: 'Gerçekleşen' },
+          { key: 'statusLabel', label: 'Durum' },
+          { key: 'endDate', label: 'Bitiş' }
+        ], data.projects.map(p => ({
+          ...p,
+          deptLabel: DEPARTMENT_LABELS[p.department] || p.department,
+          plannedLabel: `%${p.planned}`,
+          actualLabel: `%${p.actual}`,
+          statusLabel: (REPORT_PROJECT_STATUS_TR[p.status] || p.status) + (p.overdue ? ' (Gecikti)' : '')
+        })));
+      } catch (e) {
+        showToast('Rapor yüklenirken hata oluştu.', 'error');
+      }
+    }
+
+    async function exportProjectReportPDF() {
+      if (!reportsCache.projects) await loadProjectReport();
+      const data = reportsCache.projects;
+      if (!data) return;
+      buildTablePDF(
+        'PROJE ILERLEME RAPORU',
+        [
+          { label: 'Toplam', value: data.summary.total },
+          { label: 'Aktif', value: data.summary.active },
+          { label: 'Geciken', value: data.summary.overdue }
+        ],
+        [
+          { key: 'name', label: 'Proje', width: 34 },
+          { key: 'company', label: 'Firma', width: 24 },
+          { key: 'deptLabel', label: 'Birim', width: 20 },
+          { key: 'owner', label: 'Sorumlu', width: 28 },
+          { key: 'plannedLabel', label: 'Plan', width: 15 },
+          { key: 'actualLabel', label: 'Gercek', width: 17 },
+          { key: 'statusLabel', label: 'Durum', width: 30 }
+        ],
+        data.projects.map(p => ({
+          ...p,
+          deptLabel: DEPARTMENT_LABELS[p.department] || p.department,
+          plannedLabel: `%${p.planned}`,
+          actualLabel: `%${p.actual}`,
+          statusLabel: (REPORT_PROJECT_STATUS_TR[p.status] || p.status) + (p.overdue ? ' (Gec.)' : '')
+        })),
+        `Proje_Raporu_${new Date().toISOString().substring(0, 10)}.pdf`
+      );
+    }
+
+    // --- 4. PERSONEL RAPORU ---
+    function flattenPersonnelReport(data) {
+      const rows = [];
+      Object.entries(data.byDepartment).forEach(([dept, roles]) => {
+        Object.entries(roles).forEach(([role, count]) => {
+          rows.push({ deptLabel: DEPARTMENT_LABELS[dept] || dept, roleLabel: ROLE_LABELS_TR[role] || role, count });
+        });
+      });
+      rows.sort((a, b) => a.deptLabel.localeCompare(b.deptLabel) || b.count - a.count);
+      return rows;
+    }
+
+    async function loadPersonnelReport() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/reports/personnel?userRole=${currentUser.role}`);
+        const data = await safeJson(res);
+        if (!res.ok) { showToast((data && data.error) || 'Rapor yüklenemedi.', 'error'); return; }
+        reportsCache.personnel = data;
+
+        renderReportSummaryCards('reportPersonnelSummary', [
+          { label: 'Toplam Kullanıcı', value: data.summary.totalUsers },
+          { label: 'Onay Bekleyen', value: data.summary.pendingApprovals, color: 'text-amber-500' }
+        ]);
+
+        renderReportTable('reportPersonnelTable', [
+          { key: 'deptLabel', label: 'Birim' },
+          { key: 'roleLabel', label: 'Rol' },
+          { key: 'count', label: 'Kişi Sayısı' }
+        ], flattenPersonnelReport(data));
+      } catch (e) {
+        showToast('Rapor yüklenirken hata oluştu.', 'error');
+      }
+    }
+
+    async function exportPersonnelReportPDF() {
+      if (!reportsCache.personnel) await loadPersonnelReport();
+      const data = reportsCache.personnel;
+      if (!data) return;
+      buildTablePDF(
+        'PERSONEL RAPORU',
+        [
+          { label: 'Toplam Kullanici', value: data.summary.totalUsers },
+          { label: 'Onay Bekleyen', value: data.summary.pendingApprovals }
+        ],
+        [
+          { key: 'deptLabel', label: 'Birim', width: 40 },
+          { key: 'roleLabel', label: 'Rol', width: 40 },
+          { key: 'count', label: 'Kisi Sayisi', width: 30 }
+        ],
+        flattenPersonnelReport(data),
+        `Personel_Raporu_${new Date().toISOString().substring(0, 10)}.pdf`
+      );
+    }
+
     async function fetchAdminUsers() {
       const container = document.getElementById('adminUsersByTeam');
       if (!container) return;
@@ -6525,6 +7042,8 @@
       if (adminPanelSec) adminPanelSec.classList.add('hidden');
       const settingsPageSec = document.getElementById('settingsPageSection');
       if (settingsPageSec) settingsPageSec.classList.add('hidden');
+      const reportsPageSec = document.getElementById('reportsPageSection');
+      if (reportsPageSec) reportsPageSec.classList.add('hidden');
       const adminStatusPageSec = document.getElementById('adminStatusPageSection');
       if (adminStatusPageSec) adminStatusPageSec.classList.add('hidden');
       const engineerProjectsPageSec = document.getElementById('engineerProjectsPageSection');
@@ -7211,6 +7730,13 @@
       const section = document.getElementById('settingsPageSection');
       if (section) section.classList.remove('hidden');
       if (typeof loadSystemSettings === 'function') loadSystemSettings();
+    }
+
+    function openAdminReportsPage() {
+      const home = document.getElementById('adminHomeSection');
+      if (home) home.classList.add('hidden');
+      const section = document.getElementById('reportsPageSection');
+      if (section) section.classList.remove('hidden');
     }
 
     function openAdminTasksPage() {

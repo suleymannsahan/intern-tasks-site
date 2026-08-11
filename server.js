@@ -1480,6 +1480,176 @@ app.get('/api/admin/stats', async (req, res) => {
   }
 });
 
+// --- RAPORLAMA (Admin/İK "Raporlar" paneli) ---
+
+// Görev raporu: kişi bazında toplam/tamamlanan/aktif/geciken görev ve revizyon sayıları
+app.get('/api/reports/tasks', async (req, res) => {
+  try {
+    const { userRole, department, startDate, endDate } = req.query;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+
+    let sql = `SELECT tasks.*, users.name as assignee_name, users.role as assignee_role, users.department as assignee_department
+               FROM tasks LEFT JOIN users ON tasks.assigned_to = users.id WHERE 1=1`;
+    const args = [];
+    if (department) { sql += ` AND users.department = ?`; args.push(department); }
+    if (startDate) { sql += ` AND tasks.end_date >= ?`; args.push(startDate); }
+    if (endDate) { sql += ` AND tasks.end_date <= ?`; args.push(endDate); }
+
+    const tasksRes = await db.execute({ sql, args });
+    const tasks = tasksRes.rows;
+
+    const revRes = await db.execute(`SELECT task_id, COUNT(*) as cnt FROM task_revisions GROUP BY task_id`);
+    const revMap = {};
+    revRes.rows.forEach(r => { revMap[r.task_id] = r.cnt; });
+
+    const today = todayISO();
+    const byPerson = {};
+    let totalRevisions = 0;
+    tasks.forEach(t => {
+      const key = t.assigned_to;
+      if (!byPerson[key]) {
+        byPerson[key] = { id: t.assigned_to, name: t.assignee_name || '-', role: t.assignee_role || '-', department: t.assignee_department || '-', total: 0, completed: 0, active: 0, overdue: 0, revisions: 0 };
+      }
+      const p = byPerson[key];
+      const isDone = t.status === 'APPROVED' || t.status === 'COMPLETED';
+      p.total++;
+      if (isDone) p.completed++; else p.active++;
+      if (!isDone && t.end_date && t.end_date < today) p.overdue++;
+      const revCount = revMap[t.id] || 0;
+      p.revisions += revCount;
+      totalRevisions += revCount;
+    });
+
+    res.json({
+      summary: {
+        total: tasks.length,
+        completed: tasks.filter(t => t.status === 'APPROVED' || t.status === 'COMPLETED').length,
+        active: tasks.filter(t => t.status !== 'APPROVED' && t.status !== 'COMPLETED').length,
+        overdue: tasks.filter(t => t.status !== 'APPROVED' && t.status !== 'COMPLETED' && t.end_date && t.end_date < today).length,
+        revisions: totalRevisions
+      },
+      byPerson: Object.values(byPerson).sort((a, b) => b.total - a.total)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Devam/Yoklama raporu: stajyer bazında giriş sayısı, toplam süre, son giriş
+app.get('/api/reports/attendance', async (req, res) => {
+  try {
+    const { userRole, department, startDate, endDate } = req.query;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+
+    let sql = `SELECT attendance_logs.*, users.name as intern_name, users.department as intern_department
+               FROM attendance_logs LEFT JOIN users ON attendance_logs.intern_id = users.id WHERE 1=1`;
+    const args = [];
+    if (department) { sql += ` AND users.department = ?`; args.push(department); }
+    if (startDate) { sql += ` AND substr(attendance_logs.check_in_at, 1, 10) >= ?`; args.push(startDate); }
+    if (endDate) { sql += ` AND substr(attendance_logs.check_in_at, 1, 10) <= ?`; args.push(endDate); }
+
+    const logsRes = await db.execute({ sql, args });
+    const logs = logsRes.rows;
+
+    const byPerson = {};
+    logs.forEach(l => {
+      const key = l.intern_id;
+      if (!byPerson[key]) {
+        byPerson[key] = { id: l.intern_id, name: l.intern_name || '-', department: l.intern_department || '-', sessions: 0, totalHours: 0, lastCheckIn: null };
+      }
+      const p = byPerson[key];
+      p.sessions++;
+      if (l.check_out_at) {
+        const diffMs = new Date(l.check_out_at.replace(' ', 'T')) - new Date(l.check_in_at.replace(' ', 'T'));
+        if (diffMs > 0) p.totalHours += diffMs / 3600000;
+      }
+      if (!p.lastCheckIn || l.check_in_at > p.lastCheckIn) p.lastCheckIn = l.check_in_at;
+    });
+
+    const byPersonArr = Object.values(byPerson).map(p => ({ ...p, totalHours: Math.round(p.totalHours * 10) / 10 }));
+
+    res.json({
+      summary: { totalSessions: logs.length, totalInterns: byPersonArr.length },
+      byPerson: byPersonArr.sort((a, b) => b.sessions - a.sessions)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Proje ilerleme raporu: her proje için en son planlanan/gerçekleşen % ve gecikme durumu
+app.get('/api/reports/projects', async (req, res) => {
+  try {
+    const { userRole, department } = req.query;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+
+    let sql = `SELECT projects.*, companies.name as company_name, users.name as owner_name
+               FROM projects
+               LEFT JOIN companies ON projects.company_id = companies.id
+               LEFT JOIN users ON projects.owner_id = users.id
+               WHERE 1=1`;
+    const args = [];
+    if (department) { sql += ` AND projects.department = ?`; args.push(department); }
+    sql += ` ORDER BY projects.id DESC`;
+
+    const projRes = await db.execute({ sql, args });
+    const projects = projRes.rows;
+
+    const progressRes = await db.execute(`SELECT * FROM project_progress ORDER BY log_date DESC`);
+    const latestByProject = {};
+    progressRes.rows.forEach(p => {
+      if (!latestByProject[p.project_id]) latestByProject[p.project_id] = p;
+    });
+
+    const today = todayISO();
+    const rows = projects.map(p => {
+      const latest = latestByProject[p.id];
+      const isOverdue = p.status === 'ACTIVE' && p.end_date && p.end_date < today;
+      return {
+        id: p.id, name: p.name, company: p.company_name || '-', department: p.department,
+        owner: p.owner_name || '-', planned: latest ? latest.planned : 0, actual: latest ? latest.actual : 0,
+        status: p.status, priority: p.priority, endDate: p.end_date, overdue: isOverdue
+      };
+    });
+
+    res.json({
+      summary: {
+        total: projects.length,
+        active: projects.filter(p => p.status === 'ACTIVE').length,
+        overdue: rows.filter(r => r.overdue).length
+      },
+      projects: rows
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Personel raporu: departman x rol dağılım matrisi
+app.get('/api/reports/personnel', async (req, res) => {
+  try {
+    const { userRole } = req.query;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+
+    const usersRes = await db.execute(`SELECT department, role, status FROM users`);
+    const byDepartment = {};
+    let pendingCount = 0;
+    usersRes.rows.forEach(u => {
+      const dept = u.department || 'Belirtilmemiş';
+      if (!byDepartment[dept]) byDepartment[dept] = {};
+      byDepartment[dept][u.role] = (byDepartment[dept][u.role] || 0) + 1;
+      if (u.status === 'PENDING') pendingCount++;
+    });
+
+    res.json({
+      summary: { totalUsers: usersRes.rows.length, pendingApprovals: pendingCount },
+      byDepartment
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Geliştirme 1: Görevi Tamamlama & Brevo ile Ekip Liderine Mail Bildirimi
 app.put('/api/tasks/:id/complete', async (req, res) => {
   try {
