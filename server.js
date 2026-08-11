@@ -19,6 +19,49 @@ const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN
 });
 
+// ============================================================
+// SİSTEM AYARLARI (Admin/İK "Ayarlar" paneli): sunucu açılışında ve her güncellemeden sonra
+// system_settings tablosundan okunup bu bellek-içi önbelleğe (SETTINGS_CACHE) yüklenir; kodun
+// geri kalanı DB'ye her seferinde gitmeden doğrudan bu önbellekten okur.
+// ============================================================
+const DEFAULT_SETTINGS = {
+  // Bildirim/E-posta tercihleri: hangi olayda e-posta gönderilsin (uygulama içi bildirim bundan etkilenmez)
+  email_task_assigned: true,
+  email_task_completed: true,
+  email_task_revision: true,
+  email_task_approved: true,
+  email_project_assigned: true,
+  // Kayıt onay kuralları: bu rollerden/departmanlardan biriyle kayıt olunursa admin onayı gerekir
+  approval_required_roles: ['MANAGER', 'LEADER'],
+  approval_required_departments: ['INSAN_KAYNAKLARI'],
+  // Site / e-posta genel bilgileri
+  site_name: 'Görev & Takip Sistemi',
+  email_sender_name: 'Görev & Takip Sistemi',
+  email_sender_address: 'semresahann@gmail.com',
+  site_logo_url: 'https://i.ibb.co/xtFPW7KP/Y-logo.png',
+  dashboard_url: 'https://intern-tasks-pannel.onrender.com/',
+  // İş günü hesaplaması: hafta sonuna ek olarak hariç tutulacak resmi tatil günleri (YYYY-MM-DD)
+  holidays: [],
+  // Google Takvim entegrasyonu sistem geneli açık/kapalı anahtarı
+  google_calendar_enabled: true
+};
+
+let SETTINGS_CACHE = { ...DEFAULT_SETTINGS };
+
+async function loadSettingsCache() {
+  try {
+    const rows = await db.execute('SELECT key, value FROM system_settings');
+    const merged = { ...DEFAULT_SETTINGS };
+    for (const row of rows.rows) {
+      try { merged[row.key] = JSON.parse(row.value); } catch (e) { /* bozuk kayıt, varsayılanda kalsın */ }
+    }
+    SETTINGS_CACHE = merged;
+  } catch (e) {
+    console.error('Ayarlar yüklenemedi, varsayılanlar kullanılıyor:', e.message);
+    SETTINGS_CACHE = { ...DEFAULT_SETTINGS };
+  }
+}
+
 // Veritabanı sütunlarını tek tek kontrol edip yoksa ekleyen güvenli fonksiyon
 async function initDbMigration() {
   const columnsToAdd = [
@@ -283,6 +326,19 @@ async function initDb() {
       )
     `);
 
+    // ============================================================
+    // SİSTEM AYARLARI: basit key-value deposu (Admin/İK "Ayarlar" paneli). Değerler her zaman
+    // JSON.stringify edilmiş olarak saklanır (boolean/dizi/obje/string hepsi aynı yolla gider),
+    // okunurken JSON.parse edilir. loadSettingsCache() sunucu açılışında ve her kayıttan sonra çağrılır.
+    // ============================================================
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      )
+    `);
+    await loadSettingsCache();
+
     console.log('Turso bulut veritabanı tabloları hazır.');
   } catch (err) {
     console.error('Veritabanı başlatma hatası:', err.message);
@@ -354,7 +410,7 @@ async function getUserGoogleToken(userId) {
 
 // Görevi ilgili kullanıcının takvimine yazar/günceller; event id'yi tasks tablosuna kaydeder.
 async function syncTaskToGoogle(taskId) {
-  if (!gcal.isConfigured()) return;
+  if (!gcal.isConfigured() || !SETTINGS_CACHE.google_calendar_enabled) return;
   try {
     const r = await db.execute({
       sql: `SELECT tasks.*, users.name AS assignee_name
@@ -398,7 +454,7 @@ async function syncTaskToGoogle(taskId) {
 
 // Görev silinmeden ÖNCE çağrılır: takvimden etkinliği kaldırır.
 async function removeTaskFromGoogle(taskId) {
-  if (!gcal.isConfigured()) return;
+  if (!gcal.isConfigured() || !SETTINGS_CACHE.google_calendar_enabled) return;
   try {
     const r = await db.execute({
       sql: `SELECT assigned_to, google_event_id FROM tasks WHERE id = ?`,
@@ -418,7 +474,7 @@ async function removeTaskFromGoogle(taskId) {
 // TOPLANTI senkron yardımcısı ------------------------------------------------
 
 async function syncMeetingToGoogle(meetingId) {
-  if (!gcal.isConfigured()) return;
+  if (!gcal.isConfigured() || !SETTINGS_CACHE.google_calendar_enabled) return;
   try {
     const r = await db.execute({
       sql: `SELECT meeting_requests.*, users.name AS requester_name
@@ -467,6 +523,9 @@ async function syncMeetingToGoogle(meetingId) {
 app.get('/api/google/auth', (req, res) => {
   if (!gcal.isConfigured()) {
     return res.status(503).send('Google Takvim entegrasyonu sunucuda yapılandırılmamış.');
+  }
+  if (!SETTINGS_CACHE.google_calendar_enabled) {
+    return res.status(503).send('Google Takvim entegrasyonu Ayarlar panelinden kapatılmış.');
   }
   const { userId } = req.query;
   if (!userId) return res.status(400).send('userId gerekli.');
@@ -534,7 +593,7 @@ app.get('/api/google/status', async (req, res) => {
       args: [userId]
     });
     const connected = r.rows.length > 0 && !!r.rows[0].google_calendar_connected;
-    res.json({ connected, configured: gcal.isConfigured() });
+    res.json({ connected, configured: gcal.isConfigured() && SETTINGS_CACHE.google_calendar_enabled });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -591,8 +650,10 @@ app.post('/api/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const userEmail = email.trim();
 
-    // 💡 ONAY MANTIĞI: Ekip Lideri, Müdür veya İnsan Kaynakları departmanı onay beklemeye alınır (PENDING), diğerleri direkt onaylanır (APPROVED)
-    const requiresApproval = ['MANAGER', 'LEADER'].includes(role) || department === 'INSAN_KAYNAKLARI';
+    // 💡 ONAY MANTIĞI: Ayarlar panelinde belirlenen rol/departmanlardan biriyle kayıt olunursa
+    // onay beklemeye alınır (PENDING), diğerleri direkt onaylanır (APPROVED).
+    const requiresApproval = (SETTINGS_CACHE.approval_required_roles || []).includes(role) ||
+      (SETTINGS_CACHE.approval_required_departments || []).includes(department);
     const initialStatus = requiresApproval ? 'PENDING' : 'APPROVED';
 
     const result = await db.execute({
@@ -766,7 +827,7 @@ app.patch('/api/users/:id/approve', async (req, res) => {
 // Doğrulama kodu e-postasını Brevo üzerinden gönderir; mevcut görev bildirimi e-postalarıyla
 // aynı gönderici/şablon dilini kullanır.
 async function sendPasswordResetCodeEmail(toEmail, toName, code) {
-  const companyLogoUrl = "https://i.ibb.co/xtFPW7KP/Y-logo.png";
+  const companyLogoUrl = SETTINGS_CACHE.site_logo_url;
   await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -775,7 +836,7 @@ async function sendPasswordResetCodeEmail(toEmail, toName, code) {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      sender: { name: "Görev & Takip Sistemi", email: "semresahann@gmail.com" },
+      sender: { name: SETTINGS_CACHE.email_sender_name, email: SETTINGS_CACHE.email_sender_address },
       to: [{ email: toEmail, name: toName }],
       subject: `Şifre Sıfırlama Doğrulama Kodu: ${code}`,
       htmlContent: `
@@ -803,8 +864,8 @@ async function sendPasswordResetCodeEmail(toEmail, toName, code) {
 // detailsRows: [[label, value], ...]
 async function sendDetailsEmail(toEmail, toName, subject, headerTitle, introHtml, detailsRows, buttonText) {
   try {
-    const companyLogoUrl = "https://i.ibb.co/xtFPW7KP/Y-logo.png";
-    const appDashboardUrl = "https://intern-tasks-pannel.onrender.com/";
+    const companyLogoUrl = SETTINGS_CACHE.site_logo_url;
+    const appDashboardUrl = SETTINGS_CACHE.dashboard_url;
     const rowsHtml = detailsRows.map(([label, value]) => `
       <tr>
         <td style="padding: 6px 0; color: #94a3b8; width: 120px;">${label}:</td>
@@ -820,7 +881,7 @@ async function sendDetailsEmail(toEmail, toName, subject, headerTitle, introHtml
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        sender: { name: "Görev & Takip Sistemi", email: "semresahann@gmail.com" },
+        sender: { name: SETTINGS_CACHE.email_sender_name, email: SETTINGS_CACHE.email_sender_address },
         to: [{ email: toEmail, name: toName }],
         subject,
         htmlContent: `
@@ -839,7 +900,7 @@ async function sendDetailsEmail(toEmail, toName, subject, headerTitle, introHtml
               </div>
             </div>
             <div style="text-align: center; margin-top: 20px; font-size: 12px; color: #64748b;">
-              <p style="margin: 0;">Bu e-posta Görev & Takip Sistemi tarafından otomatik olarak gönderilmiştir.</p>
+              <p style="margin: 0;">Bu e-posta ${SETTINGS_CACHE.site_name} tarafından otomatik olarak gönderilmiştir.</p>
             </div>
           </div>
         `
@@ -1126,7 +1187,7 @@ app.post('/api/tasks', async (req, res) => {
 
     const intern = userResult.rows[0];
 
-    if (intern && intern.email) {
+    if (intern && intern.email && SETTINGS_CACHE.email_task_assigned) {
       await sendDetailsEmail(
         intern.email, intern.name,
         `Yeni Görev Atandı: ${title}`,
@@ -1162,6 +1223,50 @@ app.post('/api/tasks', async (req, res) => {
 const isAdmin = (role) => role === 'ADMIN' || role === 'HR';
 // Firma/Proje yönetiminde kendi biriminle sınırlı erişimi olan roller (Müdür, Ekip Lideri)
 const isDeptLockedRole = (role) => role === 'MANAGER' || role === 'LEADER';
+
+// --- SİSTEM AYARLARI ---
+
+// Tüm ayarları döner (varsayılanlarla birleştirilmiş güncel değerler) — Admin/İK
+app.get('/api/settings', async (req, res) => {
+  try {
+    const { userRole } = req.query;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    res.json(SETTINGS_CACHE);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Bir veya birden fazla ayarı günceller — Admin/İK
+app.put('/api/settings', async (req, res) => {
+  try {
+    const { userRole, updates } = req.body;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'Geçersiz veri.' });
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (!(key in DEFAULT_SETTINGS)) continue; // bilinmeyen anahtarları yok say
+      await db.execute({
+        sql: `INSERT INTO system_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        args: [key, JSON.stringify(value)]
+      });
+    }
+    await loadSettingsCache();
+    res.json({ message: 'Ayarlar güncellendi.', settings: SETTINGS_CACHE });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Tüm giriş yapmış kullanıcıların erişebileceği, hassas olmayan ayarlar
+// (ör. iş günü hesabı için tatil günleri) — yetki kontrolü yok, kasıtlı olarak herkese açık.
+app.get('/api/settings/public', async (req, res) => {
+  try {
+    res.json({ holidays: SETTINGS_CACHE.holidays || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // Görev Getirme Endpoint'ini Admin İçin Güncelleme
 app.get('/api/tasks', async (req, res) => {
@@ -1420,7 +1525,7 @@ app.put('/api/tasks/:id/complete', async (req, res) => {
         createNotification(person.id, 'TASK_COMPLETED', 'TASKS', 'Görev Tamamlandı', `${task.assignee_name} "${task.title}" görevini tamamladı, onayınızı bekliyor.`, task.id)
           .catch(e => console.error('Görev tamamlama bildirimi hatası:', e.message));
 
-        if (person.email) {
+        if (person.email && SETTINGS_CACHE.email_task_completed) {
           await sendDetailsEmail(
             person.email, person.name,
             `Görev Tamamlandı: ${task.title}`,
@@ -1493,7 +1598,7 @@ app.put('/api/tasks/:id/review', async (req, res) => {
       if (t) {
         if (isRevision) {
           createNotification(t.assigned_to, 'TASK_REVISION', 'TASKS', 'Revize İstendi', `"${t.title}" göreviniz için revize istendi: ${comment || ''}`, Number(taskId));
-          if (t.assignee_email) {
+          if (t.assignee_email && SETTINGS_CACHE.email_task_revision) {
             await sendDetailsEmail(
               t.assignee_email, t.assignee_name,
               `Revize İstendi: ${t.title}`,
@@ -1509,7 +1614,7 @@ app.put('/api/tasks/:id/review', async (req, res) => {
           }
         } else {
           createNotification(t.assigned_to, 'TASK_APPROVED', 'TASKS', 'Görev Onaylandı', `"${t.title}" göreviniz onaylandı.`, Number(taskId));
-          if (t.assignee_email) {
+          if (t.assignee_email && SETTINGS_CACHE.email_task_approved) {
             await sendDetailsEmail(
               t.assignee_email, t.assignee_name,
               `Görev Onaylandı: ${t.title}`,
@@ -1747,7 +1852,7 @@ app.post('/api/send-verification-code', async (req, res) => {
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        sender: { name: "Ekip Portali", email: "semresahann@gmail.com" },
+        sender: { name: SETTINGS_CACHE.email_sender_name, email: SETTINGS_CACHE.email_sender_address },
         to: [{ email: email }],
         subject: "Ekip Lideri Doğrulama Kodu",
         htmlContent: `<p>Ekip Lideri kayıt doğrulama kodunuz: <strong>${verificationCode}</strong></p>`
@@ -2696,7 +2801,7 @@ app.post('/api/projects', async (req, res) => {
           const deptLabels = { ELEKTRONIK: 'Elektronik', YAZILIM: 'Yazılım', MEKANIK: 'Mekanik', INSAN_KAYNAKLARI: 'İnsan Kaynakları' };
           createNotification(owner_id, 'PROJECT_ASSIGNED', 'PROJECTS', 'Yeni Proje Atandı', `"${name.trim()}" projesi size atandı.`, newProjectId)
             .catch(e => console.error('Proje atama bildirimi hatası:', e.message));
-          if (owner.email) {
+          if (owner.email && SETTINGS_CACHE.email_project_assigned) {
             await sendDetailsEmail(
               owner.email, owner.name,
               `Yeni Proje Atandı: ${name.trim()}`,

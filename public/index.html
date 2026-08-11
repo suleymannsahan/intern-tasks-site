@@ -989,6 +989,10 @@
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-regular fa-calendar-days"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Takvim</span>
               </button>
+              <button type="button" onclick="openAdminSettingsPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-gear"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Ayarlar</span>
+              </button>
             </div>
 
             <!-- SAĞ TARAF: hatırlatıcılar (mobilde en üstte / admin-İK'de çalışan sayılarının hemen altında görünür) -->
@@ -1015,6 +1019,151 @@
                 </div>
               </div>
             </div>
+          </div>
+        </section>
+
+        <!-- ADMİN/İK: AYARLAR (sistemin tüm ayarlarının tek yerden kontrol edildiği panel) -->
+        <section id="settingsPageSection" class="hidden space-y-6">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-3">
+              <button type="button" onclick="closeLeaderSubPage()" class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-500 hover:border-cyan-500 transition-all">
+                <i class="fa-solid fa-arrow-left"></i>
+              </button>
+              <span class="flex items-center gap-2"><i class="fa-solid fa-gear text-cyan-500"></i> Ayarlar</span>
+            </h3>
+            <button type="button" onclick="handleSaveSystemSettings()" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-cyan-500/20"><i class="fa-solid fa-floppy-disk me-1.5"></i>Tüm Ayarları Kaydet</button>
+          </div>
+
+          <!-- A. BİRİM & ALT ALAN YÖNETİMİ -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleSettingsPanel('settingsDepts')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-layer-group text-cyan-500"></i>Birim &amp; Alt Alan Yönetimi</h4>
+              <i id="settingsDeptsChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="settingsDeptsBody" class="hidden px-5 pb-5 space-y-3">
+              <p class="text-xs text-slate-500 dark:text-slate-400">Birim ve alt alan ekleme/silme, Firma &amp; Proje Yönetimi penceresinden yapılır.</p>
+              <button type="button" onclick="openProjectManageModal()" class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-xs font-semibold px-4 py-2 rounded-xl transition-all"><i class="fa-solid fa-arrow-up-right-from-square me-1.5"></i>Birim / Alt Alan Yönetimini Aç</button>
+            </div>
+          </div>
+
+          <!-- B. BİLDİRİM / E-POSTA TERCİHLERİ -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleSettingsPanel('settingsEmailToggles')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-envelope text-cyan-500"></i>Bildirim / E-posta Tercihleri</h4>
+              <i id="settingsEmailTogglesChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="settingsEmailTogglesBody" class="hidden px-5 pb-5 space-y-2.5">
+              <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Kapatılan olaylarda uygulama içi bildirim yine düşer, sadece e-posta gönderilmez.</p>
+              <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" id="setting_email_task_assigned" class="accent-cyan-600 w-4 h-4"> Görev atandığında e-posta gönder
+              </label>
+              <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" id="setting_email_task_completed" class="accent-cyan-600 w-4 h-4"> Görev tamamlandığında e-posta gönder
+              </label>
+              <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" id="setting_email_task_revision" class="accent-cyan-600 w-4 h-4"> Revizyon istendiğinde e-posta gönder
+              </label>
+              <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" id="setting_email_task_approved" class="accent-cyan-600 w-4 h-4"> Görev onaylandığında e-posta gönder
+              </label>
+              <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" id="setting_email_project_assigned" class="accent-cyan-600 w-4 h-4"> Proje atandığında e-posta gönder
+              </label>
+            </div>
+          </div>
+
+          <!-- C. KAYIT ONAY KURALLARI -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleSettingsPanel('settingsApproval')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-user-check text-cyan-500"></i>Kayıt Onay Kuralları</h4>
+              <i id="settingsApprovalChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="settingsApprovalBody" class="hidden px-5 pb-5 space-y-4">
+              <p class="text-xs text-slate-500 dark:text-slate-400">Seçilen rol veya departmanla kayıt olan kullanıcılar, Admin onayı verilene kadar bekler. Seçilmeyenler doğrudan onaylanır.</p>
+              <div>
+                <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Bu rollerle kayıt onay bekler</div>
+                <div class="flex flex-wrap gap-3">
+                  <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input type="checkbox" class="setting-approval-role accent-cyan-600 w-4 h-4" value="MANAGER"> Müdür</label>
+                  <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input type="checkbox" class="setting-approval-role accent-cyan-600 w-4 h-4" value="LEADER"> Ekip Lideri</label>
+                  <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input type="checkbox" class="setting-approval-role accent-cyan-600 w-4 h-4" value="ENGINEER"> Mühendis</label>
+                  <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input type="checkbox" class="setting-approval-role accent-cyan-600 w-4 h-4" value="TECHNICIAN"> Teknisyen</label>
+                  <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input type="checkbox" class="setting-approval-role accent-cyan-600 w-4 h-4" value="INTERN"> Stajyer</label>
+                </div>
+              </div>
+              <div>
+                <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Bu departmanlarla kayıt onay bekler</div>
+                <div class="flex flex-wrap gap-3">
+                  <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input type="checkbox" class="setting-approval-dept accent-cyan-600 w-4 h-4" value="ELEKTRONIK"> Elektronik</label>
+                  <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input type="checkbox" class="setting-approval-dept accent-cyan-600 w-4 h-4" value="YAZILIM"> Yazılım</label>
+                  <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input type="checkbox" class="setting-approval-dept accent-cyan-600 w-4 h-4" value="MEKANIK"> Mekanik</label>
+                  <label class="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"><input type="checkbox" class="setting-approval-dept accent-cyan-600 w-4 h-4" value="INSAN_KAYNAKLARI"> İnsan Kaynakları</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- D. SİTE / E-POSTA GENEL BİLGİLERİ -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleSettingsPanel('settingsSiteInfo')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-building text-cyan-500"></i>Site / E-posta Genel Bilgileri</h4>
+              <i id="settingsSiteInfoChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="settingsSiteInfoBody" class="hidden px-5 pb-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">Site Adı</label>
+                <input type="text" id="setting_site_name" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">E-posta Gönderen Adı</label>
+                <input type="text" id="setting_email_sender_name" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">E-posta Gönderen Adresi</label>
+                <input type="email" id="setting_email_sender_address" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">Logo URL</label>
+                <input type="text" id="setting_site_logo_url" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">Panel Linki (e-postalardaki buton bu adrese gider)</label>
+                <input type="text" id="setting_dashboard_url" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+              </div>
+            </div>
+          </div>
+
+          <!-- E. İŞ GÜNÜ / TATİL GÜNLERİ -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleSettingsPanel('settingsHolidays')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-regular fa-calendar-xmark text-cyan-500"></i>İş Günü / Tatil Günleri</h4>
+              <i id="settingsHolidaysChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="settingsHolidaysBody" class="hidden px-5 pb-5 space-y-3">
+              <p class="text-xs text-slate-500 dark:text-slate-400">Buraya eklenen tarihler, görev süresi (iş günü) hesaplamasında hafta sonlarına ek olarak hariç tutulur. Listeye eklemek/çıkarmak "Tüm Ayarları Kaydet" ile kalıcı olur.</p>
+              <div class="flex gap-2">
+                <input type="date" id="settingsNewHolidayInput" class="flex-1 bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+                <button type="button" onclick="handleAddHolidayLocal()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all">Ekle</button>
+              </div>
+              <div id="settingsHolidaysList" class="flex flex-wrap gap-2"></div>
+            </div>
+          </div>
+
+          <!-- F. GOOGLE TAKVİM ENTEGRASYONU -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleSettingsPanel('settingsGcal')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-regular fa-calendar-days text-cyan-500"></i>Google Takvim Entegrasyonu</h4>
+              <i id="settingsGcalChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="settingsGcalBody" class="hidden px-5 pb-5">
+              <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" id="setting_google_calendar_enabled" class="accent-cyan-600 w-4 h-4"> Google Takvim entegrasyonu sistem genelinde açık olsun
+              </label>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Kapatılırsa hiçbir kullanıcının görev/toplantı etkinlikleri Google Takvim'e senkronlanmaz ve yeni bağlantı kurulamaz; zaten bağlı hesapların bağlantı bilgisi silinmez.</p>
+            </div>
+          </div>
+
+          <div class="flex justify-end">
+            <button type="button" onclick="handleSaveSystemSettings()" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-cyan-500/20"><i class="fa-solid fa-floppy-disk me-1.5"></i>Tüm Ayarları Kaydet</button>
           </div>
         </section>
 
@@ -2220,6 +2369,9 @@
     let usersList = [];
     let tasksList = [];
     let dailyLogsList = [];
+    // Ayarlar panelinden belirlenen resmi tatil günleri (YYYY-MM-DD listesi); iş günü hesabında
+    // hafta sonuna ek olarak hariç tutulur. window.onload'da /api/settings/public'ten doldurulur.
+    let HOLIDAYS_CACHE = [];
     let taskChartInstance = null;
     // Bir alt sayfaya (Görevler, Projeler, Toplantı vb.) girmeden hemen önceki scroll konumu:
     // "geri" ile ana ekrana dönüldüğünde sitenin en başına değil, kaldığımız yere döneriz.
@@ -2247,6 +2399,13 @@
       // kayıt formu da dahil, birimlerin göründüğü her yer bundan beslenir.
       await loadProjectDepartments();
       refreshAllDepartmentSelects();
+
+      // Ayarlar panelinden belirlenen resmi tatil günleri (iş günü hesaplaması bunları da hariç tutar)
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/settings/public`);
+        const data = await safeJson(res);
+        HOLIDAYS_CACHE = (data && Array.isArray(data.holidays)) ? data.holidays : [];
+      } catch (e) { HOLIDAYS_CACHE = []; }
 
       await loadUsers();
       if (currentUser) {
@@ -5389,6 +5548,120 @@
       return ROLE_HIERARCHY.slice(idx + 1);
     }
 
+    // ============================================================
+    // AYARLAR PANELİ (Admin/İK): sistemin tüm ayarlarının tek yerden kontrol edildiği sayfa.
+    // ============================================================
+
+    // Yerel çalışma listesi: tatil günleri ekle/çıkar anında listede görünür, "Tüm Ayarları
+    // Kaydet"e basılana kadar sunucuya gitmez (diğer tüm ayarlarla birlikte tek istekte gider).
+    let settingsHolidaysWorking = [];
+
+    function toggleSettingsPanel(key) {
+      const body = document.getElementById(`${key}Body`);
+      const chevron = document.getElementById(`${key}Chevron`);
+      if (!body) return;
+      body.classList.toggle('hidden');
+      if (chevron) chevron.classList.toggle('rotate-180');
+    }
+
+    async function loadSystemSettings() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/settings?userRole=${currentUser.role}`);
+        const data = await safeJson(res);
+        if (!res.ok) { showToast((data && data.error) || 'Ayarlar yüklenemedi.', 'error'); return; }
+
+        document.getElementById('setting_email_task_assigned').checked = !!data.email_task_assigned;
+        document.getElementById('setting_email_task_completed').checked = !!data.email_task_completed;
+        document.getElementById('setting_email_task_revision').checked = !!data.email_task_revision;
+        document.getElementById('setting_email_task_approved').checked = !!data.email_task_approved;
+        document.getElementById('setting_email_project_assigned').checked = !!data.email_project_assigned;
+
+        const approvalRoles = data.approval_required_roles || [];
+        document.querySelectorAll('.setting-approval-role').forEach(cb => { cb.checked = approvalRoles.includes(cb.value); });
+        const approvalDepts = data.approval_required_departments || [];
+        document.querySelectorAll('.setting-approval-dept').forEach(cb => { cb.checked = approvalDepts.includes(cb.value); });
+
+        document.getElementById('setting_site_name').value = data.site_name || '';
+        document.getElementById('setting_email_sender_name').value = data.email_sender_name || '';
+        document.getElementById('setting_email_sender_address').value = data.email_sender_address || '';
+        document.getElementById('setting_site_logo_url').value = data.site_logo_url || '';
+        document.getElementById('setting_dashboard_url').value = data.dashboard_url || '';
+
+        settingsHolidaysWorking = Array.isArray(data.holidays) ? [...data.holidays] : [];
+        renderSettingsHolidaysList();
+
+        document.getElementById('setting_google_calendar_enabled').checked = !!data.google_calendar_enabled;
+      } catch (e) {
+        showToast('Ayarlar yüklenirken hata oluştu.', 'error');
+      }
+    }
+
+    function renderSettingsHolidaysList() {
+      const el = document.getElementById('settingsHolidaysList');
+      if (!el) return;
+      const sorted = [...settingsHolidaysWorking].sort();
+      if (sorted.length === 0) {
+        el.innerHTML = `<p class="text-xs text-slate-400">Henüz tatil günü eklenmedi.</p>`;
+        return;
+      }
+      el.innerHTML = sorted.map(d => `
+        <span class="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200">
+          ${d}
+          <button type="button" onclick="handleRemoveHolidayLocal('${d}')" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark"></i></button>
+        </span>
+      `).join('');
+    }
+
+    function handleAddHolidayLocal() {
+      const input = document.getElementById('settingsNewHolidayInput');
+      const val = input.value;
+      if (!val) return;
+      if (!settingsHolidaysWorking.includes(val)) {
+        settingsHolidaysWorking.push(val);
+        renderSettingsHolidaysList();
+      }
+      input.value = '';
+    }
+
+    function handleRemoveHolidayLocal(date) {
+      settingsHolidaysWorking = settingsHolidaysWorking.filter(d => d !== date);
+      renderSettingsHolidaysList();
+    }
+
+    async function handleSaveSystemSettings() {
+      const updates = {
+        email_task_assigned: document.getElementById('setting_email_task_assigned').checked,
+        email_task_completed: document.getElementById('setting_email_task_completed').checked,
+        email_task_revision: document.getElementById('setting_email_task_revision').checked,
+        email_task_approved: document.getElementById('setting_email_task_approved').checked,
+        email_project_assigned: document.getElementById('setting_email_project_assigned').checked,
+        approval_required_roles: Array.from(document.querySelectorAll('.setting-approval-role:checked')).map(cb => cb.value),
+        approval_required_departments: Array.from(document.querySelectorAll('.setting-approval-dept:checked')).map(cb => cb.value),
+        site_name: document.getElementById('setting_site_name').value.trim(),
+        email_sender_name: document.getElementById('setting_email_sender_name').value.trim(),
+        email_sender_address: document.getElementById('setting_email_sender_address').value.trim(),
+        site_logo_url: document.getElementById('setting_site_logo_url').value.trim(),
+        dashboard_url: document.getElementById('setting_dashboard_url').value.trim(),
+        holidays: settingsHolidaysWorking,
+        google_calendar_enabled: document.getElementById('setting_google_calendar_enabled').checked
+      };
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userRole: currentUser.role, updates })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { showToast((data && data.error) || 'Ayarlar kaydedilemedi.', 'error'); return; }
+        showToast('Ayarlar kaydedildi.', 'success');
+        // Tatil günleri anında iş günü hesaplamasına yansısın diye yerel önbelleği de güncelle
+        HOLIDAYS_CACHE = [...settingsHolidaysWorking];
+      } catch (e) {
+        showToast('Hata: ' + e.message, 'error');
+      }
+    }
+
     async function fetchAdminUsers() {
       const container = document.getElementById('adminUsersByTeam');
       if (!container) return;
@@ -5903,10 +6176,12 @@
       let count = 0;
       let curDate = new Date(startDateStr);
       const endDate = new Date(endDateStr);
+      const holidays = new Set(HOLIDAYS_CACHE || []);
 
       while (curDate <= endDate) {
         const dayOfWeek = curDate.getDay();
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+        const dateStr = curDate.toISOString().substring(0, 10);
+        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidays.has(dateStr)) count++;
         curDate.setDate(curDate.getDate() + 1);
       }
       return count;
@@ -6248,6 +6523,8 @@
       if (personDetailSec) personDetailSec.classList.add('hidden');
       const adminPanelSec = document.getElementById('adminPanelSection');
       if (adminPanelSec) adminPanelSec.classList.add('hidden');
+      const settingsPageSec = document.getElementById('settingsPageSection');
+      if (settingsPageSec) settingsPageSec.classList.add('hidden');
       const adminStatusPageSec = document.getElementById('adminStatusPageSection');
       if (adminStatusPageSec) adminStatusPageSec.classList.add('hidden');
       const engineerProjectsPageSec = document.getElementById('engineerProjectsPageSection');
@@ -6926,6 +7203,14 @@
       const section = document.getElementById('teamProgressSection');
       if (section) section.classList.remove('hidden');
       if (typeof loadTeamProgress === 'function') loadTeamProgress();
+    }
+
+    function openAdminSettingsPage() {
+      const home = document.getElementById('adminHomeSection');
+      if (home) home.classList.add('hidden');
+      const section = document.getElementById('settingsPageSection');
+      if (section) section.classList.remove('hidden');
+      if (typeof loadSystemSettings === 'function') loadSystemSettings();
     }
 
     function openAdminTasksPage() {
