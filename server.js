@@ -1340,7 +1340,9 @@ app.get('/api/admin/users', async (req, res) => {
       return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
     }
 
-    const result = await db.execute(`SELECT id, name, username, email, department, role, status FROM users ORDER BY id DESC`);
+    const result = await db.execute(`SELECT id, name, username, email, phone, department, sub_area, role, leader_sub_type,
+                                             intern_start_date, intern_end_date, engineer_id, status
+                                      FROM users ORDER BY id DESC`);
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1350,7 +1352,7 @@ app.get('/api/admin/users', async (req, res) => {
 // 2. Yeni Kullanıcı Oluştur (Admin Paneli)
 app.post('/api/admin/users', async (req, res) => {
   try {
-    const { name, username, email, phone, password, role, department, subArea, adminRole } = req.body;
+    const { name, username, email, phone, password, role, department, subArea, leaderType, startDate, endDate, adminRole } = req.body;
 
     if (!isAdmin(adminRole)) {
       return res.status(403).json({ error: 'Yetkisiz işlem.' });
@@ -1364,8 +1366,14 @@ app.post('/api/admin/users', async (req, res) => {
     const finalEmail = email && email.trim() !== '' ? email : `${username}@system.local`;
 
     await db.execute({
-      sql: `INSERT INTO users (name, username, email, phone, password, role, department, sub_area, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'APPROVED')`,
-      args: [name, username, finalEmail, phone || null, hashedPassword, role, department || null, department === 'ELEKTRONIK' ? (subArea || null) : null]
+      sql: `INSERT INTO users (name, username, email, phone, password, role, department, sub_area, leader_sub_type, intern_start_date, intern_end_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'APPROVED')`,
+      args: [
+        name, username, finalEmail, phone || null, hashedPassword, role, department || null,
+        department === 'ELEKTRONIK' ? (subArea || null) : null,
+        role === 'LEADER' ? (leaderType || null) : null,
+        role === 'INTERN' ? (startDate || null) : null,
+        role === 'INTERN' ? (endDate || null) : null
+      ]
     });
 
     res.json({ message: 'Kullanıcı başarıyla oluşturuldu.' });
@@ -1402,6 +1410,60 @@ app.put('/api/admin/users/:id/role', async (req, res) => {
     res.json({ message: 'Kullanıcı bilgileri güncellendi.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// 3b. Kullanıcının TÜM bilgilerini tek seferde günceller (Kullanıcı Yönetimi'ndeki "Düzenle" modalı)
+app.put('/api/admin/users/:id/full', async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { adminRole, name, username, email, phone, password, department, subArea, role, leaderType, startDate, endDate, engineerId } = req.body;
+
+    if (!isAdmin(adminRole)) {
+      return res.status(403).json({ error: 'Yetkisiz işlem.' });
+    }
+    if (!name || !username || !role) {
+      return res.status(400).json({ error: 'Ad, kullanıcı adı ve rol zorunludur.' });
+    }
+
+    const dupRes = await db.execute({ sql: `SELECT id FROM users WHERE username = ? AND id != ?`, args: [username.trim(), userId] });
+    if (dupRes.rows.length > 0) {
+      return res.status(400).json({ error: 'Bu kullanıcı adı başka bir kullanıcı tarafından kullanılıyor!' });
+    }
+
+    const finalEmail = email && email.trim() !== '' ? email.trim() : `${username.trim()}@system.local`;
+    const finalSubArea = department === 'ELEKTRONIK' ? (subArea || null) : null;
+    const finalLeaderType = role === 'LEADER' ? (leaderType || null) : null;
+    const finalStartDate = role === 'INTERN' ? (startDate || null) : null;
+    const finalEndDate = role === 'INTERN' ? (endDate || null) : null;
+    const finalEngineerId = role === 'INTERN' ? (engineerId || null) : null;
+
+    const commonArgs = [
+      name, username.trim(), finalEmail, phone || null, department || null, finalSubArea,
+      role, finalLeaderType, finalStartDate, finalEndDate, finalEngineerId
+    ];
+
+    if (password && password.trim() !== '') {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await db.execute({
+        sql: `UPDATE users SET name=?, username=?, email=?, phone=?, department=?, sub_area=?, role=?, leader_sub_type=?,
+                                intern_start_date=?, intern_end_date=?, engineer_id=?, password=? WHERE id=?`,
+        args: [...commonArgs, hashedPassword, userId]
+      });
+    } else {
+      await db.execute({
+        sql: `UPDATE users SET name=?, username=?, email=?, phone=?, department=?, sub_area=?, role=?, leader_sub_type=?,
+                                intern_start_date=?, intern_end_date=?, engineer_id=? WHERE id=?`,
+        args: [...commonArgs, userId]
+      });
+    }
+
+    res.json({ message: 'Kullanıcı bilgileri güncellendi.' });
+  } catch (error) {
+    if (error.message.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ error: 'Bu e-posta adresi başka bir kullanıcı tarafından kullanılıyor!' });
+    }
+    res.status(500).json({ error: 'Kullanıcı güncellenirken hata: ' + error.message });
   }
 });
 

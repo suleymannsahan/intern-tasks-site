@@ -2392,7 +2392,7 @@
 
   <!-- YENİ KULLANICI EKLEME MODALI -->
   <div id="addUserModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-    <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
       <h3 class="font-bold text-lg text-cyan-500"><i class="fa-solid fa-user-plus me-2"></i>Yeni Kullanıcı Oluştur</h3>
       <form onsubmit="handleCreateUser(event)" class="space-y-3">
         <div>
@@ -2432,21 +2432,145 @@
             <option value="">-- Alt Alan Seçiniz --</option>
           </select>
         </div>
-        <div>
+
+        <!-- Rol: Kayıt Ol formundaki ile aynı mantık — Ekip Lideri sadece Elektronik'te görünür,
+             İnsan Kaynakları birimi seçilince rol otomatik HR olur (Admin'e özel ekstra: Sistem Yöneticisi) -->
+        <div id="newUserRoleWrapper">
           <label class="block text-xs font-semibold mb-1">Rol</label>
-          <select id="newUserRole" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
-            <option value="INTERN">Stajyer (INTERN)</option>
-            <option value="TECHNICIAN">Teknisyen (TECHNICIAN)</option>
-            <option value="ENGINEER">Sorumlu Mühendis (ENGINEER)</option>
-            <option value="LEADER">Ekip Lideri (LEADER)</option>
-            <option value="MANAGER">Müdür (MANAGER)</option>
-            <option value="HR">İnsan Kaynakları (HR)</option>
-            <option value="ADMIN">Yönetici (ADMIN)</option>
+          <select id="newUserRole" onchange="handleNewUserRoleChange()" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <option value="MANAGER">Müdür</option>
+            <option value="LEADER" id="newUserOptLeader" class="hidden">Ekip Lideri</option>
+            <option value="ENGINEER">Mühendis</option>
+            <option value="TECHNICIAN">Teknisyen</option>
+            <option value="INTERN">Stajyer</option>
+            <option value="ADMIN">Sistem Yöneticisi</option>
           </select>
         </div>
+        <div id="newUserHrNotice" class="hidden p-3 bg-cyan-50 dark:bg-cyan-950/30 rounded-xl border border-cyan-200 dark:border-cyan-800/50 text-xs text-cyan-700 dark:text-cyan-300">
+          <i class="fa-solid fa-circle-info me-1"></i> İnsan Kaynakları birimi için rol otomatik olarak İnsan Kaynakları olur.
+        </div>
+
+        <!-- Ekip Lideri Türü: sadece Ekip Lideri rolünde görünür -->
+        <div id="newUserLeaderTypeWrap" class="hidden">
+          <label class="block text-xs font-semibold mb-1">Ekip Lideri Türü</label>
+          <select id="newUserLeaderType" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <option value="TEST_EKIP_LIDERI">Test Ekip Lideri</option>
+            <option value="GOMULU_EKIP_LIDERI">Gömülü Ekip Lideri</option>
+          </select>
+        </div>
+
+        <!-- Stajyer bilgileri: sadece Stajyer rolünde görünür -->
+        <div id="newUserInternFieldsWrap" class="hidden space-y-3 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/40">
+          <label class="block text-xs font-semibold text-amber-700 dark:text-amber-400">Stajyer Bilgileri</label>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] mb-1 text-slate-500 dark:text-slate-400">Başlangıç Tarihi</label>
+              <input type="date" id="newUserInternStart" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            </div>
+            <div>
+              <label class="block text-[10px] mb-1 text-slate-500 dark:text-slate-400">Bitiş Tarihi</label>
+              <input type="date" id="newUserInternEnd" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            </div>
+          </div>
+        </div>
+
         <div class="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
           <button type="button" onclick="closeAddUserModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-xs rounded-xl">İptal</button>
           <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs rounded-xl font-semibold">Kullanıcıyı Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- KULLANICIYI TÜM BİLGİLERİYLE DÜZENLE MODALI (Kullanıcı Yönetimi'ndeki "Düzenle" butonu) -->
+  <div id="editUserFullModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+      <h3 class="font-bold text-lg text-cyan-500"><i class="fa-solid fa-user-pen me-2"></i>Kullanıcıyı Düzenle</h3>
+      <form onsubmit="handleSaveEditUserFull(event)" class="space-y-3">
+        <input type="hidden" id="editUserFullId">
+        <div>
+          <label class="block text-xs font-semibold mb-1">Ad Soyad</label>
+          <input type="text" id="editUserFullName" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Kullanıcı Adı</label>
+          <input type="text" id="editUserFullUsername" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">E-Posta (opsiyonel)</label>
+          <input type="email" id="editUserFullEmail" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Telefon (opsiyonel)</label>
+          <input type="tel" id="editUserFullPhone" placeholder="05XX XXX XX XX" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Yeni Şifre (değiştirmek istemiyorsanız boş bırakın)</label>
+          <input type="password" id="editUserFullPassword" placeholder="Yeni şifre" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1">Birim</label>
+          <select id="editUserFullDepartment" onchange="handleEditUserFullDeptChange()" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <option value="">-- Birim Seçiniz --</option>
+            <option value="ELEKTRONIK">Elektronik</option>
+            <option value="MEKANIK">Mekanik</option>
+            <option value="YAZILIM">Yazılım</option>
+            <option value="INSAN_KAYNAKLARI">İnsan Kaynakları</option>
+          </select>
+        </div>
+        <div id="editUserFullSubAreaWrapper" class="hidden">
+          <label class="block text-xs font-semibold mb-1">Alt Alan</label>
+          <select id="editUserFullSubArea" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <option value="">-- Alt Alan Seçiniz --</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold mb-1">Rol</label>
+          <select id="editUserFullRole" onchange="handleEditUserFullRoleChange()" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <option value="MANAGER">Müdür</option>
+            <option value="LEADER" id="editUserFullOptLeader">Ekip Lideri</option>
+            <option value="ENGINEER">Mühendis</option>
+            <option value="TECHNICIAN">Teknisyen</option>
+            <option value="INTERN">Stajyer</option>
+            <option value="HR">İnsan Kaynakları</option>
+            <option value="ADMIN">Sistem Yöneticisi</option>
+          </select>
+        </div>
+
+        <!-- Ekip Lideri Türü: sadece Ekip Lideri rolünde görünür -->
+        <div id="editUserFullLeaderTypeWrap" class="hidden">
+          <label class="block text-xs font-semibold mb-1">Ekip Lideri Türü</label>
+          <select id="editUserFullLeaderType" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <option value="TEST_EKIP_LIDERI">Test Ekip Lideri</option>
+            <option value="GOMULU_EKIP_LIDERI">Gömülü Ekip Lideri</option>
+          </select>
+        </div>
+
+        <!-- Stajyer bilgileri: sadece Stajyer rolünde görünür -->
+        <div id="editUserFullInternFieldsWrap" class="hidden space-y-3 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/40">
+          <label class="block text-xs font-semibold text-amber-700 dark:text-amber-400">Stajyer Bilgileri</label>
+          <div>
+            <label class="block text-[10px] mb-1 text-slate-500 dark:text-slate-400">Sorumlu Mühendis</label>
+            <select id="editUserFullEngineer" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+              <option value="">-- Mühendis Seçiniz --</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] mb-1 text-slate-500 dark:text-slate-400">Başlangıç Tarihi</label>
+              <input type="date" id="editUserFullInternStart" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            </div>
+            <div>
+              <label class="block text-[10px] mb-1 text-slate-500 dark:text-slate-400">Bitiş Tarihi</label>
+              <input type="date" id="editUserFullInternEnd" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+          <button type="button" onclick="closeEditUserFullModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-xs rounded-xl">İptal</button>
+          <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs rounded-xl font-semibold">Kaydet</button>
         </div>
       </form>
     </div>
@@ -2496,6 +2620,9 @@
 
     let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
     let usersList = [];
+    // Kullanıcı Yönetimi'nin son çektiği tam kullanıcı listesi (telefon, alt alan, lider türü, staj
+    // tarihleri, sorumlu mühendis dahil) — "Düzenle" modalı fetch beklemeden buradan doldurulur.
+    let adminUsersCache = [];
     let tasksList = [];
     let dailyLogsList = [];
     // Ayarlar panelinden belirlenen resmi tatil günleri (YYYY-MM-DD listesi); iş günü hesabında
@@ -6192,6 +6319,7 @@
         }
 
         const users = await res.json();
+        adminUsersCache = users; // "Düzenle" modalı bu önbellekten anında (fetch beklemeden) doldurulur
         updateUserMgmtBadge(users.length);
 
         if (users.length === 0) {
@@ -6212,26 +6340,6 @@
           if (b === 'Belirtilmemiş') return -1;
           return (DEPARTMENT_LABELS[a] || a).localeCompare(DEPARTMENT_LABELS[b] || b);
         });
-
-        // Rol ve birim seçeneklerini oluşturmak için sabitler
-        const ROLE_OPTS = [
-          ['INTERN', 'Stajyer'], ['TECHNICIAN', 'Teknisyen'], ['ENGINEER', 'Mühendis'],
-          ['LEADER', 'Ekip Lideri'], ['MANAGER', 'Müdür'], ['HR', 'İnsan Kaynakları'], ['ADMIN', 'Sistem Yöneticisi']
-        ];
-        const DEPT_OPTS = [
-          ...PROJECT_DEPTS.map(d => [d.key, d.label]), ['INSAN_KAYNAKLARI', 'İnsan Kaynakları']
-        ];
-
-        const buildRoleSelect = (u) => `
-          <select onchange="changeUserRoleSelect(${u.id}, this.value)" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-cyan-500">
-            ${ROLE_OPTS.map(([v, l]) => `<option value="${v}" ${u.role === v ? 'selected' : ''}>${l}</option>`).join('')}
-          </select>`;
-
-        const buildDeptSelect = (u) => `
-          <select onchange="changeUserDeptSelect(${u.id}, '${u.role}', this.value)" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-cyan-500">
-            <option value="">-- Birim Seçiniz --</option>
-            ${DEPT_OPTS.map(([v, l]) => `<option value="${v}" ${u.department === v ? 'selected' : ''}>${l}</option>`).join('')}
-          </select>`;
 
         container.innerHTML = deptKeys.map((dept, deptIdx) => {
           const deptLabel = DEPARTMENT_LABELS[dept] || dept;
@@ -6266,18 +6374,13 @@
                       <div class="mt-0.5"><i class="fa-solid fa-circle-dot me-1 text-slate-400"></i>${u.status || '-'}</div>
                     </div>
                   </div>
-                  <button onclick="handleDeleteAdminUser(${u.id})" class="shrink-0 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 text-xs px-2.5 py-1.5 rounded-lg font-semibold transition-all">
-                    <i class="fa-solid fa-trash-can"></i>
-                  </button>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-                  <div>
-                    <label class="block text-[10px] font-semibold text-slate-400 mb-1">Rol</label>
-                    ${buildRoleSelect(u)}
-                  </div>
-                  <div>
-                    <label class="block text-[10px] font-semibold text-slate-400 mb-1">Birim</label>
-                    ${buildDeptSelect(u)}
+                  <div class="flex gap-1.5 shrink-0">
+                    <button onclick="openEditUserModal(${u.id})" class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 text-xs px-2.5 py-1.5 rounded-lg font-semibold transition-all">
+                      <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button onclick="handleDeleteAdminUser(${u.id})" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 text-xs px-2.5 py-1.5 rounded-lg font-semibold transition-all">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -6328,31 +6431,68 @@
       if (form) form.reset();
       const subAreaWrapper = document.getElementById('newUserSubAreaWrapper');
       if (subAreaWrapper) subAreaWrapper.classList.add('hidden');
+      const roleWrapper = document.getElementById('newUserRoleWrapper');
+      if (roleWrapper) roleWrapper.classList.remove('hidden');
+      const hrNotice = document.getElementById('newUserHrNotice');
+      if (hrNotice) hrNotice.classList.add('hidden');
+      const optLeader = document.getElementById('newUserOptLeader');
+      if (optLeader) optLeader.classList.add('hidden');
+      const leaderTypeWrap = document.getElementById('newUserLeaderTypeWrap');
+      if (leaderTypeWrap) leaderTypeWrap.classList.add('hidden');
+      const internFieldsWrap = document.getElementById('newUserInternFieldsWrap');
+      if (internFieldsWrap) internFieldsWrap.classList.add('hidden');
     }
 
-    // "Yeni Kullanıcı Ekle" formunda birim değiştiğinde: Elektronik seçilirse alt alan
-    // seçimini gösterir ve doldurur (Kayıt Ol formundaki regDepartment mantığıyla aynı).
+    // "Yeni Kullanıcı Ekle" formunda birim değiştiğinde: Elektronik seçilirse alt alan seçimini
+    // ve "Ekip Lideri" rol seçeneğini gösterir; İnsan Kaynakları seçilirse rol seçimini tamamen
+    // gizler (rol otomatik HR olur) — Kayıt Ol formundaki handleDepartmentOrRoleChange ile aynı mantık.
     let newUserSubAreaCache = null;
     async function handleNewUserDeptChange() {
       const dept = document.getElementById('newUserDepartment').value;
       const wrapper = document.getElementById('newUserSubAreaWrapper');
       const select = document.getElementById('newUserSubArea');
       const isElektronik = dept === 'ELEKTRONIK';
+      const isHR = dept === 'INSAN_KAYNAKLARI';
+
       if (wrapper) wrapper.classList.toggle('hidden', !isElektronik);
       if (!isElektronik) {
         if (select) select.value = '';
-        return;
+      } else {
+        if (newUserSubAreaCache === null) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/subareas?department=ELEKTRONIK`);
+            newUserSubAreaCache = await res.json();
+          } catch (e) { newUserSubAreaCache = []; }
+        }
+        if (select) {
+          select.innerHTML = '<option value="">-- Alt Alan Seçiniz --</option>' +
+            (newUserSubAreaCache || []).map(s => `<option value="${escapeHtmlProj(s.label)}">${escapeHtmlProj(s.label)}</option>`).join('');
+        }
       }
-      if (newUserSubAreaCache === null) {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/subareas?department=ELEKTRONIK`);
-          newUserSubAreaCache = await res.json();
-        } catch (e) { newUserSubAreaCache = []; }
+
+      const roleSelect = document.getElementById('newUserRole');
+      const roleWrapper = document.getElementById('newUserRoleWrapper');
+      const hrNotice = document.getElementById('newUserHrNotice');
+      const optLeader = document.getElementById('newUserOptLeader');
+
+      if (roleWrapper) roleWrapper.classList.toggle('hidden', isHR);
+      if (hrNotice) hrNotice.classList.toggle('hidden', !isHR);
+
+      if (optLeader) {
+        optLeader.classList.toggle('hidden', !isElektronik);
+        if (!isElektronik && roleSelect && roleSelect.value === 'LEADER') roleSelect.value = 'MANAGER';
       }
-      if (select) {
-        select.innerHTML = '<option value="">-- Alt Alan Seçiniz --</option>' +
-          (newUserSubAreaCache || []).map(s => `<option value="${escapeHtmlProj(s.label)}">${escapeHtmlProj(s.label)}</option>`).join('');
-      }
+
+      handleNewUserRoleChange();
+    }
+
+    // Rol değiştiğinde: Ekip Lideri seçilirse tür alanını, Stajyer seçilirse staj tarihlerini gösterir.
+    function handleNewUserRoleChange() {
+      const role = document.getElementById('newUserRole').value;
+      const leaderTypeWrap = document.getElementById('newUserLeaderTypeWrap');
+      const internFieldsWrap = document.getElementById('newUserInternFieldsWrap');
+      if (leaderTypeWrap) leaderTypeWrap.classList.toggle('hidden', role !== 'LEADER');
+      if (internFieldsWrap) internFieldsWrap.classList.toggle('hidden', role !== 'INTERN');
     }
 
     async function handleCreateUser(e) {
@@ -6363,15 +6503,19 @@
       const email = document.getElementById('newUserEmail').value;
       const phone = document.getElementById('newUserPhone').value;
       const password = document.getElementById('newUserPassword').value;
-      const role = document.getElementById('newUserRole').value;
       const department = document.getElementById('newUserDepartment').value;
       const subArea = department === 'ELEKTRONIK' ? document.getElementById('newUserSubArea').value : null;
+      // İnsan Kaynakları birimi seçildiyse rol otomatik HR olur, rol menüsü kullanılmaz
+      const role = department === 'INSAN_KAYNAKLARI' ? 'HR' : document.getElementById('newUserRole').value;
+      const leaderType = role === 'LEADER' ? document.getElementById('newUserLeaderType').value : null;
+      const startDate = role === 'INTERN' ? document.getElementById('newUserInternStart').value : null;
+      const endDate = role === 'INTERN' ? document.getElementById('newUserInternEnd').value : null;
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, username, email, phone, password, role, department, subArea, adminRole: currentUser.role })
+          body: JSON.stringify({ name, username, email, phone, password, role, department, subArea, leaderType, startDate, endDate, adminRole: currentUser.role })
         });
 
         const data = await res.json();
@@ -6388,89 +6532,143 @@
       }
     }
 
-    // Select ile rol değiştirme (elle yazmadan)
-    async function changeUserRoleSelect(userId, newRole) {
-      if (!newRole) return;
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/role`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newRole, adminRole: currentUser.role })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          await fetchAdminUsers();
-        } else {
-          alert('Hata: ' + data.error);
-          await fetchAdminUsers();
+    // ============================================================
+    // KULLANICIYI TÜM BİLGİLERİYLE DÜZENLE (Kullanıcı Yönetimi'ndeki "Düzenle" butonu)
+    // ============================================================
+
+    // Kart üzerindeki "Düzenle" butonuna basılınca: kullanıcının güncel bilgileri (adminUsersCache'ten)
+    // formun her alanına hazır/dolu bir şekilde yazılır, sonra modal açılır.
+    function openEditUserModal(userId) {
+      const u = (adminUsersCache || []).find(x => x.id == userId);
+      if (!u) return;
+
+      document.getElementById('editUserFullId').value = u.id;
+      document.getElementById('editUserFullName').value = u.name || '';
+      document.getElementById('editUserFullUsername').value = u.username || '';
+      document.getElementById('editUserFullEmail').value = (u.email || '').endsWith('@system.local') ? '' : (u.email || '');
+      document.getElementById('editUserFullPhone').value = u.phone || '';
+      document.getElementById('editUserFullPassword').value = '';
+      document.getElementById('editUserFullDepartment').value = u.department || '';
+      document.getElementById('editUserFullRole').value = u.role || 'INTERN';
+
+      // Alt Alan + Ekip Lideri seçeneği görünürlüğünü birime göre ayarla, sonra rolün kendi alanlarını aç
+      handleEditUserFullDeptChange(u.sub_area || '');
+
+      document.getElementById('editUserFullLeaderType').value = u.leader_sub_type || 'TEST_EKIP_LIDERI';
+      document.getElementById('editUserFullInternStart').value = u.intern_start_date || '';
+      document.getElementById('editUserFullInternEnd').value = u.intern_end_date || '';
+      populateEditUserFullEngineers(u.department, u.engineer_id);
+
+      handleEditUserFullRoleChange();
+
+      const modal = document.getElementById('editUserFullModal');
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeEditUserFullModal() {
+      const modal = document.getElementById('editUserFullModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    // Birim değiştiğinde: Elektronik'te alt alan + Ekip Lideri seçeneği görünür, aksi halde gizlenir.
+    // preSelectedSubArea verilirse (modal ilk açılışında), alt alan listesi dolduktan sonra o seçili olur.
+    let editUserFullSubAreaCache = null;
+    async function handleEditUserFullDeptChange(preSelectedSubArea) {
+      const dept = document.getElementById('editUserFullDepartment').value;
+      const wrapper = document.getElementById('editUserFullSubAreaWrapper');
+      const select = document.getElementById('editUserFullSubArea');
+      const isElektronik = dept === 'ELEKTRONIK';
+
+      if (wrapper) wrapper.classList.toggle('hidden', !isElektronik);
+      if (!isElektronik) {
+        if (select) select.value = '';
+      } else {
+        if (editUserFullSubAreaCache === null) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/subareas?department=ELEKTRONIK`);
+            editUserFullSubAreaCache = await res.json();
+          } catch (e) { editUserFullSubAreaCache = []; }
         }
-      } catch (err) {
-        console.error("Rol güncelleme hatası:", err);
+        if (select) {
+          select.innerHTML = '<option value="">-- Alt Alan Seçiniz --</option>' +
+            (editUserFullSubAreaCache || []).map(s => `<option value="${escapeHtmlProj(s.label)}">${escapeHtmlProj(s.label)}</option>`).join('');
+          if (preSelectedSubArea) select.value = preSelectedSubArea;
+        }
+      }
+
+      const roleSelect = document.getElementById('editUserFullRole');
+      const optLeader = document.getElementById('editUserFullOptLeader');
+      if (optLeader) {
+        optLeader.classList.toggle('hidden', !isElektronik);
+        if (!isElektronik && roleSelect && roleSelect.value === 'LEADER') roleSelect.value = 'MANAGER';
       }
     }
 
-    // Select ile birim değiştirme (elle yazmadan)
-    async function changeUserDeptSelect(userId, currentRole, newDepartment) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/role`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newRole: currentRole, department: newDepartment, adminRole: currentUser.role })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          await fetchAdminUsers();
-        } else {
-          alert('Hata: ' + data.error);
-          await fetchAdminUsers();
-        }
-      } catch (err) {
-        console.error("Birim güncelleme hatası:", err);
+    // Rol değiştiğinde: Ekip Lideri seçilirse tür alanını, Stajyer seçilirse staj bilgilerini gösterir.
+    function handleEditUserFullRoleChange() {
+      const role = document.getElementById('editUserFullRole').value;
+      const leaderTypeWrap = document.getElementById('editUserFullLeaderTypeWrap');
+      const internFieldsWrap = document.getElementById('editUserFullInternFieldsWrap');
+      if (leaderTypeWrap) leaderTypeWrap.classList.toggle('hidden', role !== 'LEADER');
+      if (internFieldsWrap) internFieldsWrap.classList.toggle('hidden', role !== 'INTERN');
+      if (role === 'INTERN') {
+        populateEditUserFullEngineers(document.getElementById('editUserFullDepartment').value, document.getElementById('editUserFullEngineer').value);
       }
     }
 
-    async function handleChangeUserRole(userId, currentRole) {
-      const newRole = prompt('Yeni rolü girin (INTERN, TECHNICIAN, ENGINEER, LEADER, MANAGER, HR, ADMIN):', currentRole);
-      if (!newRole || newRole === currentRole) return;
-
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/role`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newRole: newRole.toUpperCase(), adminRole: currentUser.role })
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-          await fetchAdminUsers();
-        } else {
-          alert('Hata: ' + data.error);
-        }
-      } catch (err) {
-        console.error("Rol güncelleme hatası:", err);
-      }
+    // Seçili birimdeki mühendisleri "Sorumlu Mühendis" seçimine doldurur, varsa mevcut seçimi korur
+    function populateEditUserFullEngineers(department, selectedId) {
+      const select = document.getElementById('editUserFullEngineer');
+      if (!select) return;
+      select.innerHTML = '<option value="">-- Mühendis Seçiniz --</option>';
+      (usersList || []).filter(u => u.role === 'ENGINEER' && u.department === department).forEach(eng => {
+        const opt = document.createElement('option');
+        opt.value = eng.id;
+        opt.innerText = eng.name;
+        if (selectedId && eng.id == selectedId) opt.selected = true;
+        select.appendChild(opt);
+      });
     }
 
-    async function handleChangeUserDepartment(userId, currentRole, currentDepartment) {
-      const options = ['ELEKTRONIK', 'MEKANIK', 'YAZILIM', 'INSAN_KAYNAKLARI'];
-      const newDepartment = prompt(`Yeni birimi girin (${options.join(', ')}):`, currentDepartment || '');
-      if (newDepartment === null || newDepartment === currentDepartment) return;
+    async function handleSaveEditUserFull(e) {
+      e.preventDefault();
+      const userId = document.getElementById('editUserFullId').value;
+      const department = document.getElementById('editUserFullDepartment').value;
+      const role = document.getElementById('editUserFullRole').value;
+
+      const payload = {
+        adminRole: currentUser.role,
+        name: document.getElementById('editUserFullName').value,
+        username: document.getElementById('editUserFullUsername').value,
+        email: document.getElementById('editUserFullEmail').value,
+        phone: document.getElementById('editUserFullPhone').value,
+        password: document.getElementById('editUserFullPassword').value,
+        department,
+        subArea: department === 'ELEKTRONIK' ? document.getElementById('editUserFullSubArea').value : null,
+        role,
+        leaderType: role === 'LEADER' ? document.getElementById('editUserFullLeaderType').value : null,
+        startDate: role === 'INTERN' ? document.getElementById('editUserFullInternStart').value : null,
+        endDate: role === 'INTERN' ? document.getElementById('editUserFullInternEnd').value : null,
+        engineerId: role === 'INTERN' ? document.getElementById('editUserFullEngineer').value : null
+      };
 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/role`, {
+        const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/full`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newRole: currentRole, department: newDepartment.toUpperCase(), adminRole: currentUser.role })
+          body: JSON.stringify(payload)
         });
-
-        const data = await res.json();
+        const data = await safeJson(res);
         if (res.ok) {
+          showToast('Kullanıcı bilgileri güncellendi.', 'success');
+          closeEditUserFullModal();
           await fetchAdminUsers();
+          await fetchAdminStats();
         } else {
-          alert('Hata: ' + data.error);
+          alert('Hata: ' + ((data && data.error) || 'Güncellenemedi.'));
         }
       } catch (err) {
-        console.error("Birim güncelleme hatası:", err);
+        console.error('Kullanıcı güncelleme hatası:', err);
       }
     }
 
