@@ -15,15 +15,10 @@
     "node": ">=18.0.0 <23.0.0"
   },
   "dependencies": {
-    "@getbrevo/brevo": "^6.0.2",
     "@libsql/client": "^0.17.4",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^13.0.1",
     "cors": "^2.8.6",
     "express": "^4.18.2",
-    "googleapis": "^174.0.0",
-    "jsonwebtoken": "^9.0.3",
-    "nodemailer": "^9.0.3",
-    "resend": "^6.18.1"
+    "googleapis": "^174.0.0"
   }
 }

@@ -2130,17 +2130,28 @@
           <input type="email" id="newUserEmail" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
         </div>
         <div>
+          <label class="block text-xs font-semibold mb-1">Telefon (opsiyonel)</label>
+          <input type="tel" id="newUserPhone" placeholder="05XX XXX XX XX" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
           <label class="block text-xs font-semibold mb-1">Şifre</label>
           <input type="password" id="newUserPassword" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
         </div>
         <div>
           <label class="block text-xs font-semibold mb-1">Birim</label>
-          <select id="newUserDepartment" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+          <select id="newUserDepartment" onchange="handleNewUserDeptChange()" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
             <option value="">-- Birim Seçiniz --</option>
             <option value="ELEKTRONIK">Elektronik</option>
             <option value="MEKANIK">Mekanik</option>
             <option value="YAZILIM">Yazılım</option>
             <option value="INSAN_KAYNAKLARI">İnsan Kaynakları</option>
+          </select>
+        </div>
+        <!-- Alt Alan: sadece Elektronik birimi seçilince görünür (Kayıt Ol formundaki ile aynı mantık) -->
+        <div id="newUserSubAreaWrapper" class="hidden">
+          <label class="block text-xs font-semibold mb-1">Alt Alan</label>
+          <select id="newUserSubArea" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <option value="">-- Alt Alan Seçiniz --</option>
           </select>
         </div>
         <div>
@@ -2268,6 +2279,7 @@
       MEETING_REVIEWED: 'fa-solid fa-comments',
       USER_PENDING: 'fa-solid fa-user-clock',
       PROJECT_PROGRESS: 'fa-solid fa-diagram-project',
+      PROJECT_ASSIGNED: 'fa-solid fa-diagram-project',
       ATTENDANCE_CHECKIN: 'fa-solid fa-right-to-bracket',
       ATTENDANCE_CHECKOUT: 'fa-solid fa-right-from-bracket'
     };
@@ -5524,6 +5536,33 @@
       if (modal) modal.classList.add('hidden');
       const form = modal ? modal.querySelector('form') : null;
       if (form) form.reset();
+      const subAreaWrapper = document.getElementById('newUserSubAreaWrapper');
+      if (subAreaWrapper) subAreaWrapper.classList.add('hidden');
+    }
+
+    // "Yeni Kullanıcı Ekle" formunda birim değiştiğinde: Elektronik seçilirse alt alan
+    // seçimini gösterir ve doldurur (Kayıt Ol formundaki regDepartment mantığıyla aynı).
+    let newUserSubAreaCache = null;
+    async function handleNewUserDeptChange() {
+      const dept = document.getElementById('newUserDepartment').value;
+      const wrapper = document.getElementById('newUserSubAreaWrapper');
+      const select = document.getElementById('newUserSubArea');
+      const isElektronik = dept === 'ELEKTRONIK';
+      if (wrapper) wrapper.classList.toggle('hidden', !isElektronik);
+      if (!isElektronik) {
+        if (select) select.value = '';
+        return;
+      }
+      if (newUserSubAreaCache === null) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/subareas?department=ELEKTRONIK`);
+          newUserSubAreaCache = await res.json();
+        } catch (e) { newUserSubAreaCache = []; }
+      }
+      if (select) {
+        select.innerHTML = '<option value="">-- Alt Alan Seçiniz --</option>' +
+          (newUserSubAreaCache || []).map(s => `<option value="${escapeHtmlProj(s.label)}">${escapeHtmlProj(s.label)}</option>`).join('');
+      }
     }
 
     async function handleCreateUser(e) {
@@ -5532,15 +5571,17 @@
       const name = document.getElementById('newUserName').value;
       const username = document.getElementById('newUserUsername').value;
       const email = document.getElementById('newUserEmail').value;
+      const phone = document.getElementById('newUserPhone').value;
       const password = document.getElementById('newUserPassword').value;
       const role = document.getElementById('newUserRole').value;
       const department = document.getElementById('newUserDepartment').value;
+      const subArea = department === 'ELEKTRONIK' ? document.getElementById('newUserSubArea').value : null;
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/admin/users`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, username, email, password, role, department, adminRole: currentUser.role })
+          body: JSON.stringify({ name, username, email, phone, password, role, department, subArea, adminRole: currentUser.role })
         });
 
         const data = await res.json();
