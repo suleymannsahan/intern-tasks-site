@@ -301,7 +301,7 @@ async function createNotification(userId, type, box, title, message, refId) {
   try {
     await db.execute({
       sql: `INSERT INTO notifications (user_id, type, box, title, message, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [userId, type, box, title, message || null, refId != null ? refId : null, new Date().toISOString().replace('T', ' ').substring(0, 19)]
+      args: [userId, type, box, title, message || null, refId != null ? refId : null, nowTurkeyLocal()]
     });
   } catch (e) {
     console.error('Bildirim oluşturulamadı:', e.message);
@@ -1522,7 +1522,7 @@ app.put('/api/tasks/:id/review', async (req, res) => {
       newStatus = 'REVISION_REQUESTED';
 
       // Zaman damgası (YYYY-MM-DD HH:mm:ss)
-      const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const now = nowTurkeyLocal();
 
       // Revizyon geçmişi kaydı ekle
       await db.execute({
@@ -1872,7 +1872,7 @@ app.post('/api/meetings', async (req, res) => {
 
     const targetRolesStr = rolesArr.length > 0 ? rolesArr.join(',') : null;
     const targetUserIdsStr = userIdsArr.length > 0 ? `,${userIdsArr.join(',')},` : null;
-    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const now = nowTurkeyLocal();
 
     const result = await db.execute({
       sql: `INSERT INTO meeting_requests (requested_by, department, subject, description, preferred_date, status, created_at, target_roles, target_user_ids) VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)`,
@@ -2235,6 +2235,12 @@ function todayISO() {
   return new Date().toISOString().substring(0, 10);
 }
 
+// Sunucu (Render) UTC'de çalıştığı için new Date().toISOString() Türkiye saatinden 3 saat geridir.
+// Türkiye DST uygulamadığından (sabit UTC+3) saati bu şekilde kaydırıp yerel saat olarak kaydediyoruz.
+function nowTurkeyLocal() {
+  return new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+}
+
 // Yardımcı: iki tarih arası tam gün farkı (b - a)
 function daysBetween(a, b) {
   const da = new Date(a + 'T00:00:00');
@@ -2343,7 +2349,7 @@ app.post('/api/attendance/checkin', async (req, res) => {
       return res.status(400).json({ error: 'Zaten açık bir giriş kaydınız var. Önce çıkış yapın.' });
     }
 
-    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const now = nowTurkeyLocal();
     const result = await db.execute({
       sql: `INSERT INTO attendance_logs (intern_id, check_in_at, check_in_lat, check_in_lng) VALUES (?, ?, ?, ?)`,
       args: [internId, now, lat != null ? lat : null, lng != null ? lng : null]
@@ -2381,7 +2387,7 @@ app.post('/api/attendance/checkout', async (req, res) => {
     }
     const logId = openRes.rows[0].id;
 
-    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const now = nowTurkeyLocal();
     await db.execute({
       sql: `UPDATE attendance_logs SET check_out_at = ?, check_out_lat = ?, check_out_lng = ? WHERE id = ?`,
       args: [now, lat != null ? lat : null, lng != null ? lng : null, logId]
