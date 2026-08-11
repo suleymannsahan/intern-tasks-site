@@ -11,9 +11,8 @@ const PORT = process.env.PORT || 5000;
 // ===== YAPAY ZEKA (Ollama) AYARI =====
 // Yerel Ollama sunucusunun adresi. Ortam değişkeni ile değiştirilebilir.
 // Örn: OLLAMA_URL=http://localhost:11434  (varsayılan)
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-// Kullanılacak model (Ollama'da "ollama pull qwen2.5" ile indirilmiş olmalı)
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5';
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY ;
+const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
 
 // ============================================================
 // ===== AI İŞ PLANI YARDIMCILARI =====
@@ -3004,19 +3003,21 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
 
     let aciklamalar = {};
     try {
-      const response = await fetch(`${OLLAMA_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: OLLAMA_MODEL,
-          messages: [{ role: 'user', content: prompt }],
-          stream: false,
-          options: { temperature: 0.3 }
-        })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const metin = data.message.content.trim();
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${MISTRAL_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: MISTRAL_MODEL,
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.3
+  })
+});
+if (response.ok) {
+  const data = await response.json();
+  const metin = data.choices[0].message.content.trim();
         metin.split('\n').forEach(satir => {
           const idx = satir.indexOf(':');
           if (idx > -1) {
@@ -3393,12 +3394,12 @@ app.post('/api/chatbot', async (req, res) => {
       return `- "${t.title}" | Atanan: ${t.assignee_name || '?'} | Görevi veren: ${t.created_by || '?'} | Kategori: ${t.category} | Bitiş: ${t.end_date} | Çalışma günü: ${t.work_days} | Durum: ${durumTR[t.status] || t.status}`;
     }).join('\n');
 
-    const sistem = `Sen "Görev & Takip Paneli" adlı uygulamanın görev asistanısın. Kullanıcının görevleriyle ilgili sorularını SADECE aşağıdaki verilere dayanarak yanıtla. Bugünün tarihi: ${bugunStr}.
+    const sistem = `Sen "Görev & Takip Paneli" adlı uygulamanın yardımcı asistanısın. Hem kullanıcının görevleriyle ilgili sorulara hem de genel sorulara (bilgi, açıklama, sohbet) yanıt verebilirsin. Bugünün tarihi: ${bugunStr}.
 
 KURALLAR:
 - SADECE Türkçe yaz. Kısa, net ve yardımcı ol; gerektiğinde madde madde listele.
-- Yalnızca aşağıdaki verilere dayan. Veride olmayan bir şey sorulursa uydurma, "Bu bilgi elimde yok." de.
-- Tarih, sayı ve durum sorularında verideki değerleri kullan.
+- Görevlerle ilgili sorularda AŞAĞIDAKİ görev verilerini kullan; bu verilerde olmayan bir görev bilgisini uydurma.
+- Görev dışı genel sorularda (tanım, açıklama, sohbet, hesaplama vb.) kendi genel bilgini kullanarak normal şekilde yanıtla.
 - Kullanıcının rolü: ${role || 'bilinmiyor'}.
 
 GÖREV VERİLERİ (${tasks.length} görev):
@@ -3414,14 +3415,17 @@ ${gorevMetni || 'Görev bulunmuyor.'}`;
     }
     messages.push({ role: 'user', content: String(message).slice(0, 2000) });
 
-    const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: OLLAMA_MODEL, messages, stream: false, options: { temperature: 0.4 } })
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${MISTRAL_API_KEY}`
+      },
+      body: JSON.stringify({ model: MISTRAL_MODEL, messages, temperature: 0.4 })
     });
     if (!response.ok) throw new Error('Yapay zekâ servisi yanıt vermedi (' + response.status + ').');
     const data = await response.json();
-    const cevap = (data && data.message && data.message.content ? data.message.content : '').trim();
+    const cevap = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content ? data.choices[0].message.content : '').trim();
     res.json({ reply: cevap || 'Üzgünüm, şu an bir yanıt üretemedim.' });
   } catch (error) {
     res.status(500).json({ error: 'Asistan hatası: ' + error.message });
@@ -3482,14 +3486,17 @@ ${gorevMetni}`;
     }));
     const ollamaMesajlar = [{ role: 'system', content: sistem }, ...sonMesajlar];
 
-    const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: OLLAMA_MODEL, messages: ollamaMesajlar, stream: false, options: { temperature: 0.4 } })
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${MISTRAL_API_KEY}`
+      },
+      body: JSON.stringify({ model: MISTRAL_MODEL, messages: ollamaMesajlar, temperature: 0.4 })
     });
     if (!response.ok) throw new Error('LLM yanıt vermedi (' + response.status + ')');
     const data = await response.json();
-    const cevap = (data.message && data.message.content ? data.message.content : '').trim() || 'Üzgünüm, bir yanıt üretemedim.';
+    const cevap = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content ? data.choices[0].message.content : '').trim() || 'Üzgünüm, bir yanıt üretemedim.';
     res.json({ cevap });
   } catch (error) {
     res.status(500).json({ error: 'Asistan hatası: ' + error.message });
