@@ -4947,6 +4947,7 @@
         ? m.target_roles.split(',').map(r => ROLE_LABELS_TR[r.trim()] || r.trim()).join(', ')
         : '';
       const showReview = canReviewMeeting(m);
+      const showDelete = m.status === 'REJECTED' && (currentUser.role === 'ADMIN' || currentUser.role === 'HR');
       return `
       <div class="bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
         <div class="flex justify-between items-start gap-2 mb-1.5">
@@ -4967,8 +4968,30 @@
             <button onclick="openEditMeetingModal(${m.id})" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all" title="İçeriği Düzenle"><i class="fa-solid fa-pen"></i></button>
           </div>
         ` : ''}
+        ${showDelete ? `
+          <div class="flex gap-2 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+            <button onclick="handleDeleteMeetingRequest(${m.id})" class="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs font-semibold py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5"><i class="fa-solid fa-trash-can"></i>Talebi Sil</button>
+          </div>
+        ` : ''}
       </div>
     `;
+    }
+
+    // Reddedilen bir toplantı talebini kalıcı olarak siler (yalnızca Admin/İK)
+    async function handleDeleteMeetingRequest(meetingId) {
+      if (!confirm('Bu reddedilen talebi kalıcı olarak silmek istediğinizden emin misiniz?')) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/meetings/${meetingId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userRole: currentUser.role })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { alert(data.error || 'Talep silinemedi.'); return; }
+        await loadMeetings();
+      } catch (err) {
+        console.error('Toplantı talebi silme hatası:', err);
+      }
     }
 
     // Toplantı taleplerini "Bekleyen Yeni Talepler" ve "Reddedilen Talepler" olarak iki ayrı

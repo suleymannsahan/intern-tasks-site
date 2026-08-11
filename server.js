@@ -2152,6 +2152,31 @@ app.put('/api/meetings/:id/review', async (req, res) => {
   }
 });
 
+// Reddedilen bir toplantı talebini kalıcı olarak siler (Admin/İK, Reddedilen Talepler listesinden)
+app.delete('/api/meetings/:id', async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const { userRole } = req.body;
+
+    if (!isAdmin(userRole)) {
+      return res.status(403).json({ error: 'Bu işlemi yapmaya yetkiniz yok!' });
+    }
+
+    const result = await db.execute({
+      sql: `DELETE FROM meeting_requests WHERE id = ? AND status = 'REJECTED'`,
+      args: [meetingId]
+    });
+
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: 'Talep bulunamadı veya yalnızca reddedilen talepler silinebilir.' });
+    }
+
+    res.json({ message: 'Talep silindi.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Talep silinirken hata: ' + error.message });
+  }
+});
+
 // Toplantı talebinin içeriğini (konu / açıklama / tarih) düzenleme — onay/red akışından bağımsız
 app.put('/api/meetings/:id/content', async (req, res) => {
   try {
