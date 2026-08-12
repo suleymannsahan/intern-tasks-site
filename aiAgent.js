@@ -23,6 +23,8 @@
 // ============================================================
 
 const express = require('express');
+const aiRag = require('./aiRag');       // Özellik 4: semantik geçmiş görev araması
+const aiReport = require('./aiReport'); // Özellik 5: yönetici özeti
 
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
@@ -144,6 +146,40 @@ const ARAC_TANIMLARI = {
       }
     }
   },
+  benzer_gorev_ara: {
+    yazma: false,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'benzer_gorev_ara',
+        description: 'Geçmiş görevlerin açıklama ve notları içinde anlamsal (semantik) arama yapar. Yeni bir kart/aşama için benzer geçmiş işleri, yaşanan blokajları hatırlamak amacıyla kullan.',
+        parameters: {
+          type: 'object',
+          properties: {
+            sorgu: { type: 'string', description: 'Aranacak konu/aşama/sorun (ör. "BDK test cihazı uyumsuzluğu").' }
+          },
+          required: ['sorgu']
+        }
+      }
+    }
+  },
+  yonetici_ozeti: {
+    yazma: false,
+    yetki: ['ADMIN', 'HR', 'MANAGER', 'LEADER'],
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'yonetici_ozeti',
+        description: 'Güncel duruma dair kısa yönetici özeti üretir (devam eden/onay bekleyen/geciken görevler). Yönetici "özet", "durum raporu", "bugün ne durumdayız" gibi sorduğunda kullan.',
+        parameters: {
+          type: 'object',
+          properties: {
+            kapsam: { type: 'string', enum: ['gunluk', 'haftalik'], description: 'İsteğe bağlı; varsayılan günlük.' }
+          }
+        }
+      }
+    }
+  },
   gorev_ata: {
     yazma: true,
     yetki: GOREV_YAZMA_ROLLERI,
@@ -203,13 +239,15 @@ const ARAC_TANIMLARI = {
   }
 };
 
-// Role göre kullanılabilir araç listesi (okuma herkese açık; yazma yetkiye bağlı)
+// Role göre kullanılabilir araç listesi.
+// Kural: bir araçta "yetki" listesi varsa yalnızca o roller kullanabilir (okuma/yazma fark etmez).
+// "yetki" yoksa ve okuma aracıysa herkes kullanabilir.
 function rolIcinAraclar(role) {
   const list = [];
   for (const key of Object.keys(ARAC_TANIMLARI)) {
     const a = ARAC_TANIMLARI[key];
-    if (!a.yazma) { list.push(a.tanim); continue; }
-    if (a.yetki && a.yetki.includes(role)) list.push(a.tanim);
+    if (a.yetki) { if (a.yetki.includes(role)) list.push(a.tanim); continue; }
+    if (!a.yazma) list.push(a.tanim); // yetki tanımsız okuma aracı → serbest
   }
   return list;
 }
@@ -217,8 +255,8 @@ function aracYazmaMi(name) { return !!(ARAC_TANIMLARI[name] && ARAC_TANIMLARI[na
 function aracYetkiliMi(name, role) {
   const a = ARAC_TANIMLARI[name];
   if (!a) return false;
-  if (!a.yazma) return true;
-  return a.yetki && a.yetki.includes(role);
+  if (a.yetki) return a.yetki.includes(role);
+  return !a.yazma; // yetki yoksa yalnızca okuma serbest
 }
 
 // ============================================================
@@ -320,6 +358,20 @@ function createAgentRouter(db, { isAdmin }) {
     if (name === 'gorevleri_listele') return calistir_gorevleri_listele(args, user);
     if (name === 'gorev_detay') return calistir_gorev_detay(args, user);
     if (name === 'is_yuku_ozeti') return calistir_is_yuku_ozeti(args, user);
+    if (name === 'benzer_gorev_ara') {
+      try {
+        const sonuc = await aiRag.benzerGorevAra(db, args.sorgu, 3, { role: user.role, department: user.department });
+        return sonuc.length ? { benzerGorevler: sonuc } : { benzerGorevler: [], not: 'Benzer geçmiş görev bulunamadı.' };
+      } catch (e) { return { hata: 'Arama yapılamadı: ' + e.message }; }
+    }
+    if (name === 'yonetici_ozeti') {
+      try {
+        // Admin/İK genel; Müdür/Lider kendi birimi
+        const dep = (user.role === 'MANAGER' || user.role === 'LEADER') ? user.department : null;
+        const { ozet, veriler } = await aiReport.ozetUret(db, { department: dep, kapsam: args.kapsam || 'gunluk' });
+        return { ozet, metrikler: veriler };
+      } catch (e) { return { hata: 'Özet üretilemedi: ' + e.message }; }
+    }
     return { hata: 'Bilinmeyen araç.' };
   }
 

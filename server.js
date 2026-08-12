@@ -1257,6 +1257,17 @@ app.use('/api', ai.createAiRouter(db, { isAdmin }));
 const aiAgent = require('./aiAgent');
 app.use('/api', aiAgent.createAgentRouter(db, { isAdmin }));
 
+// ÖZELLİK 5 — Otomatik Yönetici Özeti (rapor) — aiReport.js
+const aiReport = require('./aiReport');
+app.use('/api', aiReport.createReportRouter(db, { isAdmin }));
+aiReport.startReportScheduler(db, { isAdmin, sendDetailsEmail, createNotification });
+
+// ÖZELLİK 4 — Semantic Search / RAG (geçmiş görev hafızası) — aiRag.js
+const aiRag = require('./aiRag');
+aiRag.initRagSchema(db).catch(e => console.error('RAG şema:', e.message));
+app.use('/api', aiRag.createRagRouter(db, { isAdmin }));
+aiRag.startRagIndexer(db); // arka planda yeni/değişen görevleri indeksler
+
 // --- SİSTEM AYARLARI ---
 
 // Tüm ayarları döner (varsayılanlarla birleştirilmiş güncel değerler) — Admin/İK
