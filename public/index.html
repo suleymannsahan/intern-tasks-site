@@ -10410,6 +10410,8 @@
     // ============================================================
     let aiChatHistory = [];
     let aiChatBusy = false;
+    // AI ajan katmanı: onay bekleyen yazma işlemi burada tutulur ({name, args})
+    let bekleyenIslem = null;
 
     function toggleAiChatWidget() {
       const panel = document.getElementById('aiChatPanel');
@@ -10446,7 +10448,9 @@
       aiChatBusy = true;
 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/chatbot`, {
+        // Ajan katmanı: AI görev listeleme/iş yükü gibi okuma araçlarını kendi çalıştırır;
+        // atama/tarih/durum gibi bir YAZMA işlemi gerekiyorsa requiresConfirmation döner.
+        const res = await fetch(`${API_BASE_URL}/api/agent/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -10459,16 +10463,89 @@
           })
         });
         const data = await res.json();
-        const reply = res.ok ? (data.reply || 'Üzgünüm, bir yanıt üretemedim.') : ('Hata: ' + (data.error || 'Asistan şu anda kullanılamıyor.'));
-        typingBubble.innerText = reply;
-        aiChatHistory.push({ role: 'user', content: message });
-        aiChatHistory.push({ role: 'assistant', content: reply });
-        if (aiChatHistory.length > 16) aiChatHistory = aiChatHistory.slice(-16);
+
+        if (res.ok && data.requiresConfirmation) {
+          // Yazma işlemi onay bekliyor: balon yerine Onayla/İptal kartı göster
+          typingBubble.remove();
+          bekleyenIslem = data.pendingAction; // { name, args }
+          aiOnayKartiGoster(data.summary || 'Bu işlemi uygulamak istiyor musunuz?');
+          aiChatHistory.push({ role: 'user', content: message });
+        } else {
+          const reply = res.ok ? (data.reply || 'Üzgünüm, bir yanıt üretemedim.') : ('Hata: ' + (data.error || 'Asistan şu anda kullanılamıyor.'));
+          typingBubble.innerText = reply;
+          aiChatHistory.push({ role: 'user', content: message });
+          aiChatHistory.push({ role: 'assistant', content: reply });
+          if (aiChatHistory.length > 16) aiChatHistory = aiChatHistory.slice(-16);
+        }
       } catch (err) {
         console.error('Görev asistanı hatası:', err);
         typingBubble.innerText = 'Asistana ulaşılamadı. Lütfen daha sonra tekrar deneyin.';
       } finally {
         aiChatBusy = false;
+        const box = document.getElementById('aiChatMessages');
+        if (box) box.scrollTop = box.scrollHeight;
+      }
+    }
+
+    // AI ajan: onay kartını sohbet akışına ekler
+    function aiOnayKartiGoster(ozet) {
+      const box = document.getElementById('aiChatMessages');
+      if (!box) return;
+      const card = document.createElement('div');
+      card.className = 'mr-auto max-w-[90%] bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 text-slate-800 dark:text-amber-100 text-xs rounded-2xl px-3 py-2';
+      const uyari = document.createElement('div');
+      uyari.className = 'mb-2';
+      uyari.innerText = ozet;
+      const btnWrap = document.createElement('div');
+      btnWrap.className = 'flex gap-2';
+      const evet = document.createElement('button');
+      evet.className = 'px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white';
+      evet.innerText = 'Onayla';
+      const hayir = document.createElement('button');
+      hayir.className = 'px-3 py-1 rounded bg-slate-400 hover:bg-slate-500 text-white';
+      hayir.innerText = 'İptal';
+      btnWrap.appendChild(evet); btnWrap.appendChild(hayir);
+      card.appendChild(uyari); card.appendChild(btnWrap);
+      box.appendChild(card);
+      box.scrollTop = box.scrollHeight;
+
+      evet.onclick = () => aiIslemiOnayla(card, evet, hayir);
+      hayir.onclick = () => {
+        card.remove();
+        bekleyenIslem = null;
+        appendAiChatBubble('assistant', 'İşlem iptal edildi.');
+      };
+    }
+
+    // AI ajan: onaylanan işlemi /api/agent/execute ile uygular (sunucu yetkiyi tekrar kontrol eder)
+    async function aiIslemiOnayla(card, evetBtn, hayirBtn) {
+      if (!bekleyenIslem) return;
+      evetBtn.disabled = true; hayirBtn.disabled = true;
+      evetBtn.innerText = 'Uygulanıyor...';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/agent/execute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            name: currentUser.name,
+            role: currentUser.role,
+            department: currentUser.department,
+            action: bekleyenIslem
+          })
+        });
+        const data = await res.json();
+        card.remove();
+        const reply = res.ok ? (data.reply || 'İşlem tamamlandı.') : ('Hata: ' + (data.error || 'İşlem yapılamadı.'));
+        appendAiChatBubble('assistant', reply);
+        aiChatHistory.push({ role: 'assistant', content: reply });
+        if (aiChatHistory.length > 16) aiChatHistory = aiChatHistory.slice(-16);
+        // Görev listesi açıksa tazele (fonksiyon adın farklıysa buraya kendi yenileme çağrını koy)
+        if (typeof loadTasks === 'function') { try { loadTasks(); } catch (e) {} }
+      } catch (e) {
+        appendAiChatBubble('assistant', 'İşlem gönderilemedi.');
+      } finally {
+        bekleyenIslem = null;
         const box = document.getElementById('aiChatMessages');
         if (box) box.scrollTop = box.scrollHeight;
       }

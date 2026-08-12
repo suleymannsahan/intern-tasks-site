@@ -1252,6 +1252,11 @@ const isDeptLockedRole = (role) => role === 'MANAGER' || role === 'LEADER';
 // Yapay zeka özellikleri (Akıllı İş Planı, Görev Asistanı, Genel Asistan) — ai.js içinde, izole.
 app.use('/api', ai.createAiRouter(db, { isAdmin }));
 
+// AI AJAN KATMANI (Function Calling + Dinamik System Prompt) — aiAgent.js içinde, izole.
+// Onaylı yazma işlemleri: /api/agent/chat (öneri) + /api/agent/execute (uygula).
+const aiAgent = require('./aiAgent');
+app.use('/api', aiAgent.createAgentRouter(db, { isAdmin }));
+
 // --- SİSTEM AYARLARI ---
 
 // Tüm ayarları döner (varsayılanlarla birleştirilmiş güncel değerler) — Admin/İK
