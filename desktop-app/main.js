@@ -1,8 +1,10 @@
 // main.js — Electron ana süreci. Canlı Render sitesini native bir pencerede açar.
 // Sunucu tarafında hiçbir şey değişmez; bu sadece o siteyi çevreleyen bir "kabuk".
 const { app, BrowserWindow, shell } = require('electron');
+const path = require('path');
 
 const UYGULAMA_URL = 'https://intern-tasks-pannel.onrender.com/';
+const IKON_YOLU = path.join(__dirname, 'build', 'icon.ico');
 
 function pencereOlustur() {
   const win = new BrowserWindow({
@@ -11,6 +13,7 @@ function pencereOlustur() {
     minWidth: 960,
     minHeight: 640,
     title: 'Görevlendirme & Takip Paneli',
+    icon: IKON_YOLU,
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
@@ -29,6 +32,8 @@ function pencereOlustur() {
 }
 
 app.whenReady().then(() => {
+  // Windows görev çubuğunda doğru ikon/uygulama adının gruplanması için
+  app.setAppUserModelId('com.beyesteknoloji.gorevpaneli');
   pencereOlustur();
 
   app.on('activate', () => {
