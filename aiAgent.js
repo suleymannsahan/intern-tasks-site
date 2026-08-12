@@ -76,8 +76,9 @@ Kullanıcı: ${name || 'bilinmiyor'} (rol: ${role || 'bilinmiyor'}${department ?
 
 GENEL KURALLAR:
 - SADECE Türkçe yaz. Markdown/işaret (*, #, **) KULLANMA.
-- Bir işlem yapman istendiğinde uygun aracı (function) çağır; veriyi UYDURMA.
-- Görev listesi/iş yükü gerekiyorsa önce ilgili aracı çağırıp gerçek veriye bak.
+- "sa", "selam", "merhaba", "nasılsın" gibi kısa selam/sohbet mesajlarında HİÇBİR araç (function) çağırma; doğrudan kısa ve samimi cevap ver.
+- Araçları YALNIZCA kullanıcı gerçekten görev listeleme, atama, tarih/durum değiştirme, risk, atama önerisi, özet veya geçmiş görev araması istediğinde çağır.
+- Bir işlem yapman istendiğinde uygun aracı çağır; veriyi UYDURMA.
 - Bir görevi güncellemeden/atamadan önce doğru görevi bulduğundan emin ol; şüphedeysen kullanıcıya sor.`;
 
   if (role === 'ENGINEER' || role === 'TECHNICIAN') {
@@ -301,18 +302,55 @@ function createAgentRouter(db, { isAdmin }) {
     next();
   });
 
-  // Mistral'a araçlarla birlikte istek atar; ham "message" nesnesini döner (tool_calls dahil)
+  // Mistral'a araçlarla birlikte istek atar; ham "message" nesnesini döner (tool_calls dahil).
+  // Zaman aşımı (askıda kalmayı önler) + gerçek hata gövdesini loglar.
   async function mistralWithTools(messages, tools) {
     const body = { model: MISTRAL_MODEL, messages, temperature: 0.2 };
     if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
-    const r = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MISTRAL_API_KEY}` },
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error('Yapay zekâ servisi yanıt vermedi (' + r.status + ').');
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000); // 30 sn'de iptal et
+    let r;
+    try {
+      r = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MISTRAL_API_KEY}` },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') throw new Error('Yapay zekâ servisi zaman aşımına uğradı (30 sn).');
+      throw e;
+    }
+    clearTimeout(timer);
+
+    if (!r.ok) {
+      let govde = '';
+      try { govde = await r.text(); } catch (e) {}
+      console.error('MISTRAL HATASI', r.status, govde.slice(0, 800)); // terminalde gerçek sebep
+      throw new Error('Yapay zekâ servisi yanıt vermedi (' + r.status + ').');
+    }
     const data = await r.json();
     return (data.choices && data.choices[0] && data.choices[0].message) || { content: '' };
+  }
+
+  // Araçsız düz sohbet (yedek): tool yolu patlarsa ya da basit mesajlarda hızlı cevap için.
+  async function duzSohbet(messages) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const r = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MISTRAL_API_KEY}` },
+        body: JSON.stringify({ model: MISTRAL_MODEL, messages, temperature: 0.4 }),
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (!r.ok) return '';
+      const data = await r.json();
+      return ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '').trim();
+    } catch (e) { clearTimeout(timer); return ''; }
   }
 
   // ---- OKUMA aracı yürütücüleri (kullanıcı görünürlüğüne saygılı) ---------
@@ -466,49 +504,59 @@ function createAgentRouter(db, { isAdmin }) {
       }
       messages.push({ role: 'user', content: String(message).slice(0, 2000) });
 
-      // Araç döngüsü: okuma araçlarını çalıştır, yazma gelirse dur ve onay iste
-      const MAX_TUR = 4;
-      for (let tur = 0; tur < MAX_TUR; tur++) {
-        const ai = await mistralWithTools(messages, tools);
-        const toolCalls = ai.tool_calls || [];
+      // Araç döngüsü: okuma araçlarını çalıştır, yazma gelirse dur ve onay iste.
+      // Herhangi bir aşamada Mistral tool isteği patlarsa, kullanıcıyı boş bırakmamak için
+      // araçsız düz sohbete düşüp yine de bir cevap döndürürüz.
+      try {
+        const MAX_TUR = 4;
+        for (let tur = 0; tur < MAX_TUR; tur++) {
+          const ai = await mistralWithTools(messages, tools);
+          const toolCalls = ai.tool_calls || [];
 
-        if (!toolCalls.length) {
-          return res.json({ reply: (ai.content || 'Bir yanıt üretemedim.').trim() });
-        }
-
-        // Model asistan mesajını (tool_calls ile) geçmişe ekle
-        messages.push({ role: 'assistant', content: ai.content || '', tool_calls: toolCalls });
-
-        // YAZMA aracı var mı? İlkini onaya çıkar (birden fazla yazmayı tek turda yapmayız)
-        const yazma = toolCalls.find(tc => aracYazmaMi(tc.function.name));
-        if (yazma) {
-          if (!aracYetkiliMi(yazma.function.name, role)) {
-            return res.json({ reply: 'Bu işlem için yetkiniz bulunmuyor.' });
+          if (!toolCalls.length) {
+            return res.json({ reply: (ai.content || 'Bir yanıt üretemedim.').trim() });
           }
-          let args = {};
-          try { args = JSON.parse(yazma.function.arguments || '{}'); } catch (e) {}
-          const ozet = await yazmaOzeti(yazma.function.name, args);
-          return res.json({
-            requiresConfirmation: true,
-            pendingAction: { name: yazma.function.name, args },
-            summary: ozet
-          });
-        }
 
-        // Sadece okuma araçları: hepsini çalıştır, sonucu modele geri ver, döngü devam
-        for (const tc of toolCalls) {
-          let args = {};
-          try { args = JSON.parse(tc.function.arguments || '{}'); } catch (e) {}
-          const sonuc = await okumaAraciCalistir(tc.function.name, args, user);
-          messages.push({
-            role: 'tool', name: tc.function.name, tool_call_id: tc.id,
-            content: JSON.stringify(sonuc).slice(0, 6000)
-          });
+          // Model asistan mesajını (tool_calls ile) geçmişe ekle
+          messages.push({ role: 'assistant', content: ai.content || '', tool_calls: toolCalls });
+
+          // YAZMA aracı var mı? İlkini onaya çıkar (birden fazla yazmayı tek turda yapmayız)
+          const yazma = toolCalls.find(tc => aracYazmaMi(tc.function.name));
+          if (yazma) {
+            if (!aracYetkiliMi(yazma.function.name, role)) {
+              return res.json({ reply: 'Bu işlem için yetkiniz bulunmuyor.' });
+            }
+            let args = {};
+            try { args = JSON.parse(yazma.function.arguments || '{}'); } catch (e) {}
+            const ozet = await yazmaOzeti(yazma.function.name, args);
+            return res.json({
+              requiresConfirmation: true,
+              pendingAction: { name: yazma.function.name, args },
+              summary: ozet
+            });
+          }
+
+          // Sadece okuma araçları: hepsini çalıştır, sonucu modele geri ver, döngü devam
+          for (const tc of toolCalls) {
+            let args = {};
+            try { args = JSON.parse(tc.function.arguments || '{}'); } catch (e) {}
+            const sonuc = await okumaAraciCalistir(tc.function.name, args, user);
+            messages.push({
+              role: 'tool', name: tc.function.name, tool_call_id: tc.id,
+              content: JSON.stringify(sonuc).slice(0, 6000)
+            });
+          }
         }
+        return res.json({ reply: 'İşlem uzadı, lütfen isteğinizi biraz daha netleştirin.' });
+      } catch (toolHata) {
+        // Tool yolu başarısız (ör. Mistral araç formatı/servis hatası) → araçsız düz cevaba düş
+        console.error('Ajan tool yolu hatası, düz sohbete düşülüyor:', toolHata.message);
+        const duzMesajlar = messages.filter(m => m.role === 'system' || m.role === 'user' || (m.role === 'assistant' && !m.tool_calls));
+        const cevap = await duzSohbet(duzMesajlar);
+        return res.json({ reply: cevap || 'Şu an araç tabanlı işlemlerde bir sorun var, ama buradayım. Sorunuzu tekrar yazar mısınız?' });
       }
-
-      return res.json({ reply: 'İşlem uzadı, lütfen isteğinizi biraz daha netleştirin.' });
     } catch (error) {
+      console.error('Ajan genel hatası:', error.message);
       res.status(500).json({ error: 'Ajan hatası: ' + error.message });
     }
   });
