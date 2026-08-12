@@ -383,8 +383,7 @@
             </div>
             <div id="notificationsList" class="space-y-1.5 scroll-panel max-h-[60vh] pr-1"></div>
             <p id="notificationsEmptyHint" class="text-xs text-slate-400 text-center py-6">Yeni bildiriminiz yok.</p>
-            <!-- İŞ PLANI BİLDİRİMLERİ (AI): aşama onay/red/gecikme uyarıları — /api/bildirimler.
-                 Normal bildirimlerden ayrı, kalıcı akış (okundu işaretlenir, silinmez). -->
+            <!-- İŞ PLANI BİLDİRİMLERİ (AI): aşama onay/red/gecikme uyarıları — /api/bildirimler. -->
             <div id="ipBildirimWrap" class="hidden mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button type="button" onclick="toggleIpBildirimPanel()" class="w-full flex items-center justify-between gap-2 py-1.5 text-left">
                 <span class="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
@@ -7165,14 +7164,7 @@
       const aiPanel = document.getElementById('aiChatPanel');
       if (aiBtn) aiBtn.classList.add('hidden');
       if (aiPanel) aiPanel.classList.add('hidden');
-      // Genel Asistan + İş Planı bildirim durumunu sıfırla (AI)
-      const genelAsistanBtnEl2 = document.getElementById('genelAsistanBtn');
-      const genelAsistanPanelEl2 = document.getElementById('genelAsistanPanel');
-      if (genelAsistanBtnEl2) genelAsistanBtnEl2.classList.add('hidden');
-      if (genelAsistanPanelEl2) genelAsistanPanelEl2.classList.add('hidden');
-      genelAsistanMesajlar = [];
-      const gaBox = document.getElementById('genelAsistanMessages');
-      if (gaBox) gaBox.innerHTML = '';
+      // İş Planı bildirim durumunu sıfırla (AI)
       ipBildirimListesi = [];
       renderIpBildirimPanel();
       aiChatHistory = [];
@@ -7186,9 +7178,7 @@
       document.getElementById('dashboardContainer').classList.remove('hidden');
       const aiBtn = document.getElementById('aiChatWidgetBtn');
       if (aiBtn) aiBtn.classList.remove('hidden');
-      // Genel Asistan balonunu göster + İş Planı bildirim takibini başlat (AI)
-      const genelAsistanBtnEl = document.getElementById('genelAsistanBtn');
-      if (genelAsistanBtnEl) genelAsistanBtnEl.classList.remove('hidden');
+      // İş Planı bildirim takibini başlat (AI)
       baslatIpBildirimTakibi();
 
       // Ad Soyad Yazdır
@@ -10246,8 +10236,6 @@
       const panel = document.getElementById('aiChatPanel');
       if (!panel) return;
       panel.classList.toggle('hidden');
-      const gaPanelClose = document.getElementById('genelAsistanPanel');
-      if (gaPanelClose) gaPanelClose.classList.add('hidden');
       if (!panel.classList.contains('hidden')) {
         const input = document.getElementById('aiChatInput');
         if (input) input.focus();
@@ -10427,95 +10415,16 @@
       } catch (e) { console.error('Bildirimler okundu işaretlenemedi:', e.message); }
     }
 
-    // ============================================================
-    // GENEL ASİSTAN (AI) — ai.js /api/asistan. Görev Asistanı'ndan farkı: birim geneli değil,
-    // yalnızca kullanıcıya ATANAN + kendi VERDİĞİ görevleri bağlam alır (kişiye özel).
-    // ============================================================
-    let genelAsistanMesajlar = [];
-    let genelAsistanBusy = false;
-
-    function toggleGenelAsistan() {
-      const panel = document.getElementById('genelAsistanPanel');
-      if (!panel) return;
-      panel.classList.toggle('hidden');
-      // Aynı anda tek pencere: açılınca Görev Asistanı'nı kapat
-      const gorevPanel = document.getElementById('aiChatPanel');
-      if (gorevPanel && !panel.classList.contains('hidden')) gorevPanel.classList.add('hidden');
-      if (!panel.classList.contains('hidden')) {
-        const input = document.getElementById('genelAsistanInput');
-        if (input) input.focus();
-      }
-    }
-
-    function appendGenelAsistanBubble(role, text) {
-      const box = document.getElementById('genelAsistanMessages');
-      if (!box) return;
-      const bubble = document.createElement('div');
-      bubble.className = role === 'user'
-        ? 'ml-auto max-w-[85%] bg-violet-600 text-white text-xs rounded-2xl rounded-br-sm px-3 py-2 whitespace-pre-wrap break-words'
-        : 'mr-auto max-w-[85%] bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-xs rounded-2xl rounded-bl-sm px-3 py-2 whitespace-pre-wrap break-words';
-      bubble.innerText = text;
-      box.appendChild(bubble);
-      box.scrollTop = box.scrollHeight;
-      return bubble;
-    }
-
-    async function sendGenelAsistanMessage() {
-      if (genelAsistanBusy) return;
-      const input = document.getElementById('genelAsistanInput');
-      const message = (input.value || '').trim();
-      if (!message) return;
-      input.value = '';
-
-      appendGenelAsistanBubble('user', message);
-      genelAsistanMesajlar.push({ role: 'user', content: message });
-      const typingBubble = appendGenelAsistanBubble('assistant', 'Yazıyor...');
-      genelAsistanBusy = true;
-
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/asistan`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: currentUser.id,
-            name: currentUser.name,
-            role: currentUser.role,
-            department: currentUser.department,
-            messages: genelAsistanMesajlar
-          })
-        });
-        const data = await res.json();
-        const reply = res.ok ? (data.cevap || 'Üzgünüm, bir yanıt üretemedim.') : ('Hata: ' + (data.error || 'Asistan şu anda kullanılamıyor.'));
-        typingBubble.innerText = reply;
-        genelAsistanMesajlar.push({ role: 'assistant', content: reply });
-        if (genelAsistanMesajlar.length > 20) genelAsistanMesajlar = genelAsistanMesajlar.slice(-20);
-      } catch (err) {
-        console.error('Genel asistan hatası:', err);
-        typingBubble.innerText = 'Asistana ulaşılamadı. Lütfen daha sonra tekrar deneyin.';
-      } finally {
-        genelAsistanBusy = false;
-        const box = document.getElementById('genelAsistanMessages');
-        if (box) box.scrollTop = box.scrollHeight;
-      }
-    }
-
-    function handleGenelAsistanKeydown(event) {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        sendGenelAsistanMessage();
-      }
-    }
-
   </script>
 
-  <!-- Görev Asistanı: sabit konumlu sohbet balonu (giriş yapılınca görünür olur) -->
-  <button id="aiChatWidgetBtn" onclick="toggleAiChatWidget()" class="hidden fixed bottom-5 right-5 z-[70] w-14 h-14 rounded-full bg-gradient-to-br from-cyan-600 to-violet-600 text-white shadow-2xl flex items-center justify-center hover:scale-105 transition-transform" title="Görev Asistanı">
-    <i class="fa-solid fa-robot text-xl"></i>
+  <!-- BEYES Asistan: sabit konumlu AI sohbet balonu (giriş yapılınca görünür olur) -->
+  <button id="aiChatWidgetBtn" onclick="toggleAiChatWidget()" class="hidden fixed bottom-5 right-5 z-[70] w-14 h-14 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl flex items-center justify-center hover:scale-105 transition-transform p-2" title="BEYES Asistan">
+    <img src="Y_logo.png" alt="BEYES" class="max-h-8 w-auto object-contain">
   </button>
 
   <div id="aiChatPanel" class="hidden fixed bottom-24 right-5 z-[70] w-80 sm:w-96 max-w-[92vw] h-[28rem] max-h-[75vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-cyan-600 to-violet-600 text-white">
-      <div class="flex items-center gap-2 text-sm font-bold"><i class="fa-solid fa-robot"></i> Görev Asistanı</div>
+      <div class="flex items-center gap-2 text-sm font-bold"><span class="inline-flex items-center justify-center h-6 w-6 rounded-md bg-white shrink-0"><img src="Y_logo.png" alt="BEYES" class="max-h-4 w-auto object-contain"></span> BEYES Asistan</div>
       <button onclick="toggleAiChatWidget()" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div id="aiChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
@@ -10526,25 +10435,5 @@
       </button>
     </div>
   </div>
-
-  <!-- Genel Asistan: kişiye özel AI sohbet balonu (/api/asistan). Görev Asistanı'nın yanında. -->
-  <button id="genelAsistanBtn" onclick="toggleGenelAsistan()" class="hidden fixed bottom-5 right-24 z-[70] w-14 h-14 rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-2xl flex items-center justify-center hover:scale-105 transition-transform" title="Genel Asistan">
-    <i class="fa-solid fa-user-tie text-xl"></i>
-  </button>
-
-  <div id="genelAsistanPanel" class="hidden fixed bottom-24 right-5 z-[70] w-80 sm:w-96 max-w-[92vw] h-[28rem] max-h-[75vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-    <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white">
-      <div class="flex items-center gap-2 text-sm font-bold"><i class="fa-solid fa-user-tie"></i> Genel Asistan</div>
-      <button onclick="toggleGenelAsistan()" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div id="genelAsistanMessages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
-    <div class="p-2.5 border-t border-slate-200 dark:border-slate-800 flex items-end gap-2">
-      <textarea id="genelAsistanInput" onkeydown="handleGenelAsistanKeydown(event)" rows="1" placeholder="Görevleriniz hakkında sorun..." class="flex-1 resize-none bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-violet-500"></textarea>
-      <button onclick="sendGenelAsistanMessage()" class="w-9 h-9 shrink-0 rounded-xl bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center">
-        <i class="fa-solid fa-paper-plane text-xs"></i>
-      </button>
-    </div>
-  </div>
-
 </body>
 </html>
