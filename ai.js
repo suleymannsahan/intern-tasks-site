@@ -587,7 +587,7 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
   // ============================================================
   router.post('/chatbot', async (req, res) => {
     try {
-      const { userId, role, department, message, history } = req.body;
+      const { userId, role, department, message, history, name } = req.body;
 
       if (!message || !String(message).trim()) {
         return res.status(400).json({ error: 'Mesaj boş olamaz.' });
@@ -621,13 +621,16 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
         return `- "${t.title}" | Atanan: ${t.assignee_name || '?'} | Görevi veren: ${t.created_by || '?'} | Kategori: ${t.category} | Bitiş: ${t.end_date} | Çalışma günü: ${t.work_days} | Durum: ${durumTR[t.status] || t.status}`;
       }).join('\n');
 
-      const sistem = `Sen "Görev & Takip Paneli" adlı uygulamanın yardımcı asistanısın. Hem kullanıcının görevleriyle ilgili sorulara hem de genel sorulara (bilgi, açıklama, sohbet) yanıt verebilirsin. Bugünün tarihi: ${bugunStr}.
+      const sistem = `Sen "BEYES Asistan" adlı, "Görev & Takip Paneli" uygulamasının yardımcısısın. Bugünün tarihi: ${bugunStr}.
+Kullanıcı: ${name || 'bilinmiyor'} (rol: ${role || 'bilinmiyor'}).
 
 KURALLAR:
-- SADECE Türkçe yaz. Kısa, net ve yardımcı ol; gerektiğinde madde madde listele.
-- Görevlerle ilgili sorularda AŞAĞIDAKİ görev verilerini kullan; bu verilerde olmayan bir görev bilgisini uydurma.
-- Görev dışı genel sorularda (tanım, açıklama, sohbet, hesaplama vb.) kendi genel bilgini kullanarak normal şekilde yanıtla.
-- Kullanıcının rolü: ${role || 'bilinmiyor'}.
+- SADECE Türkçe yaz. Düz metin kullan; Markdown veya *, #, ** gibi işaretleri KULLANMA.
+- Yanıtın soruyla ORANTILI olsun. "sa", "selam", "merhaba" gibi kısa selamlaşmalara SADECE kısa ve samimi bir karşılık ver, nasıl yardımcı olabileceğini sor; İSTENMEDİKÇE görevleri listeleme.
+- Görev listesini ya da özetini yalnızca kullanıcı görevlerini açıkça sorduğunda ver.
+- Görevlerle ilgili sorularda AŞAĞIDAKİ görev verilerini kullan; bu verilerde olmayan bilgiyi uydurma.
+- Kullanıcının adını yalnızca yukarıda verildiyse kullan; İSİM UYDURMA, verilmemişse isimle hitap etme.
+- Görev dışı genel sorulara (tanım, açıklama, sohbet, hesaplama) normal şekilde yanıtla.
 
 GÖREV VERİLERİ (${tasks.length} görev):
 ${gorevMetni || 'Görev bulunmuyor.'}`;
