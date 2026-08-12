@@ -1,0 +1,10 @@
+{
+  "appId": "com.beyesteknoloji.gorevpaneli",
+  "appName": "Görevlendirme ve Takip Paneli",
+  "webDir": "www",
+  "server": {
+    "url": "https://intern-tasks-pannel.onrender.com/",
+    "androidScheme": "https",
+    "cleartext": false
+  }
+}

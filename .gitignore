@@ -3,3 +3,8 @@
 intern-tasks-site.env
 *.db
 
+# Masaüstü (Electron) ve mobil (Capacitor) build çıktıları — kaynak değil, üretilen ikili dosyalar
+desktop-app/dist/
+android-app/android/app/build/
+android-app/android/build/
+

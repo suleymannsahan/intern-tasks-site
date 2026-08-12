@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Görevlendirme & Takip Paneli</title>
+
+  <!-- PWA: telefonda "Ana Ekrana Ekle" ile uygulama gibi açılabilmesi için -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="apple-touch-icon" href="https://i.ibb.co/xtFPW7KP/Y-logo.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Görev Paneli">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -157,6 +165,12 @@
         animation: dropdownPopIn 0.15s ease-out;
       }
     }
+    /* Akıllı İş Planı — Gantt çizelgesi */
+    .ip-gantt-bar { transition: width .3s ease, left .3s ease; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+    .ip-gantt-bar span { text-shadow: 0 1px 2px rgba(0,0,0,.28); }
+    .ip-gantt-soluk { opacity: .55; }
+    .ip-gantt-active { outline: 2px dashed rgba(255,255,255,.85); outline-offset: -3px; animation: ipGanttPulse 1.6s ease-in-out infinite; }
+    @keyframes ipGanttPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.18); } }
   </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen font-sans selection:bg-cyan-500 selection:text-slate-950 transition-colors duration-200">
@@ -9284,6 +9298,40 @@
       bitti: { label: 'Tamamlandı', cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' }
     };
 
+    // Akıllı İş Planı — aşamaları tarih aralıklarına göre renkli Gantt çubuklarıyla çizer.
+    // Not: renkler orijinalinden biraz koyulaştırıldı (700 tonu) — barların üzerindeki beyaz
+    // yazı, daha açık tonlarda (ör. amber-300) WCAG kontrast eşiğinin altında kalıyordu.
+    function ipGanttCiz(adimlar) {
+      if (!adimlar || !adimlar.length) return '';
+      const parseTR = (s) => { const q = String(s || '').split('.').map(Number); return new Date(q[2], (q[1] || 1) - 1, q[0] || 1); };
+      const bas0 = parseTR(adimlar[0].baslangic);
+      let sonBit = bas0;
+      adimlar.forEach(a => { const b = parseTR(a.bitis); if (b > sonBit) sonBit = b; });
+      const toplamMs = Math.max(1, sonBit - bas0);
+      const RENKLER = ['#0e7490', '#4338ca', '#6d28d9', '#be185d', '#b45309', '#047857'];
+      const satirlar = adimlar.map((a, i) => {
+        const bas = parseTR(a.baslangic), bit = parseTR(a.bitis);
+        let sol = ((bas - bas0) / toplamMs) * 100;
+        let gen = ((bit - bas) / toplamMs) * 100;
+        if (!isFinite(sol) || sol < 0) sol = 0;
+        if (!isFinite(gen) || gen < 3) gen = 3;
+        if (sol + gen > 100) gen = Math.max(3, 100 - sol);
+        const durum = a.durum || 'bekliyor';
+        const bitti = durum === 'bitti';
+        const aktif = durum === 'devam' || durum === 'onay_bekliyor';
+        const solukCls = (bitti || aktif) ? '' : 'ip-gantt-soluk';
+        const aktifCls = aktif ? 'ip-gantt-active' : '';
+        const bittiIk = bitti ? '<i class="fa-solid fa-check text-white text-[9px] me-1"></i>' : '';
+        return `
+            <div class="relative h-7 rounded-md bg-slate-100 dark:bg-slate-800/50">
+              <div class="ip-gantt-bar ${solukCls} ${aktifCls} absolute top-0 h-full rounded-md flex items-center justify-center px-1.5" style="left:${sol}%; width:${gen}%; background:${RENKLER[i % RENKLER.length]};" title="${a.ad}: ${a.baslangic} - ${a.bitis} (${a.gun || 0} gün)">
+                <span class="text-[10px] font-semibold text-white truncate">${bittiIk}${a.ad}</span>
+              </div>
+            </div>`;
+      }).join('');
+      return `<div class="mb-3 space-y-1.5">${satirlar}</div>`;
+    }
+
     function renderIsPlaniSection(task) {
       const canManage = IS_PLANI_YETKILI_ROLLER.includes(currentUser.role);
       const isAssignee = task.assigned_to === currentUser.id;
@@ -9367,6 +9415,7 @@
               </div>
             ` : ''}
           </div>
+          ${ipGanttCiz(adimlar)}
           <div class="space-y-2">${stagesHtml}</div>
         </div>
       `;
@@ -10202,6 +10251,13 @@
       setTimeout(() => { if (typeof refreshGoogleCalendarStatus === 'function') refreshGoogleCalendarStatus(); }, 500);
     })();
 
+    // PWA: servis çalışanını kaydet (telefonda "Ana Ekrana Ekle" kurulabilirliği için).
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) => console.error('Servis çalışanı kaydedilemedi:', err));
+      });
+    }
+
     // ============================================================
     // GÖREV ASİSTANI (yapay zeka sohbet balonu) — giriş yapıldığında görünür, tüm rollerde
     // kullanılabilir. Kullanıcının görebildiği görevleri bağlam alır (/api/chatbot).
@@ -10252,6 +10308,7 @@
             role: currentUser.role,
             department: currentUser.department,
             message,
+            name: currentUser.name,
             history: aiChatHistory
           })
         });
@@ -10279,14 +10336,14 @@
     }
   </script>
 
-  <!-- Görev Asistanı: sabit konumlu sohbet balonu (giriş yapılınca görünür olur) -->
-  <button id="aiChatWidgetBtn" onclick="toggleAiChatWidget()" class="hidden fixed bottom-5 right-5 z-[70] w-14 h-14 rounded-full bg-gradient-to-br from-cyan-600 to-violet-600 text-white shadow-2xl flex items-center justify-center hover:scale-105 transition-transform" title="Görev Asistanı">
-    <i class="fa-solid fa-robot text-xl"></i>
+  <!-- BEYES Asistan: sabit konumlu AI sohbet balonu (giriş yapılınca görünür olur) -->
+  <button id="aiChatWidgetBtn" onclick="toggleAiChatWidget()" class="hidden fixed bottom-5 right-5 z-[70] w-14 h-14 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl flex items-center justify-center hover:scale-105 transition-transform p-2" title="BEYES Asistan">
+    <img src="Y_logo.png" alt="BEYES" class="max-h-8 w-auto object-contain">
   </button>
 
   <div id="aiChatPanel" class="hidden fixed bottom-24 right-5 z-[70] w-80 sm:w-96 max-w-[92vw] h-[28rem] max-h-[75vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-cyan-600 to-violet-600 text-white">
-      <div class="flex items-center gap-2 text-sm font-bold"><i class="fa-solid fa-robot"></i> Görev Asistanı</div>
+      <div class="flex items-center gap-2 text-sm font-bold"><span class="inline-flex items-center justify-center h-6 w-6 rounded-md bg-white shrink-0"><img src="Y_logo.png" alt="BEYES" class="max-h-4 w-auto object-contain"></span> BEYES Asistan</div>
       <button onclick="toggleAiChatWidget()" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div id="aiChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>

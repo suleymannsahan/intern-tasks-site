@@ -1,0 +1,17 @@
+{
+  "name": "gorev-paneli-android",
+  "version": "1.0.0",
+  "description": "Görevlendirme & Takip Paneli - Android Uygulaması (canlı siteyi native WebView'da açar)",
+  "private": true,
+  "scripts": {
+    "sync": "cap sync android",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0"
+  }
+}

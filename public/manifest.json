@@ -1,0 +1,26 @@
+{
+  "name": "Görevlendirme & Takip Paneli",
+  "short_name": "Görev Paneli",
+  "description": "Stajyer Görevlendirme ve Takip Paneli",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "https://i.ibb.co/xtFPW7KP/Y-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://i.ibb.co/xtFPW7KP/Y-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

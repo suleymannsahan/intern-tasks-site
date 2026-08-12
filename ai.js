@@ -26,6 +26,12 @@ function nowTurkeyLocal() {
   return new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
 }
 
+function yabanciKarakterVar(metin) {
+  // Türkçe dışı yazı sistemleri (Çince/Japonca/Korece/Kiril/Arapça) tespiti.
+  // Not: İngilizce de Latin harf kullandığından karakterle ayırt edilemez.
+  return /[぀-ヿ㐀-䶿一-鿿豈-﫿＀-￯가-힯ᄀ-ᇿЀ-ӿ؀-ۿ]/.test(String(metin || ''));
+}
+
 // İş planı oluşturma/düzenleme yetkisi olan roller
 const IS_PLANI_YETKILI = ['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'];
 
@@ -147,6 +153,19 @@ function createAiRouter(db, { isAdmin }) {
     return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content ? data.choices[0].message.content : '').trim();
   }
 
+  // mistralChat'in Türkçe-güvenceli sürümü: yanıt Türkçe dışı karakter içeriyorsa
+  // daha katı bir uyarıyla bir kez daha dener.
+  async function mistralChatTR(messages, temperature = 0.4, maxDeneme = 2) {
+    let cevap = '';
+    for (let d = 0; d < maxDeneme; d++) {
+      const msgs = d === 0 ? messages
+        : messages.concat([{ role: 'system', content: 'ÖNEMLİ: Yanıtın TAMAMEN Türkçe olmalı. Çince, Japonca, Kiril vb. Türkçe dışı hiçbir karakter kullanma.' }]);
+      cevap = await mistralChat(msgs, temperature);
+      if (!yabanciKarakterVar(cevap)) return cevap;
+    }
+    return cevap;
+  }
+
   // Geçmiş gerçek verilere göre akıllı ağırlık (5+ kayıt varsa gerçek ortalama)
   async function akilliAgirliklarHesapla(kategori) {
     const ESIK = 5;
@@ -217,17 +236,31 @@ SADECE şu formatta, her aşama için bir satır:
 ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
 
       let aciklamalar = {};
-      try {
-        const metin = await mistralChat([{ role: 'user', content: prompt }], 0.3);
-        metin.split('\n').forEach(satir => {
-          const idx = satir.indexOf(':');
-          if (idx > -1) {
-            aciklamalar[satir.slice(0, idx).trim()] = satir.slice(idx + 1).trim();
-          }
-        });
-      } catch (aiErr) {
-        console.error('AI açıklama hatası:', aiErr.message);
+      const MAX_ACIKLAMA_DENEME = 3;
+      for (let deneme = 0; deneme < MAX_ACIKLAMA_DENEME; deneme++) {
+        try {
+          const ekUyari = deneme === 0 ? ''
+            : '\n\nUYARI: Önceki denemede Türkçe olmayan karakterler vardı. Yanıtın TAMAMEN Türkçe olsun; başka hiçbir dil/karakter kullanma.';
+          const metin = await mistralChat([{ role: 'user', content: prompt + ekUyari }], 0.3);
+          const parsed = {};
+          metin.split('\n').forEach(satir => {
+            const idx = satir.indexOf(':');
+            if (idx > -1) {
+              parsed[satir.slice(0, idx).trim()] = satir.slice(idx + 1).trim();
+            }
+          });
+          aciklamalar = parsed;
+          const bozukVar = Object.values(parsed).some(v => yabanciKarakterVar(v));
+          if (!bozukVar) break; // hepsi Türkçe → tamam
+        } catch (aiErr) {
+          console.error('AI açıklama hatası:', aiErr.message);
+          break; // servis hatasında tekrar deneme
+        }
       }
+      // Türkçe dışı kalan açıklamaları göstermektense boş bırak
+      Object.keys(aciklamalar).forEach(k => {
+        if (yabanciKarakterVar(aciklamalar[k])) aciklamalar[k] = '';
+      });
 
       plan.adimlar = plan.adimlar.map(adim => ({ ...adim, aciklama: aciklamalar[adim.ad] || '' }));
 
@@ -554,7 +587,7 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
   // ============================================================
   router.post('/chatbot', async (req, res) => {
     try {
-      const { userId, role, department, message, history } = req.body;
+      const { userId, role, department, message, history, name } = req.body;
 
       if (!message || !String(message).trim()) {
         return res.status(400).json({ error: 'Mesaj boş olamaz.' });
@@ -588,13 +621,16 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
         return `- "${t.title}" | Atanan: ${t.assignee_name || '?'} | Görevi veren: ${t.created_by || '?'} | Kategori: ${t.category} | Bitiş: ${t.end_date} | Çalışma günü: ${t.work_days} | Durum: ${durumTR[t.status] || t.status}`;
       }).join('\n');
 
-      const sistem = `Sen "Görev & Takip Paneli" adlı uygulamanın yardımcı asistanısın. Hem kullanıcının görevleriyle ilgili sorulara hem de genel sorulara (bilgi, açıklama, sohbet) yanıt verebilirsin. Bugünün tarihi: ${bugunStr}.
+      const sistem = `Sen "BEYES Asistan" adlı, "Görev & Takip Paneli" uygulamasının yardımcısısın. Bugünün tarihi: ${bugunStr}.
+Kullanıcı: ${name || 'bilinmiyor'} (rol: ${role || 'bilinmiyor'}).
 
 KURALLAR:
-- SADECE Türkçe yaz. Kısa, net ve yardımcı ol; gerektiğinde madde madde listele.
-- Görevlerle ilgili sorularda AŞAĞIDAKİ görev verilerini kullan; bu verilerde olmayan bir görev bilgisini uydurma.
-- Görev dışı genel sorularda (tanım, açıklama, sohbet, hesaplama vb.) kendi genel bilgini kullanarak normal şekilde yanıtla.
-- Kullanıcının rolü: ${role || 'bilinmiyor'}.
+- SADECE Türkçe yaz. Düz metin kullan; Markdown veya *, #, ** gibi işaretleri KULLANMA.
+- Yanıtın soruyla ORANTILI olsun. "sa", "selam", "merhaba" gibi kısa selamlaşmalara SADECE kısa ve samimi bir karşılık ver, nasıl yardımcı olabileceğini sor; İSTENMEDİKÇE görevleri listeleme.
+- Görev listesini ya da özetini yalnızca kullanıcı görevlerini açıkça sorduğunda ver.
+- Görevlerle ilgili sorularda AŞAĞIDAKİ görev verilerini kullan; bu verilerde olmayan bilgiyi uydurma.
+- Kullanıcının adını yalnızca yukarıda verildiyse kullan; İSİM UYDURMA, verilmemişse isimle hitap etme.
+- Görev dışı genel sorulara (tanım, açıklama, sohbet, hesaplama) normal şekilde yanıtla.
 
 GÖREV VERİLERİ (${tasks.length} görev):
 ${gorevMetni || 'Görev bulunmuyor.'}`;
@@ -609,7 +645,7 @@ ${gorevMetni || 'Görev bulunmuyor.'}`;
       }
       messages.push({ role: 'user', content: String(message).slice(0, 2000) });
 
-      const cevap = await mistralChat(messages, 0.4);
+      const cevap = await mistralChatTR(messages, 0.4);
       res.json({ reply: cevap || 'Üzgünüm, şu an bir yanıt üretemedim.' });
     } catch (error) {
       res.status(500).json({ error: 'Asistan hatası: ' + error.message });
@@ -664,7 +700,7 @@ ${gorevMetni}`;
         content: String(m.content || '')
       }));
 
-      const cevap = await mistralChat([{ role: 'system', content: sistem }, ...sonMesajlar], 0.4);
+      const cevap = await mistralChatTR([{ role: 'system', content: sistem }, ...sonMesajlar], 0.4);
       res.json({ cevap: cevap || 'Üzgünüm, bir yanıt üretemedim.' });
     } catch (error) {
       res.status(500).json({ error: 'Asistan hatası: ' + error.message });

@@ -1,0 +1,38 @@
+{
+  "name": "gorev-paneli-desktop",
+  "version": "1.0.0",
+  "description": "Görevlendirme & Takip Paneli - Masaüstü Uygulaması (canlı siteyi native pencerede açar)",
+  "main": "main.js",
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.beyesteknoloji.gorevpaneli",
+    "productName": "Görevlendirme ve Takip Paneli",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
