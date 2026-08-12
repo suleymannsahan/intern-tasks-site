@@ -189,7 +189,7 @@
       class="absolute inset-0 w-full h-full object-cover z-0"
       autoplay muted loop playsinline
       poster="">
-      <source src="login-bg-3.mp4" type="video/mp4">
+      <source src="login-bg-4.mp4" type="video/mp4">
     </video>
     <!-- Video üzerine hafif karartma katmanı (formların okunabilirliği için) -->
     <div class="absolute inset-0 z-0 bg-black/40 dark:bg-black/55"></div>
@@ -325,7 +325,7 @@
   <div id="introVideoScreen" class="hidden relative w-full h-[180vh] bg-black">
     <div class="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center">
       <video id="introVideo" class="absolute inset-0 w-full h-full object-cover" autoplay muted loop playsinline>
-        <source src="opening-bg.mp4" type="video/mp4">
+        <source src="login-bg-3.mp4" type="video/mp4">
       </video>
       <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-black/70"></div>
 
@@ -1013,6 +1013,10 @@
               <button type="button" onclick="openAdminProgressPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-sitemap"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Ekiplerin Yapılandırılması</span>
+              </button>
+              <button type="button" onclick="openNewTaskPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-square-plus"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Yeni Görev Ata</span>
               </button>
               <button type="button" data-notif-box="TASKS" onclick="openAdminTasksPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
                 <div class="relative h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-list-check"></i><span class="notif-box-dot hidden"></span></div>
@@ -1714,14 +1718,20 @@
             <!-- Kime atanacak: herhangi bir birimden, herhangi bir çalışan rolünden kişi seçilebilir -->
             <div class="mb-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
               <label class="block text-xs font-semibold mb-2 text-slate-700 dark:text-slate-300">Görev Kime Atanacak?</label>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                 <div>
                   <label class="block text-[10px] text-slate-500 mb-1">Birim</label>
-                  <select id="taskAssignDept" onchange="populateAssigneeOptions()" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                  <select id="taskAssignDept" onchange="handleTaskAssignDeptChange()" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
                     <option value="">Tüm Birimler</option>
                     <option value="ELEKTRONIK">Elektronik</option>
                     <option value="MEKANIK">Mekanik</option>
                     <option value="YAZILIM">Yazılım</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Alt Alan</label>
+                  <select id="taskAssignSubArea" onchange="populateAssigneeOptions()" class="hidden w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                    <option value="">Tüm Alanlar</option>
                   </select>
                 </div>
                 <div>
@@ -8647,8 +8657,8 @@
       return TASK_ASSIGNABLE_ROLES;
     }
 
-    // "Yeni Görev Atama" filtrelerini (Birim/Rol) varsayılana döndürür ve kişi listesini yeniler
-    function resetTaskAssignFilter() {
+    // "Yeni Görev Atama" filtrelerini (Birim/Alt Alan/Rol) varsayılana döndürür ve kişi listesini yeniler
+    async function resetTaskAssignFilter() {
       const deptSel = document.getElementById('taskAssignDept');
       const roleSel = document.getElementById('taskAssignRole');
       if (deptSel) deptSel.value = '';
@@ -8657,15 +8667,52 @@
         roleSel.innerHTML = `<option value="">Tüm Roller</option>` + roles.map(r => `<option value="${r}">${TASK_ROLE_LABELS[r]}</option>`).join('');
         roleSel.value = '';
       }
+      await renderTaskAssignSubAreaOptions();
       populateAssigneeOptions();
     }
 
-    // Görev atama seçim kutusunu seçili Birim/Rol filtresine (ve atayanın yetkili olduğu rollere) göre doldurur
+    // Birim değişince: Alt Alan seçeneklerini yeniler (sadece o birimde alt alan varsa gösterir) ve kişi listesini günceller
+    async function handleTaskAssignDeptChange() {
+      await renderTaskAssignSubAreaOptions();
+      populateAssigneeOptions();
+    }
+
+    // adminTaskFilterSubareas: tüm birimlerin alt alanlarını tutan, bir kez çekilip önbelleğe
+    // alınan paylaşımlı liste (bkz. populateAdminTaskFilters) — burada da aynı önbellek kullanılır.
+    async function renderTaskAssignSubAreaOptions() {
+      const deptSel = document.getElementById('taskAssignDept');
+      const subSel = document.getElementById('taskAssignSubArea');
+      if (!deptSel || !subSel) return;
+
+      if (adminTaskFilterSubareas === null) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/subareas`);
+          adminTaskFilterSubareas = await res.json();
+        } catch (e) { adminTaskFilterSubareas = []; }
+      }
+
+      const dept = deptSel.value;
+      const subs = dept ? (adminTaskFilterSubareas || []).filter(s => s.department_key === dept) : [];
+
+      if (subs.length > 0) {
+        subSel.innerHTML = ['<option value="">Tüm Alanlar</option>']
+          .concat(subs.map(s => `<option value="${s.label}">${s.label}</option>`))
+          .join('');
+        subSel.classList.remove('hidden');
+      } else {
+        subSel.innerHTML = '<option value="">Tüm Alanlar</option>';
+        subSel.value = '';
+        subSel.classList.add('hidden');
+      }
+    }
+
+    // Görev atama seçim kutusunu seçili Birim/Alt Alan/Rol filtresine (ve atayanın yetkili olduğu rollere) göre doldurur
     function populateAssigneeOptions() {
       const select = document.getElementById('taskAssignee');
       if (!select) return;
 
       const dept = document.getElementById('taskAssignDept')?.value || '';
+      const subArea = document.getElementById('taskAssignSubArea')?.value || '';
       const role = document.getElementById('taskAssignRole')?.value || '';
       const assignableRoles = getTaskAssignableRolesForViewer();
 
@@ -8673,6 +8720,7 @@
         assignableRoles.includes(u.role) &&
         (!u.status || u.status === 'APPROVED') &&
         (!dept || u.department === dept) &&
+        (!subArea || u.sub_area === subArea) &&
         (!role || u.role === role)
       ).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
 
