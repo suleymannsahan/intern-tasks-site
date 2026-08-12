@@ -11,7 +11,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+// Varsayılan 100kb sınırı, base64'e çevrilmiş görev belgesi yüklemeleri (10MB'a kadar dosya,
+// base64 sonrası ~13-14MB JSON gövdesi) için yetersiz kalıyordu — 15mb'a çıkarıldı.
+app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Turso Bulut Veritabanı Bağlantısı
@@ -339,6 +341,27 @@ async function initDb() {
       )
     `);
     await loadSettingsCache();
+
+    // ============================================================
+    // GÖREV BELGELERİ: bir göreve atanan kişi, görevi tamamlamadan önce (ya da sırasında)
+    // istediği türde belge ekleyebilir. Ayrı bir dosya sunucusu/bulut depolama olmadığından
+    // (Render'ın disk alanı kalıcı değil) dosya içeriği base64 olarak doğrudan veritabanında
+    // tutulur — 10MB'lık üst sınır bu yüzden var (bkz. POST /api/tasks/:id/attachments).
+    // ============================================================
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS task_attachments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER NOT NULL,
+        file_name TEXT NOT NULL,
+        mime_type TEXT,
+        file_size INTEGER,
+        file_data TEXT NOT NULL,
+        uploaded_by TEXT,
+        uploaded_by_id INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(task_id) REFERENCES tasks(id)
+      )
+    `);
 
     console.log('Turso bulut veritabanı tabloları hazır.');
   } catch (err) {
@@ -1493,6 +1516,7 @@ app.delete('/api/admin/users/:id', async (req, res) => {
     for (const taskId of taskIds) {
       await removeTaskFromGoogle(taskId); // Google Takvim etkinliğini de temizle
       await db.execute({ sql: `DELETE FROM task_revisions WHERE task_id = ?`, args: [taskId] });
+      await db.execute({ sql: `DELETE FROM task_attachments WHERE task_id = ?`, args: [taskId] });
     }
     await db.execute({ sql: `DELETE FROM daily_logs WHERE intern_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM tasks WHERE assigned_to = ?`, args: [userId] });
@@ -1913,13 +1937,17 @@ app.delete('/api/tasks/:id', async (req, res) => {
     // Silmeden ÖNCE Google Takvim etkinliğini kaldır (event id satırla birlikte kaybolmadan)
     await removeTaskFromGoogle(taskId);
 
-    // Göreve ait logları ve revizyonları temizle
+    // Göreve ait logları, revizyonları ve belgeleri temizle
     await db.execute({
       sql: `DELETE FROM daily_logs WHERE task_id = ?`,
       args: [taskId]
     });
     await db.execute({
       sql: `DELETE FROM task_revisions WHERE task_id = ?`,
+      args: [taskId]
+    });
+    await db.execute({
+      sql: `DELETE FROM task_attachments WHERE task_id = ?`,
       args: [taskId]
     });
 
@@ -1937,6 +1965,93 @@ app.delete('/api/tasks/:id', async (req, res) => {
   } catch (error) {
     console.error('Görev silme hatası:', error);
     res.status(500).json({ error: 'Görev silinirken bir hata oluştu: ' + error.message });
+  }
+});
+
+// ============================================================
+// GÖREV BELGELERİ: göreve atanan kişi, görevi tamamlamadan önce (ya da sırasında) istediği
+// belgeyi ekleyebilir. Ayrı bir dosya/bulut depolama servisi kurulmadığı için içerik base64
+// olarak veritabanında tutulur (bkz. initDb'deki task_attachments tablosu yorumu).
+// ============================================================
+const TASK_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+
+// Belge yükle — sadece göreve atanan kişi ekleyebilir
+app.post('/api/tasks/:id/attachments', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    const { fileName, mimeType, fileData, userId, userName } = req.body;
+
+    if (!fileName || !fileData) {
+      return res.status(400).json({ error: 'Dosya adı ve içeriği gereklidir.' });
+    }
+
+    const approxBytes = Math.ceil((fileData.length * 3) / 4);
+    if (approxBytes > TASK_ATTACHMENT_MAX_BYTES) {
+      return res.status(400).json({ error: 'Dosya boyutu 10MB sınırını aşıyor.' });
+    }
+
+    const taskRes = await db.execute({ sql: `SELECT assigned_to FROM tasks WHERE id = ?`, args: [taskId] });
+    if (taskRes.rows.length === 0) return res.status(404).json({ error: 'Görev bulunamadı.' });
+    if (Number(taskRes.rows[0].assigned_to) !== Number(userId)) {
+      return res.status(403).json({ error: 'Sadece göreve atanan kişi belge ekleyebilir.' });
+    }
+
+    const result = await db.execute({
+      sql: `INSERT INTO task_attachments (task_id, file_name, mime_type, file_size, file_data, uploaded_by, uploaded_by_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [taskId, fileName, mimeType || null, approxBytes, fileData, userName || null, userId || null, nowTurkeyLocal()]
+    });
+
+    res.json({ id: Number(result.lastInsertRowid), message: 'Belge eklendi.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Belge eklenemedi: ' + error.message });
+  }
+});
+
+// Görevin belgelerini listele (dosya içeriği hariç, sadece meta veriler) — görevi görebilen
+// herkes çağırabilir, aynı /api/tasks görünürlük mantığı zaten bu endpoint'e ulaşmayı gate'ler
+// (kullanıcı görev listesinde olmayan bir task_id'yi normalde bilemez/isteyemez).
+app.get('/api/tasks/:id/attachments', async (req, res) => {
+  try {
+    const r = await db.execute({
+      sql: `SELECT id, task_id, file_name, mime_type, file_size, uploaded_by, created_at FROM task_attachments WHERE task_id = ? ORDER BY id DESC`,
+      args: [req.params.id]
+    });
+    res.json(r.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Belgeyi indir/görüntüle
+app.get('/api/attachments/:id/download', async (req, res) => {
+  try {
+    const r = await db.execute({ sql: `SELECT * FROM task_attachments WHERE id = ?`, args: [req.params.id] });
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Belge bulunamadı.' });
+    const att = r.rows[0];
+    const buffer = Buffer.from(att.file_data, 'base64');
+    res.setHeader('Content-Type', att.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(att.file_name)}"`);
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Belge sil — yükleyen kişi ya da yönetici rolleri
+app.delete('/api/attachments/:id', async (req, res) => {
+  try {
+    const { userId, userRole } = req.body;
+    const r = await db.execute({ sql: `SELECT uploaded_by_id FROM task_attachments WHERE id = ?`, args: [req.params.id] });
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Belge bulunamadı.' });
+
+    const isOwner = Number(r.rows[0].uploaded_by_id) === Number(userId);
+    const isManager = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(userRole);
+    if (!isOwner && !isManager) return res.status(403).json({ error: 'Bu belgeyi silme yetkiniz yok.' });
+
+    await db.execute({ sql: `DELETE FROM task_attachments WHERE id = ?`, args: [req.params.id] });
+    res.json({ message: 'Belge silindi.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1959,6 +2074,7 @@ app.delete('/api/users/:id', async (req, res) => {
     for (const taskId of taskIds) {
       await removeTaskFromGoogle(taskId); // takvim etkinliğini de temizle
       await db.execute({ sql: `DELETE FROM task_revisions WHERE task_id = ?`, args: [taskId] });
+      await db.execute({ sql: `DELETE FROM task_attachments WHERE task_id = ?`, args: [taskId] });
     }
     await db.execute({ sql: `DELETE FROM daily_logs WHERE intern_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM tasks WHERE assigned_to = ?`, args: [userId] });
@@ -2017,6 +2133,7 @@ app.delete('/api/users/profile', async (req, res) => {
     for (const t of ownTasksResult.rows) {
       await removeTaskFromGoogle(t.id); // Google Takvim etkinliğini de temizle
       await db.execute({ sql: `DELETE FROM task_revisions WHERE task_id = ?`, args: [t.id] });
+      await db.execute({ sql: `DELETE FROM task_attachments WHERE task_id = ?`, args: [t.id] });
     }
     await db.execute({ sql: `DELETE FROM daily_logs WHERE intern_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM tasks WHERE assigned_to = ?`, args: [userId] });

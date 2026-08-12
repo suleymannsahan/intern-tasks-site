@@ -9300,6 +9300,8 @@
           </div>
         </div>
 
+        <div id="taskAttachmentsSection"></div>
+
         ${renderIsPlaniSection(task)}
 
         ${internButtons}
@@ -9307,11 +9309,126 @@
       `;
 
       document.getElementById('taskDetailModal').classList.remove('hidden');
+      renderTaskAttachments(task.id);
     }
 
     function closeTaskDetailModal() {
       const m = document.getElementById('taskDetailModal');
       if (m) m.classList.add('hidden');
+    }
+
+    // ============================================================
+    // GÖREV BELGELERİ: göreve atanan kişi (görevi tamamlamadan önce ya da sırasında) istediği
+    // türde belge ekleyebilir; görevi görebilen herkes (aynı görünürlükle) listeyi görür ve
+    // indirebilir. Dosya içeriği base64 olarak backend'e gönderilir (ayrı depolama yok).
+    // ============================================================
+    function formatDosyaBoyutu(bytes) {
+      if (!bytes && bytes !== 0) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    async function renderTaskAttachments(taskId) {
+      const container = document.getElementById('taskAttachmentsSection');
+      if (!container) return;
+
+      const task = (tasksList || []).find(t => t.id == taskId);
+      const isAssignee = task && task.assigned_to === currentUser.id;
+
+      let attachments = [];
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/attachments`);
+        if (res.ok) attachments = await res.json();
+      } catch (err) {
+        console.error('Belgeler alınamadı:', err);
+      }
+
+      const canManage = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role);
+      const listHtml = attachments.map(a => {
+        const canDelete = isAssignee || canManage || a.uploaded_by === currentUser.name;
+        return `
+          <div class="flex items-center justify-between gap-2 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2">
+            <a href="${API_BASE_URL}/api/attachments/${a.id}/download" target="_blank" rel="noopener" class="min-w-0 flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-400 hover:underline">
+              <i class="fa-solid fa-paperclip shrink-0"></i>
+              <span class="truncate">${a.file_name}</span>
+              <span class="shrink-0 text-slate-400">(${formatDosyaBoyutu(a.file_size)})</span>
+            </a>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-[10px] text-slate-400">${a.uploaded_by || ''}</span>
+              ${canDelete ? `<button onclick="handleDeleteAttachment(${a.id}, ${taskId})" class="text-rose-500 hover:text-rose-600 text-xs"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const uploadHtml = isAssignee ? `
+        <div class="flex items-center gap-2 mt-2">
+          <input type="file" id="taskAttachmentInput_${taskId}" class="flex-1 text-xs text-slate-500 dark:text-slate-400 file:me-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-cyan-500/10 file:text-cyan-600 dark:file:text-cyan-400 file:text-xs file:font-semibold" />
+          <button onclick="handleUploadAttachment(${taskId})" class="shrink-0 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+            <i class="fa-solid fa-upload me-1"></i> Belge Ekle
+          </button>
+        </div>
+      ` : '';
+
+      container.innerHTML = `
+        <div>
+          <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Belgeler (${attachments.length}):</span>
+          <div class="mt-2 space-y-1.5">
+            ${listHtml || '<div class="text-xs text-slate-400 italic">Henüz belge eklenmedi.</div>'}
+          </div>
+          ${uploadHtml}
+        </div>
+      `;
+    }
+
+    function handleUploadAttachment(taskId) {
+      const input = document.getElementById(`taskAttachmentInput_${taskId}`);
+      const file = input && input.files && input.files[0];
+      if (!file) { alert('Lütfen bir dosya seçin.'); return; }
+      if (file.size > 10 * 1024 * 1024) { alert('Dosya boyutu 10MB sınırını aşıyor.'); return; }
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          // reader.result: "data:<mime>;base64,<veri>" — sadece base64 kısmını gönderiyoruz
+          const base64 = String(reader.result).split(',')[1] || '';
+          const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/attachments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileName: file.name,
+              mimeType: file.type,
+              fileData: base64,
+              userId: currentUser.id,
+              userName: currentUser.name
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) { alert('Hata: ' + (data.error || 'Belge yüklenemedi.')); return; }
+          await renderTaskAttachments(taskId);
+        } catch (err) {
+          console.error('Belge yükleme hatası:', err);
+          alert('Belge yüklenirken bir hata oluştu.');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function handleDeleteAttachment(attachmentId, taskId) {
+      if (!confirm('Bu belgeyi silmek istediğinize emin misiniz?')) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/attachments/${attachmentId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, userRole: currentUser.role })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert('Hata: ' + (data.error || 'Belge silinemedi.')); return; }
+        await renderTaskAttachments(taskId);
+      } catch (err) {
+        console.error('Belge silme hatası:', err);
+      }
     }
 
     // ============================================================
