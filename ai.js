@@ -29,7 +29,7 @@ function nowTurkeyLocal() {
 function yabanciKarakterVar(metin) {
   // Türkçe dışı yazı sistemleri (Çince/Japonca/Korece/Kiril/Arapça) tespiti.
   // Not: İngilizce de Latin harf kullandığından karakterle ayırt edilemez.
-  return /[぀-ヿ㐀-䶿一-鿿豈-﫿＀-￯가-힯ᄀ-ᇿЀ-ӿ؀-ۿ]/.test(String(metin || ''));
+  return /[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\uAC00-\uD7AF\u1100-\u11FF\u0400-\u04FF\u0600-\u06FF]/.test(String(metin || ''));
 }
 
 // İş planı oluşturma/düzenleme yetkisi olan roller
