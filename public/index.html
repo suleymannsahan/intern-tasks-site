@@ -2425,11 +2425,7 @@
         </div>
         <div>
           <label class="block text-xs font-semibold mb-1">Rol</label>
-          <select id="manageUserRole" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
-            <option value="INTERN">Stajyer</option>
-            <option value="ENGINEER">Mühendis</option>
-            <option value="LEADER">Ekip Lideri</option>
-          </select>
+          <select id="manageUserRole" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm"></select>
         </div>
         <div class="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
           <button type="button" onclick="closeManageUserModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-xs rounded-xl">İptal</button>
@@ -6821,7 +6817,15 @@
       document.getElementById('manageUserId').value = user.id;
       document.getElementById('manageUserName').value = user.name;
       document.getElementById('manageUserEmail').value = user.email;
-      document.getElementById('manageUserRole').value = user.role;
+
+      // Rol seçenekleri, düzenleyen kişinin hiyerarşide atayabileceği rollerle sınırlı — böylece
+      // ör. bir Mühendis, bir stajyeri bu formdan Ekip Lideri yapamaz (sunucu tarafında da ayrıca kontrol edilir).
+      const isAdminOrHr = currentUser.role === 'ADMIN' || currentUser.role === 'HR';
+      const allowedRoles = isAdminOrHr ? ['INTERN', 'ENGINEER', 'LEADER'] : getSubordinateRoles(currentUser.role);
+      const roleSelect = document.getElementById('manageUserRole');
+      roleSelect.innerHTML = allowedRoles.map(r => `<option value="${r}">${ROLE_LABELS_TR[r] || r}</option>`).join('');
+      roleSelect.value = allowedRoles.includes(user.role) ? user.role : (allowedRoles[0] || '');
+
       document.getElementById('manageUserModal').classList.remove('hidden');
     }
 
@@ -6898,7 +6902,7 @@
         const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'user-role': currentUser.role },
-          body: JSON.stringify({ name, email, role })
+          body: JSON.stringify({ name, email, role, requesterId: currentUser.id })
         });
         if (res.ok) {
           alert('Kullanıcı bilgileri güncellendi.');
@@ -6920,7 +6924,8 @@
       try {
         const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
           method: 'DELETE',
-          headers: { 'user-role': currentUser.role }
+          headers: { 'Content-Type': 'application/json', 'user-role': currentUser.role },
+          body: JSON.stringify({ requesterId: currentUser.id })
         });
         if (res.ok) {
           alert('Kullanıcı silindi.');
@@ -7530,10 +7535,21 @@
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
+    // Sol taraftaki "Ekip Rehberi" panelinde bir kişiyi silme/düzenleme yetkisi var mı?
+    // Kural: Admin/İK her yerde tam yetkili. Stajyer hiçbir zaman kimseyi silemez/düzenleyemez.
+    // Diğer roller SADECE kendi biriminde ve SADECE mevcut rol hiyerarşisindeki (getSubordinateRoles)
+    // kendinden altta olan kişileri silebilir/düzenleyebilir (Müdür > Ekip Lideri > Mühendis > Teknisyen > Stajyer).
+    function canManageInSidebar(u) {
+      if (!currentUser) return false;
+      if (currentUser.role === 'ADMIN' || currentUser.role === 'HR') return true;
+      if (currentUser.role === 'INTERN') return false;
+      if (u.department !== currentUser.department) return false;
+      return getSubordinateRoles(currentUser.role).includes(u.role);
+    }
+
     function renderSidebarDirectory() {
       const container = document.getElementById('sidebarDirectory');
       const filterSelect = document.getElementById('sidebarDeptFilter');
-      const isLeader = currentUser && ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role);
       const roleIcons = {
         MANAGER: 'fa-user-shield text-indigo-500',
         LEADER: 'fa-user-tie text-cyan-500',
@@ -7552,7 +7568,7 @@
               <div class="font-semibold text-slate-900 dark:text-slate-100 ${isInternRole ? 'hover:text-cyan-500 hover:underline' : ''}">${u.name}</div>
               <div class="text-[10px] text-slate-500 dark:text-slate-400">${u.email}</div>
             </div>
-            ${isLeader ? `
+            ${canManageInSidebar(u) ? `
               <div class="flex items-center gap-1 shrink-0">
                 <button onclick="openManageUserModal('${u.id}')" title="Düzenle" class="text-xs text-amber-500 p-1"><i class="fa-solid fa-pen"></i></button>
                 <button onclick="deleteAnyUser('${u.id}', '${u.name.replace(/'/g, "\\'")}')" title="Sil" class="text-xs text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button>

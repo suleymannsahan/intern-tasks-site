@@ -1249,6 +1249,32 @@ const isAdmin = (role) => role === 'ADMIN' || role === 'HR';
 // Firma/Proje yönetiminde kendi biriminle sınırlı erişimi olan roller (Müdür, Ekip Lideri)
 const isDeptLockedRole = (role) => role === 'MANAGER' || role === 'LEADER';
 
+// Sol taraftaki "Ekip Rehberi" panelinden yapılan kullanıcı silme/düzenleme işlemleri için ortak
+// yetki kontrolü: Admin/İK her yerde tam yetkili. Stajyer hiçbir zaman kimseyi silemez/düzenleyemez.
+// Diğer roller SADECE kendi biriminde ve SADECE mevcut rol hiyerarşisinde (ROLE_HIERARCHY /
+// getSubordinateRoles — bkz. aşağıda tanımlı) kendinden altta olan kişiler üzerinde işlem yapabilir.
+async function authorizeHierarchicalUserAction(requesterId, requesterRole, targetUserId) {
+  if (isAdmin(requesterRole)) return { allowed: true };
+  if (requesterRole === 'INTERN') return { allowed: false, error: 'Bu işlemi yapmaya yetkiniz yok!' };
+
+  const requesterRes = await db.execute({ sql: `SELECT department FROM users WHERE id = ?`, args: [requesterId] });
+  const targetRes = await db.execute({ sql: `SELECT role, department FROM users WHERE id = ?`, args: [targetUserId] });
+  if (requesterRes.rows.length === 0 || targetRes.rows.length === 0) {
+    return { allowed: false, error: 'Kullanıcı bulunamadı.' };
+  }
+
+  const requesterDept = requesterRes.rows[0].department;
+  const target = targetRes.rows[0];
+
+  if (!requesterDept || target.department !== requesterDept) {
+    return { allowed: false, error: 'Bu işlemi yalnızca kendi biriminizdeki kullanıcılar için yapabilirsiniz.' };
+  }
+  if (!getSubordinateRoles(requesterRole).includes(target.role)) {
+    return { allowed: false, error: 'Bu kullanıcıyı silme/düzenleme yetkiniz yok.' };
+  }
+  return { allowed: true };
+}
+
 // Yapay zeka özellikleri (Akıllı İş Planı, Görev Asistanı, Genel Asistan) — ai.js içinde, izole.
 app.use('/api', ai.createAiRouter(db, { isAdmin }));
 
@@ -2081,9 +2107,11 @@ app.delete('/api/users/:id', async (req, res) => {
   try {
     const userId = req.params.id;
     const userRole = (req.headers['user-role'] || '').toUpperCase();
+    const requesterId = req.body && req.body.requesterId;
 
-    if (!['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(userRole)) {
-      return res.status(403).json({ error: 'Bu işlemi yapmaya yetkiniz yok!' });
+    const auth = await authorizeHierarchicalUserAction(requesterId, userRole, userId);
+    if (!auth.allowed) {
+      return res.status(403).json({ error: auth.error });
     }
 
     const tasksResult = await db.execute({
@@ -2176,15 +2204,22 @@ app.delete('/api/users/profile', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const userId = req.params.id;
-    const { name, email, role, startDate, endDate } = req.body;
+    const { name, email, role, startDate, endDate, requesterId } = req.body;
     const userRole = (req.headers['user-role'] || '').toUpperCase();
 
-    if (!['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(userRole)) {
-      return res.status(403).json({ error: 'Bu işlemi yapmaya yetkiniz yok!' });
+    const auth = await authorizeHierarchicalUserAction(requesterId, userRole, userId);
+    if (!auth.allowed) {
+      return res.status(403).json({ error: auth.error });
     }
 
     if (!name || !email || !role) {
       return res.status(400).json({ error: 'Ad, e-posta ve rol alanları zorunludur.' });
+    }
+
+    // Hedef kişiyi yönetme yetkisi olsa bile, kişiyi kendi hiyerarşisinin dışına (ör. Ekip
+    // Lideri'ne, ya da kendi rolüne) terfi ettirmesin — sadece izin verilen roller arasında geçiş.
+    if (!isAdmin(userRole) && !getSubordinateRoles(userRole).includes(role)) {
+      return res.status(403).json({ error: 'Bu kullanıcıyı seçtiğiniz role atama yetkiniz yok.' });
     }
 
     await db.execute({
