@@ -25,6 +25,7 @@
 const express = require('express');
 const aiRag = require('./aiRag');       // Özellik 4: semantik geçmiş görev araması
 const aiReport = require('./aiReport'); // Özellik 5: yönetici özeti
+const aiInsights = require('./aiInsights'); // Özellik 2+3: risk taraması + atama önerisi
 
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
@@ -175,6 +176,36 @@ const ARAC_TANIMLARI = {
           type: 'object',
           properties: {
             kapsam: { type: 'string', enum: ['gunluk', 'haftalik'], description: 'İsteğe bağlı; varsayılan günlük.' }
+          }
+        }
+      }
+    }
+  },
+  risk_taramasi: {
+    yazma: false,
+    yetki: ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'],
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'risk_taramasi',
+        description: 'Gecikme OLMADAN önce riskli/darboğaz aşamaları bulur (süresi %70+ dolmuş ama tamamlanmamış, geçmişte sarkma eğilimi olan). "Risk var mı", "hangi görevler sıkışık", "darboğaz" gibi sorularda kullan.',
+        parameters: { type: 'object', properties: {} }
+      }
+    }
+  },
+  atama_onerisi: {
+    yazma: false,
+    yetki: ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'],
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'atama_onerisi',
+        description: 'Yeni bir görev için, adayların aktif iş yükü ve geçmiş performansına göre en uygun kişiyi önerir. "Bunu kime atayayım", "kim müsait", "en uygun mühendis" gibi sorularda kullan.',
+        parameters: {
+          type: 'object',
+          properties: {
+            kategori: { type: 'string', description: 'Görevin kategorisi (varsa).' },
+            asama: { type: 'string', description: 'Ağırlıklı/kritik aşama (ör. Sequence, Visio). İsteğe bağlı.' }
           }
         }
       }
@@ -371,6 +402,20 @@ function createAgentRouter(db, { isAdmin }) {
         const { ozet, veriler } = await aiReport.ozetUret(db, { department: dep, kapsam: args.kapsam || 'gunluk' });
         return { ozet, metrikler: veriler };
       } catch (e) { return { hata: 'Özet üretilemedi: ' + e.message }; }
+    }
+    if (name === 'risk_taramasi') {
+      try {
+        const dep = (user.role === 'MANAGER' || user.role === 'LEADER' || user.role === 'ENGINEER') ? user.department : null;
+        const riskler = await aiInsights.riskTara(db, { department: dep });
+        return riskler.length ? { riskler: riskler.slice(0, 10) } : { riskler: [], not: 'Şu an belirgin bir risk/darboğaz görünmüyor.' };
+      } catch (e) { return { hata: 'Risk taraması yapılamadı: ' + e.message }; }
+    }
+    if (name === 'atama_onerisi') {
+      try {
+        const dep = isAdmin(user.role) ? null : (user.department || null);
+        const sonuc = await aiInsights.atamaOnerisi(db, { kategori: args.kategori, department: dep, asama: args.asama });
+        return sonuc;
+      } catch (e) { return { hata: 'Atama önerisi üretilemedi: ' + e.message }; }
     }
     return { hata: 'Bilinmeyen araç.' };
   }

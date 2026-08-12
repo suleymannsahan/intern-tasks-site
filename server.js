@@ -1268,6 +1268,11 @@ aiRag.initRagSchema(db).catch(e => console.error('RAG şema:', e.message));
 app.use('/api', aiRag.createRagRouter(db, { isAdmin }));
 aiRag.startRagIndexer(db); // arka planda yeni/değişen görevleri indeksler
 
+// ÖZELLİK 2+3 — Risk erken uyarı + Akıllı atama önerisi — aiInsights.js
+const aiInsights = require('./aiInsights');
+app.use('/api', aiInsights.createInsightsRouter(db, { isAdmin }));
+aiInsights.startRiskScheduler(db); // saatlik risk taraması -> bildirim paneline yazar
+
 // --- SİSTEM AYARLARI ---
 
 // Tüm ayarları döner (varsayılanlarla birleştirilmiş güncel değerler) — Admin/İK
