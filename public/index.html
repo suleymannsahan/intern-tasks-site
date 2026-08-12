@@ -599,9 +599,7 @@
                  belirli bir stajyerin görevlerine daraltabilir -->
             <div id="engineerInternFilterWrap" class="hidden mb-4">
               <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">Stajyer Filtrele</label>
-              <select id="engineerInternFilterSelect" onchange="setEngineerInternFilter(this.value)" class="w-full sm:w-64 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
-                <option value="">Tümü (Kendim + Stajyerlerim)</option>
-              </select>
+              <select id="engineerInternFilterSelect" onchange="setEngineerInternFilter(this.value)" class="w-full sm:w-64 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100"></select>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -8483,8 +8481,9 @@
       renderLeaderTasksPage();
     }
 
-    // MÜHENDİS: kendisine sorumlu mühendis olarak atanmış (engineer_id ile bağlı) stajyerleri
-    // "Görevler" sayfasının üstünde filtre olarak listeler; seçilince o stajyerin görevlerine daraltır.
+    // MÜHENDİS: "Görevler" sayfasının üstünde "Kendim" (kendi görevleri) ile kendisine sorumlu
+    // mühendis olarak atanmış (engineer_id ile bağlı) her stajyeri ayrı seçenek olarak listeler;
+    // seçilen kişinin görevlerine daraltır (birleşik "Tümü" görünümü yok, sade tutuluyor).
     let engineerInternFilterValue = '';
 
     function populateEngineerInternFilter() {
@@ -8500,10 +8499,11 @@
         .filter(u => u.role === 'INTERN' && u.engineer_id == currentUser.id)
         .sort((a, b) => a.name.localeCompare(b.name));
 
-      if (!myInterns.some(u => u.id == engineerInternFilterValue)) engineerInternFilterValue = '';
+      const validValues = [String(currentUser.id), ...myInterns.map(u => String(u.id))];
+      if (!validValues.includes(String(engineerInternFilterValue))) engineerInternFilterValue = currentUser.id;
 
-      select.innerHTML = `<option value="">Tümü (Kendim + Stajyerlerim)</option>` +
-        myInterns.map(u => `<option value="${u.id}" ${u.id == engineerInternFilterValue ? 'selected' : ''}>${u.name}</option>`).join('');
+      select.innerHTML = `<option value="${currentUser.id}" ${String(engineerInternFilterValue) === String(currentUser.id) ? 'selected' : ''}>Kendim</option>` +
+        myInterns.map(u => `<option value="${u.id}" ${String(u.id) === String(engineerInternFilterValue) ? 'selected' : ''}>${u.name}</option>`).join('');
     }
 
     function setEngineerInternFilter(internId) {
@@ -8525,15 +8525,12 @@
       const subRoles = getSubordinateRoles(currentUser.role);
 
       const relevant = (tasksList || []).filter(t => {
-        // Mühendis için "Görevler" listesi kendisine ait görevlerin yanı sıra, kendisinden
-        // sorumlu (engineer_id ile bağlı) stajyerlerin görevlerini de gösterir. Üstteki
-        // "Stajyer Filtrele" ile belirli bir stajyerin görevlerine daraltılabilir.
+        // Mühendis için "Görevler" listesi, üstteki "Stajyer Filtrele" seçimine göre ya kendi
+        // görevlerini ya da seçilen (kendisinden sorumlu, engineer_id ile bağlı) stajyerin
+        // görevlerini gösterir.
         if (currentUser.role === 'ENGINEER') {
-          if (engineerInternFilterValue) return t.assigned_to == engineerInternFilterValue;
-          const myInternIds = (usersList || [])
-            .filter(u => u.role === 'INTERN' && u.engineer_id == currentUser.id)
-            .map(u => u.id);
-          return t.assigned_to == currentUser.id || myInternIds.includes(t.assigned_to);
+          const selected = engineerInternFilterValue || currentUser.id;
+          return t.assigned_to == selected;
         }
 
         const arole = getAssigneeRole(t);
