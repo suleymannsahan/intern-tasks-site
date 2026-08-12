@@ -157,6 +157,12 @@
         animation: dropdownPopIn 0.15s ease-out;
       }
     }
+    /* Akıllı İş Planı — Gantt çizelgesi */
+    .ip-gantt-bar { transition: width .3s ease, left .3s ease; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+    .ip-gantt-bar span { text-shadow: 0 1px 2px rgba(0,0,0,.28); }
+    .ip-gantt-soluk { opacity: .55; }
+    .ip-gantt-active { outline: 2px dashed rgba(255,255,255,.85); outline-offset: -3px; animation: ipGanttPulse 1.6s ease-in-out infinite; }
+    @keyframes ipGanttPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.18); } }
   </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen font-sans selection:bg-cyan-500 selection:text-slate-950 transition-colors duration-200">
@@ -9307,6 +9313,38 @@
       bitti: { label: 'Tamamlandı', cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' }
     };
 
+    // Akıllı İş Planı — aşamaları tarih aralıklarına göre renkli Gantt çubuklarıyla çizer.
+    function ipGanttCiz(adimlar) {
+      if (!adimlar || !adimlar.length) return '';
+      const parseTR = (s) => { const q = String(s || '').split('.').map(Number); return new Date(q[2], (q[1] || 1) - 1, q[0] || 1); };
+      const bas0 = parseTR(adimlar[0].baslangic);
+      let sonBit = bas0;
+      adimlar.forEach(a => { const b = parseTR(a.bitis); if (b > sonBit) sonBit = b; });
+      const toplamMs = Math.max(1, sonBit - bas0);
+      const RENKLER = ['#06b6d4', '#818cf8', '#a78bfa', '#f472b6', '#fcd34d', '#34d399'];
+      const satirlar = adimlar.map((a, i) => {
+        const bas = parseTR(a.baslangic), bit = parseTR(a.bitis);
+        let sol = ((bas - bas0) / toplamMs) * 100;
+        let gen = ((bit - bas) / toplamMs) * 100;
+        if (!isFinite(sol) || sol < 0) sol = 0;
+        if (!isFinite(gen) || gen < 3) gen = 3;
+        if (sol + gen > 100) gen = Math.max(3, 100 - sol);
+        const durum = a.durum || 'bekliyor';
+        const bitti = durum === 'bitti';
+        const aktif = durum === 'devam' || durum === 'onay_bekliyor';
+        const solukCls = (bitti || aktif) ? '' : 'ip-gantt-soluk';
+        const aktifCls = aktif ? 'ip-gantt-active' : '';
+        const bittiIk = bitti ? '<i class="fa-solid fa-check text-white text-[9px] me-1"></i>' : '';
+        return `
+            <div class="relative h-7 rounded-md bg-slate-100 dark:bg-slate-800/50">
+              <div class="ip-gantt-bar ${solukCls} ${aktifCls} absolute top-0 h-full rounded-md flex items-center justify-center px-1.5" style="left:${sol}%; width:${gen}%; background:${RENKLER[i % RENKLER.length]};" title="${a.ad}: ${a.baslangic} - ${a.bitis} (${a.gun || 0} gün)">
+                <span class="text-[10px] font-semibold text-white truncate">${bittiIk}${a.ad}</span>
+              </div>
+            </div>`;
+      }).join('');
+      return `<div class="mb-3 space-y-1.5">${satirlar}</div>`;
+    }
+
     function renderIsPlaniSection(task) {
       const canManage = IS_PLANI_YETKILI_ROLLER.includes(currentUser.role);
       const isAssignee = task.assigned_to === currentUser.id;
@@ -9390,6 +9428,7 @@
               </div>
             ` : ''}
           </div>
+          ${ipGanttCiz(adimlar)}
           <div class="space-y-2">${stagesHtml}</div>
         </div>
       `;
