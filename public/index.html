@@ -595,6 +595,15 @@
               <div id="leaderTasksRoleToggle" class="inline-flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-300 dark:border-slate-800"></div>
             </div>
 
+            <!-- MÜHENDİS: sorumlu olduğu stajyerlerin görevlerini de burada görür, bu filtre ile
+                 belirli bir stajyerin görevlerine daraltabilir -->
+            <div id="engineerInternFilterWrap" class="hidden mb-4">
+              <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">Stajyer Filtrele</label>
+              <select id="engineerInternFilterSelect" onchange="setEngineerInternFilter(this.value)" class="w-full sm:w-64 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+                <option value="">Tümü (Kendim + Stajyerlerim)</option>
+              </select>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <section>
                 <h4 class="font-bold text-xs mb-3 text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-spinner text-cyan-500"></i>Aktif Görevler <span id="leaderActiveTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">0</span></h4>
@@ -8075,6 +8084,7 @@
       if (home) home.classList.add('hidden');
       const section = document.getElementById('leaderTasksPageSection');
       if (section) section.classList.remove('hidden');
+      populateEngineerInternFilter();
       renderLeaderTasksPage();
     }
 
@@ -8473,6 +8483,34 @@
       renderLeaderTasksPage();
     }
 
+    // MÜHENDİS: kendisine sorumlu mühendis olarak atanmış (engineer_id ile bağlı) stajyerleri
+    // "Görevler" sayfasının üstünde filtre olarak listeler; seçilince o stajyerin görevlerine daraltır.
+    let engineerInternFilterValue = '';
+
+    function populateEngineerInternFilter() {
+      const wrap = document.getElementById('engineerInternFilterWrap');
+      const select = document.getElementById('engineerInternFilterSelect');
+      if (!wrap || !select || !currentUser) return;
+
+      const isEngineer = currentUser.role === 'ENGINEER';
+      wrap.classList.toggle('hidden', !isEngineer);
+      if (!isEngineer) return;
+
+      const myInterns = (usersList || [])
+        .filter(u => u.role === 'INTERN' && u.engineer_id == currentUser.id)
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      if (!myInterns.some(u => u.id == engineerInternFilterValue)) engineerInternFilterValue = '';
+
+      select.innerHTML = `<option value="">Tümü (Kendim + Stajyerlerim)</option>` +
+        myInterns.map(u => `<option value="${u.id}" ${u.id == engineerInternFilterValue ? 'selected' : ''}>${u.name}</option>`).join('');
+    }
+
+    function setEngineerInternFilter(internId) {
+      engineerInternFilterValue = internId;
+      renderLeaderTasksPage();
+    }
+
     // "Görevler" kutucuğu: Müdür/Ekip Lideri'nin hem kendi görevlerini hem de
     // altındaki rollerin (rol sıralaması) görevlerini birlikte, kart olarak gösterir.
     function renderLeaderTasksPage() {
@@ -8487,9 +8525,16 @@
       const subRoles = getSubordinateRoles(currentUser.role);
 
       const relevant = (tasksList || []).filter(t => {
-        // Mühendis için "Görevler" listesi yalnızca kendisine ait görevleri gösterir,
-        // teknisyen/stajyer gibi başkalarının görevlerini değil.
-        if (currentUser.role === 'ENGINEER') return t.assigned_to == currentUser.id;
+        // Mühendis için "Görevler" listesi kendisine ait görevlerin yanı sıra, kendisinden
+        // sorumlu (engineer_id ile bağlı) stajyerlerin görevlerini de gösterir. Üstteki
+        // "Stajyer Filtrele" ile belirli bir stajyerin görevlerine daraltılabilir.
+        if (currentUser.role === 'ENGINEER') {
+          if (engineerInternFilterValue) return t.assigned_to == engineerInternFilterValue;
+          const myInternIds = (usersList || [])
+            .filter(u => u.role === 'INTERN' && u.engineer_id == currentUser.id)
+            .map(u => u.id);
+          return t.assigned_to == currentUser.id || myInternIds.includes(t.assigned_to);
+        }
 
         const arole = getAssigneeRole(t);
         // Belirli bir rol seçiliyse sadece o roldeki (kendi biriminde altındaki) kişilerin görevleri
