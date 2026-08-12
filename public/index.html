@@ -5000,14 +5000,18 @@
     let personProjectChartInstance = null;
     let personProjectCurrentId = null;
     let personProjectOwnerId = null;
+    let personProjectData = null; // son çekilen {project, progress} — yeniden fetch etmeden yeniden çizmek için
+    let ppEditingId = null;       // şu an satır-içi düzenlenen ilerleme notunun id'si (Admin)
 
     async function openPersonProjectModal(projectId, ownerId) {
       personProjectCurrentId = projectId;
       personProjectOwnerId = ownerId;
+      ppEditingId = null;
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}`);
         const data = await safeJson(res);
         if (!res.ok) { showToast(data.error || 'Proje yüklenemedi.', 'error'); return; }
+        personProjectData = data;
         renderPersonProjectModal(data);
         document.getElementById('personProjectModal').classList.remove('hidden');
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
@@ -5060,17 +5064,45 @@
         }
       });
 
-      // İlerleme notları (en yeni üstte)
+      // İlerleme notları (en yeni üstte). Admin/İK her notun tüm bilgilerini (tarih/plan/gerçek/not)
+      // düzenleyebilir ve notu silebilir — server tarafında da isAdmin ile aynı kural uygulanır.
+      const isAdminViewer = currentUser.role === 'ADMIN' || currentUser.role === 'HR';
       const logsEl = document.getElementById('ppLogs');
       if (sorted.length === 0) {
         logsEl.innerHTML = `<p class="text-xs text-slate-400">Henüz ilerleme kaydı yok.</p>`;
       } else {
-        logsEl.innerHTML = sorted.slice().reverse().map(p => `
-          <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-xs">
-            <div class="flex justify-between text-slate-500 dark:text-slate-400"><span>${p.log_date}</span><span>Plan %${p.planned} · Gerçek %${p.actual}</span></div>
-            ${p.note ? `<div class="mt-1 text-slate-700 dark:text-slate-300">${escapeHtmlProj(p.note)}</div>` : ''}
-          </div>
-        `).join('');
+        logsEl.innerHTML = sorted.slice().reverse().map(p => {
+          if (isAdminViewer && ppEditingId == p.id) {
+            return `
+              <div class="bg-slate-100 dark:bg-slate-800/70 border border-cyan-500/50 rounded-lg p-2.5 text-xs space-y-1.5">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                  <input type="date" id="ppEditDate_${p.id}" value="${p.log_date}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                  <input type="number" id="ppEditPlanned_${p.id}" min="0" max="100" value="${p.planned}" placeholder="Planlanan %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                  <input type="number" id="ppEditActual_${p.id}" min="0" max="100" value="${p.actual}" placeholder="Gerçekleşen %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                </div>
+                <input type="text" id="ppEditNote_${p.id}" value="${(p.note || '').replace(/"/g, '&quot;')}" placeholder="Not (opsiyonel)" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                <div class="flex gap-1.5">
+                  <button onclick="saveEditedProgressNote(${p.id})" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold py-1.5 rounded-lg">Kaydet</button>
+                  <button onclick="cancelEditProgressNote()" class="flex-1 bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold py-1.5 rounded-lg">Vazgeç</button>
+                </div>
+              </div>
+            `;
+          }
+          return `
+            <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-xs">
+              <div class="flex justify-between items-start gap-2">
+                <div class="flex justify-between flex-1 min-w-0 text-slate-500 dark:text-slate-400"><span>${p.log_date}</span><span>Plan %${p.planned} · Gerçek %${p.actual}</span></div>
+                ${isAdminViewer ? `
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button onclick="openEditProgressNote(${p.id})" title="Düzenle" class="text-amber-500 p-0.5"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="handleDeleteProgressNote(${p.id})" title="Sil" class="text-rose-500 p-0.5"><i class="fa-solid fa-trash-can"></i></button>
+                  </div>
+                ` : ''}
+              </div>
+              ${p.note ? `<div class="mt-1 text-slate-700 dark:text-slate-300">${escapeHtmlProj(p.note)}</div>` : ''}
+            </div>
+          `;
+        }).join('');
       }
 
       // İlerleme ekleme formu: sadece projenin sahibi veya Admin görür (server de aynı kuralı uygular)
@@ -5099,6 +5131,54 @@
         document.getElementById('ppPlanned').value = '';
         document.getElementById('ppActual').value = '';
         document.getElementById('ppNote').value = '';
+        await openPersonProjectModal(personProjectCurrentId, personProjectOwnerId);
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    // İlerleme notu düzenleme (Admin/İK): satırı düzenleme moduna alır, veriyi yeniden çekmeden
+    // (personProjectData önbelleğinden) anında yeniden çizer.
+    function openEditProgressNote(progressId) {
+      ppEditingId = progressId;
+      if (personProjectData) renderPersonProjectModal(personProjectData);
+    }
+
+    function cancelEditProgressNote() {
+      ppEditingId = null;
+      if (personProjectData) renderPersonProjectModal(personProjectData);
+    }
+
+    async function saveEditedProgressNote(progressId) {
+      const log_date = document.getElementById(`ppEditDate_${progressId}`).value;
+      const planned = document.getElementById(`ppEditPlanned_${progressId}`).value;
+      const actual = document.getElementById(`ppEditActual_${progressId}`).value;
+      const note = document.getElementById(`ppEditNote_${progressId}`).value.trim();
+      if (!log_date) { showToast('Tarih gerekli.', 'error'); return; }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/progress/${progressId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ log_date, planned, actual, note, userRole: currentUser.role })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); return; }
+        showToast('İlerleme notu güncellendi.', 'success');
+        ppEditingId = null;
+        await openPersonProjectModal(personProjectCurrentId, personProjectOwnerId);
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    async function handleDeleteProgressNote(progressId) {
+      if (!confirm('Bu ilerleme notunu silmek istediğinize emin misiniz?')) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/progress/${progressId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userRole: currentUser.role })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Silinemedi.', 'error'); return; }
+        showToast('İlerleme notu silindi.', 'success');
         await openPersonProjectModal(personProjectCurrentId, personProjectOwnerId);
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }

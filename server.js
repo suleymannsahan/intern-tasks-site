@@ -3331,6 +3331,23 @@ app.post('/api/projects/:id/progress', async (req, res) => {
 });
 
 // İlerleme noktası sil (Admin)
+// İlerleme notu düzenle (Admin) — tarih/planlanan/gerçekleşen/not alanlarının tümü değiştirilebilir
+app.put('/api/progress/:id', async (req, res) => {
+  try {
+    const { userRole, log_date, planned, actual, note } = req.body;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (!log_date) return res.status(400).json({ error: 'Tarih gerekli.' });
+    const result = await db.execute({
+      sql: `UPDATE project_progress SET log_date = ?, planned = ?, actual = ?, note = ? WHERE id = ?`,
+      args: [log_date, Number(planned) || 0, Number(actual) || 0, note || null, req.params.id]
+    });
+    if (result.rowsAffected === 0) return res.status(404).json({ error: 'Kayıt bulunamadı.' });
+    res.json({ message: 'Kayıt güncellendi.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.delete('/api/progress/:id', async (req, res) => {
   try {
     const { userRole } = req.body;
