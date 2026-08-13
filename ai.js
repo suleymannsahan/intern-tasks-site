@@ -91,41 +91,6 @@ function isPlaniHesapla(kategori, dokumanTarihiStr, bitisTarihiStr, agirliklar) 
   };
 }
 
-// Manuel mod: her aşamanın BİTİŞİNİ kullanıcı verir.
-// 1. adım başlangıcı = dokümanTarihi; sonraki adım başlangıcı = önceki adımın bitişi.
-function isPlaniManuel(dokumanTarihiStr, asamaBitisleri) {
-  const baslangic = new Date(dokumanTarihiStr);
-  if (isNaN(baslangic)) throw new Error('Başlangıç tarihi geçersiz.');
-  if (!Array.isArray(asamaBitisleri) || asamaBitisleri.length !== IS_ADIMLARI.length) {
-    throw new Error(IS_ADIMLARI.length + ' adet aşama bitiş tarihi gereklidir.');
-  }
-
-  let imlec = new Date(baslangic);
-  const adimlar = [];
-  IS_ADIMLARI.forEach((adim, i) => {
-    const bit = new Date(asamaBitisleri[i]);
-    if (isNaN(bit)) throw new Error(adim.ad + ': bitiş tarihi geçersiz.');
-    if (bit <= imlec) throw new Error(adim.ad + ': bitiş tarihi, başlangıçtan (' + tarihFormatla(imlec) + ') sonra olmalı.');
-    const gun = Math.max(1, Math.round((bit - imlec) / (1000 * 60 * 60 * 24)));
-    adimlar.push({
-      ad: adim.ad,
-      baslangic: tarihFormatla(imlec),
-      bitis: tarihFormatla(bit),
-      gun,
-      kaynak: 'manuel',
-      gecmisAdet: 0
-    });
-    imlec = new Date(bit);
-  });
-
-  return {
-    baslangic: tarihFormatla(baslangic),
-    bitis: tarihFormatla(imlec),
-    toplamGun: Math.max(1, Math.round((imlec - baslangic) / (1000 * 60 * 60 * 24))),
-    adimlar
-  };
-}
-
 // Veritabanı sütunları/tabloları — güvenli (var olanı bozmayan) migrasyon.
 // NOT: mevcut "notifications" tablosuna DOKUNULMAZ; AI bildirimleri ayrı tabloda tutulur.
 async function initAiSchema(db) {
@@ -239,31 +204,17 @@ function createAiRouter(db, { isAdmin }) {
   // 1) İş planı üret + her aşamaya AI ile tek cümlelik açıklama yaz
   router.post('/is-plani', async (req, res) => {
     try {
-      const { kartIsmi, kategori, dokumanTarihi, bitisTarihi, asamaBitisleri, userRole } = req.body;
+      const { kartIsmi, kategori, dokumanTarihi, bitisTarihi, userRole } = req.body;
 
       if (!IS_PLANI_YETKILI.includes(userRole)) {
         return res.status(403).json({ error: 'İş planı oluşturma yetkiniz yok.' });
       }
-
-      // MANUEL MOD: aşama bitişleri kullanıcıdan gelirse yüzdeyle bölme yapılmaz;
-      // her aşamanın başlangıcı bir önceki aşamanın bitişinden zincirlenir.
-      const manuelMod = Array.isArray(asamaBitisleri) && asamaBitisleri.length === IS_ADIMLARI.length;
-
-      if (!kartIsmi || !kategori || !dokumanTarihi || (!manuelMod && !bitisTarihi)) {
-        return res.status(400).json({ error: 'Kart ismi, kategori, başlangıç tarihi ve aşama bitiş tarihleri gereklidir.' });
+      if (!kartIsmi || !kategori || !dokumanTarihi || !bitisTarihi) {
+        return res.status(400).json({ error: 'Kart ismi, kategori, döküman ve bitiş tarihi gereklidir.' });
       }
 
-      let plan;
-      if (manuelMod) {
-        try {
-          plan = isPlaniManuel(dokumanTarihi, asamaBitisleri);
-        } catch (e) {
-          return res.status(400).json({ error: e.message });
-        }
-      } else {
-        const agirliklar = await akilliAgirliklarHesapla(Number(kategori));
-        plan = isPlaniHesapla(Number(kategori), dokumanTarihi, bitisTarihi, agirliklar);
-      }
+      const agirliklar = await akilliAgirliklarHesapla(Number(kategori));
+      const plan = isPlaniHesapla(Number(kategori), dokumanTarihi, bitisTarihi, agirliklar);
 
       const gecmisNotlari = plan.adimlar
         .filter(a => a.kaynak === 'gercek' && a.gecmisAdet > 0)

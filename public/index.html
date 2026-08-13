@@ -3336,12 +3336,12 @@
         });
 
         if (res.ok) {
-          showToast('Görev detayları güncellendi.', 'success');
+          alert('Görev detayları güncellendi.');
           closeEditTaskModal();
           await loadTasks();
         } else {
           const data = await res.json();
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) {
         console.error('Görev güncelleme hatası:', err);
@@ -3379,7 +3379,7 @@
 
         const data = await res.json();
         if (res.ok) {
-          showToast('Profil bilgileriniz başarıyla güncellendi!', 'success');
+          alert("Profil bilgileriniz başarıyla güncellendi!");
           currentUser.name = name;
           currentUser.username = username;
           currentUser.email = email;
@@ -3398,7 +3398,7 @@
           await loadUsers();
           await showDashboard();
         } else {
-          showToast('Hata: ' + data.error, 'error');
+          alert("Hata: " + data.error);
         }
       } catch (err) {
         console.error("Profil güncelleme hatası:", err);
@@ -3416,12 +3416,12 @@
         });
 
         if (res.ok) {
-          showToast('Hesabınız başarıyla silindi.', 'success');
+          alert("Hesabınız başarıyla silindi.");
           closeEditProfileModal();
           handleLogout();
         } else {
           const data = await res.json();
-          showToast('Silme Hatası: ' + data.error, 'error');
+          alert("Silme Hatası: " + data.error);
         }
       } catch (err) {
         console.error("Hesap silme hatası:", err);
@@ -3508,17 +3508,17 @@
       const subArea = department === 'ELEKTRONIK' ? document.getElementById('regSubArea').value : null;
 
       if (department === 'ELEKTRONIK' && !subArea) {
-        showToast('Lütfen bir alt alan seçiniz.', 'error');
+        alert('Lütfen bir alt alan seçiniz.');
         return;
       }
 
       // E-posta ve telefon zorunlu
       if (!email) {
-        showToast('Lütfen e-posta adresinizi giriniz.', 'error');
+        alert('Lütfen e-posta adresinizi giriniz.');
         return;
       }
       if (!phone) {
-        showToast('Lütfen telefon numaranızı giriniz.', 'error');
+        alert('Lütfen telefon numaranızı giriniz.');
         return;
       }
 
@@ -3526,7 +3526,7 @@
       const role = isHR ? 'HR' : document.getElementById('regRole').value;
 
       if (!isHR && !role) {
-        showToast('Lütfen bir rol seçiniz.', 'error');
+        alert('Lütfen bir rol seçiniz.');
         return;
       }
 
@@ -3539,7 +3539,7 @@
         startDate = document.getElementById('regStartDate').value;
         endDate = document.getElementById('regEndDate').value;
         if (!startDate || !endDate) {
-          showToast('Stajyerler için başlangıç ve bitiş tarihleri zorunludur!', 'error');
+          alert('Stajyerler için başlangıç ve bitiş tarihleri zorunludur!');
           return;
         }
       }
@@ -3567,19 +3567,19 @@
         if (res.ok) {
           // Sunucunun döndürdüğü statüye göre bilgi mesajı göster (Ekip Lideri, Müdür veya İnsan Kaynakları onay bekler)
           if (data.status === 'PENDING') {
-            showToast('Hesabınız oluşturuldu! Bu rol/departman için hesabınız Admin onayından sonra aktifleşecektir.', 'success');
+            alert("Hesabınız oluşturuldu! Bu rol/departman için hesabınız Admin onayından sonra aktifleşecektir.");
           } else {
-            showToast('Hesabınız başarıyla oluşturuldu! Giriş yapabilirsiniz.', 'success');
+            alert("Hesabınız başarıyla oluşturuldu! Giriş yapabilirsiniz.");
           }
-
+          
           await loadUsers();
           switchAuthTab('login');
         } else {
-          showToast(data.error || 'Kayıt sırasında bir hata oluştu.', 'error');
+          alert(data.error || "Kayıt sırasında bir hata oluştu.");
         }
       } catch (err) {
         console.error("Kayıt hatası:", err);
-        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
+        alert("Sunucuya bağlanırken bir sorun oluştu.");
       }
     }
 
@@ -5777,13 +5777,13 @@
         const data = await res.json();
 
         if (!res.ok) {
-          showToast(data.error || 'Veri alınamadı.', 'error');
+          alert(data.error || 'Veri alınamadı.');
           return;
         }
 
         const person = data.people && data.people[0];
         if (!person) {
-          showToast('Kullanıcı bulunamadı.', 'error');
+          alert('Kullanıcı bulunamadı.');
           return;
         }
 
@@ -6116,7 +6116,7 @@
           body: JSON.stringify({ userRole: currentUser.role })
         });
         const data = await safeJson(res);
-        if (!res.ok) { showToast(data.error || 'Talep silinemedi.', 'error'); return; }
+        if (!res.ok) { alert(data.error || 'Talep silinemedi.'); return; }
         await loadMeetings();
       } catch (err) {
         console.error('Toplantı talebi silme hatası:', err);
@@ -6201,11 +6201,11 @@
       });
 
       if (CROSS_DEPT_MEETING_ROLES.includes(currentUser.role) && !targetDepartment) {
-        showToast('Lütfen bir birim seçiniz.', 'error');
+        alert('Lütfen bir birim seçiniz.');
         return;
       }
       if (targetDepartment && meetingSubs.length > 0 && !meetingSubVal) {
-        showToast('Lütfen bir alt alan seçiniz.', 'error');
+        alert('Lütfen bir alt alan seçiniz.');
         return;
       }
 
@@ -6227,11 +6227,11 @@
 
         const data = await res.json();
         if (res.ok) {
-          showToast('Toplantı talebiniz iletildi.', 'success');
+          alert('Toplantı talebiniz iletildi.');
           e.target.reset();
           await loadMeetings();
         } else {
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) {
         console.error("Toplantı talebi gönderme hatası:", err);
@@ -6277,7 +6277,7 @@
           closeEditMeetingModal();
           await loadMeetings();
         } else {
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) {
         console.error('Toplantı talebi düzenleme hatası:', err);
@@ -6307,7 +6307,7 @@
         if (res.ok) {
           await loadMeetings();
         } else {
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) {
         console.error("Toplantı talebi güncelleme hatası:", err);
@@ -7222,12 +7222,12 @@
 
         const data = await res.json();
         if (res.ok) {
-          showToast('Kullanıcı başarıyla oluşturuldu.', 'success');
+          alert('Kullanıcı başarıyla oluşturuldu.');
           closeAddUserModal();
           await fetchAdminUsers();
           await fetchAdminStats();
         } else {
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) {
         console.error("Kullanıcı oluşturma hatası:", err);
@@ -7367,7 +7367,7 @@
           await fetchAdminUsers();
           await fetchAdminStats();
         } else {
-          showToast('Hata: ' + ((data && data.error) || 'Güncellenemedi.'), 'error');
+          alert('Hata: ' + ((data && data.error) || 'Güncellenemedi.'));
         }
       } catch (err) {
         console.error('Kullanıcı güncelleme hatası:', err);
@@ -7389,7 +7389,7 @@
           await fetchAdminUsers();
           await fetchAdminStats();
         } else {
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) {
         console.error("Kullanıcı silme hatası:", err);
@@ -7411,7 +7411,7 @@
     async function sendLeaderVerificationCode() {
       const emailInput = document.getElementById('regEmail');
       if (!emailInput || !emailInput.value) {
-        showToast('Geçerli bir e-posta girin.', 'error');
+        alert("Geçerli bir e-posta girin.");
         return;
       }
 
@@ -7422,7 +7422,7 @@
           body: JSON.stringify({ email: emailInput.value })
         });
 
-        if (response.ok) showToast('Doğrulama kodu e-postanıza gönderildi!', 'success');
+        if (response.ok) alert('Doğrulama kodu e-postanıza gönderildi!');
       } catch (error) {
         console.error('Hata:', error);
       }
@@ -7562,13 +7562,13 @@
           body: JSON.stringify({ name, email, role, requesterId: currentUser.id })
         });
         if (res.ok) {
-          showToast('Kullanıcı bilgileri güncellendi.', 'success');
+          alert('Kullanıcı bilgileri güncellendi.');
           closeManageUserModal();
           await loadUsers();
           renderSidebarDirectory();
         } else {
           const data = await res.json();
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) {
         console.error('Kullanıcı güncelleme hatası:', err);
@@ -7585,12 +7585,12 @@
           body: JSON.stringify({ requesterId: currentUser.id })
         });
         if (res.ok) {
-          showToast('Kullanıcı silindi.', 'success');
+          alert('Kullanıcı silindi.');
           await loadUsers();
           renderSidebarDirectory();
         } else {
           const data = await res.json();
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) {
         console.error('Kullanıcı silme hatası:', err);
@@ -7672,7 +7672,7 @@
           setInterval(() => loadNotifications(false), 60000);
 
         } else {
-          showToast(data.error, 'error');
+          alert(data.error);
         }
       } catch (err) {
         console.error("Giriş hatası:", err);
@@ -7759,14 +7759,14 @@
           body: JSON.stringify({ username, email })
         });
         const data = await safeJson(res);
-        if (!res.ok) { showToast(data.error || 'Kod gönderilemedi.', 'error'); return; }
+        if (!res.ok) { alert(data.error || 'Kod gönderilemedi.'); return; }
 
         const emailLabel = document.getElementById('resetStep2Email');
         if (emailLabel) emailLabel.innerText = email;
         resetToStep(2);
-        if (isResend) showToast('Doğrulama kodu tekrar gönderildi.', 'success');
+        if (isResend) alert('Doğrulama kodu tekrar gönderildi.');
       } catch (err) {
-        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
+        alert('Sunucuya bağlanırken bir sorun oluştu.');
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = 'Kod Gönder'; }
       }
@@ -7789,12 +7789,12 @@
           body: JSON.stringify({ username, email, code })
         });
         const data = await safeJson(res);
-        if (!res.ok) { showToast(data.error || 'Kod doğrulanamadı.', 'error'); return; }
+        if (!res.ok) { alert(data.error || 'Kod doğrulanamadı.'); return; }
 
         resetVerifiedToken = data.token;
         resetToStep(3);
       } catch (err) {
-        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
+        alert('Sunucuya bağlanırken bir sorun oluştu.');
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = 'Kodu Doğrula'; }
       }
@@ -7809,11 +7809,11 @@
       const newPasswordConfirm = document.getElementById('resetNewPassConfirm').value;
 
       if (newPassword !== newPasswordConfirm) {
-        showToast('Girdiğiniz şifreler birbiriyle eşleşmiyor.', 'error');
+        alert('Girdiğiniz şifreler birbiriyle eşleşmiyor.');
         return;
       }
       if (!resetVerifiedToken) {
-        showToast('Doğrulama oturumu bulunamadı. Lütfen baştan başlayın.', 'error');
+        alert('Doğrulama oturumu bulunamadı. Lütfen baştan başlayın.');
         resetToStep(1);
         return;
       }
@@ -7828,16 +7828,16 @@
           body: JSON.stringify({ username, email, token: resetVerifiedToken, newPassword })
         });
         const data = await safeJson(res);
-        if (!res.ok) { showToast(data.error || 'Şifre güncellenemedi.', 'error'); return; }
+        if (!res.ok) { alert(data.error || 'Şifre güncellenemedi.'); return; }
 
-        showToast('Şifreniz başarıyla güncellendi! Yeni şifrenizle giriş yapabilirsiniz.', 'success');
+        alert('Şifreniz başarıyla güncellendi! Yeni şifrenizle giriş yapabilirsiniz.');
         closeResetModal();
         document.getElementById('resetUsername').value = '';
         document.getElementById('resetEmail').value = '';
         document.getElementById('resetNewPass').value = '';
         document.getElementById('resetNewPassConfirm').value = '';
       } catch (err) {
-        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
+        alert('Sunucuya bağlanırken bir sorun oluştu.');
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = 'Şifreyi Güncelle'; }
       }
@@ -8886,7 +8886,7 @@
           await loadTasks();
         } else {
           const data = await res.json();
-          showToast('Hata: ' + (data.error || 'Görev eklenemedi.'), 'error');
+          alert('Hata: ' + (data.error || 'Görev eklenemedi.'));
         }
       } catch (err) { console.error('Kendime görev ekleme hatası:', err); }
     }
@@ -9285,7 +9285,7 @@
           await loadTasks();
         } else {
           const data = await res.json();
-          showToast('Hata: ' + (data.error || 'Görev eklenemedi.'), 'error');
+          alert('Hata: ' + (data.error || 'Görev eklenemedi.'));
         }
       } catch (err) { console.error('Kendime görev ekleme hatası:', err); }
     }
@@ -9714,7 +9714,7 @@
       });
 
       if (res.ok) {
-        showToast('Görev atandı!', 'success');
+        alert("Görev atandı!");
         document.getElementById('taskTitle').value = '';
         document.getElementById('taskDescription').value = '';
         await loadTasks();
@@ -9722,7 +9722,7 @@
         if (typeof renderEngineerInternStatusList === 'function') renderEngineerInternStatusList();
       } else {
         const data = await res.json();
-        showToast('Hata: ' + (data.error || 'Görev atanamadı.'), 'error');
+        alert('Hata: ' + (data.error || 'Görev atanamadı.'));
       }
     }
 
@@ -10080,6 +10080,7 @@
     }
 
     function closeTaskDetailModal() {
+      ipDuzenleme = null;
       const m = document.getElementById('taskDetailModal');
       if (m) m.classList.add('hidden');
     }
@@ -10174,8 +10175,8 @@
     function handleUploadAttachment(taskId) {
       const input = document.getElementById(`taskAttachmentInput_${taskId}`);
       const file = input && input.files && input.files[0];
-      if (!file) { showToast('Lütfen bir dosya seçin.', 'error'); return; }
-      if (file.size > 10 * 1024 * 1024) { showToast('Dosya boyutu 10MB sınırını aşıyor.', 'error'); return; }
+      if (!file) { alert('Lütfen bir dosya seçin.'); return; }
+      if (file.size > 10 * 1024 * 1024) { alert('Dosya boyutu 10MB sınırını aşıyor.'); return; }
 
       const reader = new FileReader();
       reader.onload = async () => {
@@ -10194,11 +10195,11 @@
             })
           });
           const data = await res.json();
-          if (!res.ok) { showToast('Hata: ' + (data.error || 'Belge yüklenemedi.'), 'error'); return; }
+          if (!res.ok) { alert('Hata: ' + (data.error || 'Belge yüklenemedi.')); return; }
           await renderTaskAttachments(taskId);
         } catch (err) {
           console.error('Belge yükleme hatası:', err);
-          showToast('Belge yüklenirken bir hata oluştu.', 'error');
+          alert('Belge yüklenirken bir hata oluştu.');
         }
       };
       reader.readAsDataURL(file);
@@ -10213,7 +10214,7 @@
           body: JSON.stringify({ userId: currentUser.id, userRole: currentUser.role })
         });
         const data = await res.json();
-        if (!res.ok) { showToast('Hata: ' + (data.error || 'Belge silinemedi.'), 'error'); return; }
+        if (!res.ok) { alert('Hata: ' + (data.error || 'Belge silinemedi.')); return; }
         await renderTaskAttachments(taskId);
       } catch (err) {
         console.error('Belge silme hatası:', err);
@@ -10233,11 +10234,33 @@
       bitti: { label: 'Tamamlandı', cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' }
     };
 
-    // Manuel iş planı için aşama adları (ai.js IS_ADIMLARI ile AYNI sıra).
+    // AI planı üretildikten sonra "aşama bitişlerini tek tek onayla/düzenle" adımının durumu.
+    // Doluyken { taskId, plan } tutar; boşken normal görünüm çizilir.
+    let ipDuzenleme = null;
+
+    // Düzenleyici aşama adları (ai.js IS_ADIMLARI ile aynı sıra).
     const IS_PLANI_ADIMLAR = ['Şematik İnceleme', 'KTTD', 'BDK', 'Visio', 'Sequence', 'Entegrasyon'];
 
-    // Plan oluşturma formunda başlangıç tarihlerini zincirler:
-    // 1. aşama başlangıcı = plan başlangıcı; sonraki aşama başlangıcı = önceki aşamanın bitişi.
+    // TR (GG.AA.YYYY) <-> ISO (YYYY-AA-GG) dönüşümleri ve gün farkı.
+    function ipTrToIso(tr) {
+      const q = String(tr || '').split('.');
+      if (q.length !== 3) return '';
+      const [g, a, y] = q;
+      return `${y}-${String(a).padStart(2, '0')}-${String(g).padStart(2, '0')}`;
+    }
+    function ipIsoToTR(iso) {
+      const q = String(iso || '').split('-');
+      if (q.length !== 3) return '';
+      const [y, a, g] = q;
+      return `${String(g).padStart(2, '0')}.${String(a).padStart(2, '0')}.${y}`;
+    }
+    function ipGunFark(iso1, iso2) {
+      const d1 = new Date(iso1), d2 = new Date(iso2);
+      return Math.max(1, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
+    }
+
+    // Aşama başlangıçlarını zincirler: 1. aşama = plan başlangıcı (#isPlaniDokumanTarihi),
+    // sonraki aşama başlangıcı = önceki aşamanın bitişi. Bitişlere min koyar (geri tarih engeli).
     function ipZincirle() {
       const basEl = document.getElementById('isPlaniDokumanTarihi');
       if (!basEl) return;
@@ -10285,10 +10308,113 @@
       return `<div class="mb-3 space-y-1.5">${satirlar}</div>`;
     }
 
+    // AI planı üretildikten sonra gösterilen düzenleyici: her aşamanın BİTİŞİ tek tek onaylanır/değiştirilir.
+    // Başlangıçlar kilitli ve zincirli (1. aşama = plan başlangıcı). Açıklamalar korunur.
+    function ipPlanDuzenleFormu(task) {
+      const plan = ipDuzenleme.plan;
+      const adimlar = plan.adimlar || [];
+      const planBasIso = ipTrToIso(plan.baslangic);
+
+      const satirlar = adimlar.map((a, i) => {
+        const basIso = i === 0 ? planBasIso : ipTrToIso(adimlar[i - 1].bitis);
+        const bitIso = ipTrToIso(a.bitis);
+        return `
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 w-24 shrink-0">${i + 1}. ${a.ad}</span>
+            <input type="date" id="ipBas_${i}" value="${basIso}" disabled title="Başlangıç (otomatik)" class="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-500" />
+            <span class="text-slate-400 text-[11px] shrink-0">&rarr;</span>
+            <input type="date" id="ipBit_${i}" value="${bitIso}" oninput="ipZincirle()" title="Bitiş — onaylayın veya değiştirin" class="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px]" />
+          </div>`;
+      }).join('');
+
+      return `
+        <div class="bg-violet-500/5 border border-violet-300 dark:border-violet-900/40 rounded-xl p-4">
+          <div class="text-xs font-bold text-violet-600 dark:text-violet-300 mb-2"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Akıllı İş Planı — Aşama Bitişleri</div>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">Yapay zekâ aşağıdaki tarihleri önerdi. Her aşamanın <b>bitişini</b> onaylayın veya değiştirin; başlangıçlar bir önceki aşamanın bitişine göre otomatik güncellenir.</p>
+          <input type="date" id="isPlaniDokumanTarihi" value="${planBasIso}" class="hidden" />
+          <div class="space-y-1.5 mb-3">${satirlar}</div>
+          <div class="flex gap-2">
+            <button onclick="ipEditIptal(${task.id})" class="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold py-2 rounded-xl">İptal</button>
+            <button onclick="ipEditKaydet(${task.id})" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl"><i class="fa-solid fa-check me-1"></i> Planı Kaydet</button>
+          </div>
+        </div>`;
+    }
+
+    // Düzenleyicideki bitişleri alıp planı yeniden kurar (başlangıçlar zincirli), sonra kaydeder.
+    async function ipEditKaydet(taskId) {
+      if (!ipDuzenleme || ipDuzenleme.taskId !== taskId) return;
+      const plan = ipDuzenleme.plan;
+      const adimlar = plan.adimlar || [];
+      const planBasIso = ipTrToIso(plan.baslangic);
+
+      const bitisler = [];
+      for (let i = 0; i < adimlar.length; i++) {
+        const v = (document.getElementById('ipBit_' + i) || {}).value;
+        if (!v) { alert(`${i + 1}. aşamanın (${adimlar[i].ad}) bitiş tarihini giriniz.`); return; }
+        bitisler.push(v);
+      }
+      let onceki = planBasIso;
+      for (let i = 0; i < bitisler.length; i++) {
+        if (bitisler[i] <= onceki) {
+          alert(`${i + 1}. aşamanın (${adimlar[i].ad}) bitişi, başlangıcından (${ipIsoToTR(onceki)}) sonra olmalı.`);
+          return;
+        }
+        onceki = bitisler[i];
+      }
+
+      let basIso = planBasIso;
+      const yeniAdimlar = adimlar.map((a, i) => {
+        const bitIso = bitisler[i];
+        const adim = {
+          ...a,
+          baslangic: ipIsoToTR(basIso),
+          bitis: ipIsoToTR(bitIso),
+          gun: ipGunFark(basIso, bitIso),
+          durum: a.durum || 'bekliyor'
+        };
+        basIso = bitIso;
+        return adim;
+      });
+
+      const yeniPlan = {
+        ...plan,
+        baslangic: ipIsoToTR(planBasIso),
+        bitis: ipIsoToTR(bitisler[bitisler.length - 1]),
+        toplamGun: ipGunFark(planBasIso, bitisler[bitisler.length - 1]),
+        adimlar: yeniAdimlar
+      };
+
+      try {
+        const saveRes = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-kaydet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: yeniPlan, userRole: currentUser.role })
+        });
+        if (!saveRes.ok) { const d = await saveRes.json(); alert('Hata: ' + (d.error || 'Plan kaydedilemedi.')); return; }
+        ipDuzenleme = null;
+        await loadTasks();
+        openTaskDetailModal(taskId);
+      } catch (err) {
+        console.error('İş planı kaydetme hatası:', err);
+        alert('İş planı kaydedilirken bir hata oluştu.');
+      }
+    }
+
+    // Düzenlemeyi iptal et: taslak atılır, oluşturma formuna dönülür (plan henüz kaydedilmedi).
+    function ipEditIptal(taskId) {
+      ipDuzenleme = null;
+      openTaskDetailModal(taskId);
+    }
+
     function renderIsPlaniSection(task) {
       const canManage = IS_PLANI_YETKILI_ROLLER.includes(currentUser.role);
       const isAssignee = task.assigned_to === currentUser.id;
       if (!canManage && !isAssignee) return '';
+
+      // AI planı üretildikten SONRA: aşama bitişlerini tek tek onaylama/düzenleme adımı.
+      if (ipDuzenleme && ipDuzenleme.taskId === task.id) {
+        return ipPlanDuzenleFormu(task);
+      }
 
       if (!task.is_plani) {
         if (!canManage) return '';
@@ -10297,29 +10423,16 @@
         return `
           <div class="bg-violet-500/5 border border-violet-300 dark:border-violet-900/40 rounded-xl p-4">
             <div class="text-xs font-bold text-violet-600 dark:text-violet-300 mb-2"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Akıllı İş Planı</div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">6 aşamalı iş planı. Her aşamanın yalnızca <b>bitiş tarihini</b> girin; ilk aşamanın başlangıcı plan başlangıç tarihidir, sonraki her aşamanın başlangıcı bir önceki aşamanın bitişidir.</p>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-              <label class="flex flex-col gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">Kategori
-                <select id="isPlaniKategori" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
-                  <option value="1">Küçük (3 ay)</option>
-                  <option value="2">Orta (4 ay)</option>
-                  <option value="3">Büyük (5 ay)</option>
-                  <option value="4">Çok Büyük (6 ay)</option>
-                </select>
-              </label>
-              <label class="flex flex-col gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">Plan başlangıcı
-                <input type="date" id="isPlaniDokumanTarihi" value="${bugun}" oninput="ipZincirle()" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
-              </label>
-            </div>
-            <div class="space-y-1.5 mb-3">
-              ${IS_PLANI_ADIMLAR.map((ad, i) => `
-                <div class="flex items-center gap-2">
-                  <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 w-24 shrink-0">${i + 1}. ${ad}</span>
-                  <input type="date" id="ipBas_${i}" value="${i === 0 ? bugun : ''}" disabled title="Başlangıç (otomatik)" class="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-500" />
-                  <span class="text-slate-400 text-[11px] shrink-0">→</span>
-                  <input type="date" id="ipBit_${i}" oninput="ipZincirle()" title="Bitiş — siz girin" class="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px]" />
-                </div>
-              `).join('')}
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">Bu görev için yapay zekâ destekli 6 aşamalı bir iş planı oluşturabilirsiniz (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon).</p>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+              <select id="isPlaniKategori" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+                <option value="1">Küçük (3 ay)</option>
+                <option value="2">Orta (4 ay)</option>
+                <option value="3">Büyük (5 ay)</option>
+                <option value="4">Çok Büyük (6 ay)</option>
+              </select>
+              <input type="date" id="isPlaniDokumanTarihi" value="${bugun}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              <input type="date" id="isPlaniBitisTarihi" value="${bitisVarsayilan}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
             </div>
             <button onclick="handleGenerateIsPlani(${task.id})" class="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
               <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Plan Oluştur
@@ -10392,46 +10505,24 @@
       if (!task) return;
       const kategori = document.getElementById('isPlaniKategori').value;
       const dokumanTarihi = document.getElementById('isPlaniDokumanTarihi').value;
-      if (!dokumanTarihi) { showToast('Plan başlangıç tarihini seçiniz.', 'error'); return; }
-
-      // Her aşamanın bitişini topla (başlangıçlar otomatik zincirlenir)
-      const asamaBitisleri = [];
-      for (let i = 0; i < IS_PLANI_ADIMLAR.length; i++) {
-        const v = (document.getElementById('ipBit_' + i) || {}).value;
-        if (!v) { showToast(`${i + 1}. aşamanın (${IS_PLANI_ADIMLAR[i]}) bitiş tarihini giriniz.`, 'error'); return; }
-        asamaBitisleri.push(v);
-      }
-      // Sıralı ve artan olmalı (ISO tarih string karşılaştırması yeterli)
-      let onceki = dokumanTarihi;
-      for (let i = 0; i < asamaBitisleri.length; i++) {
-        if (asamaBitisleri[i] <= onceki) {
-          showToast(`${i + 1}. aşamanın (${IS_PLANI_ADIMLAR[i]}) bitişi, başlangıcından (${onceki}) sonra olmalı.`, 'error');
-          return;
-        }
-        onceki = asamaBitisleri[i];
-      }
+      const bitisTarihi = document.getElementById('isPlaniBitisTarihi').value;
+      if (!dokumanTarihi || !bitisTarihi) { alert('Döküman ve bitiş tarihini seçiniz.'); return; }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/is-plani`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ kartIsmi: task.title, kategori, dokumanTarihi, asamaBitisleri, userRole: currentUser.role })
+          body: JSON.stringify({ kartIsmi: task.title, kategori, dokumanTarihi, bitisTarihi, userRole: currentUser.role })
         });
         const plan = await res.json();
-        if (!res.ok) { showToast('Hata: ' + (plan.error || 'Plan oluşturulamadı.'), 'error'); return; }
+        if (!res.ok) { alert('Hata: ' + (plan.error || 'Plan oluşturulamadı.')); return; }
 
-        const saveRes = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-kaydet`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plan, userRole: currentUser.role })
-        });
-        if (!saveRes.ok) { const d = await saveRes.json(); showToast('Hata: ' + (d.error || 'Plan kaydedilemedi.'), 'error'); return; }
-
-        await loadTasks();
+        // AI planı hazır. Kaydetmeden ÖNCE: aşama bitişlerini tek tek onaylama/düzenleme adımına geç.
+        ipDuzenleme = { taskId, plan };
         openTaskDetailModal(taskId);
       } catch (err) {
         console.error('İş planı oluşturma hatası:', err);
-        showToast('İş planı oluşturulurken bir hata oluştu.', 'error');
+        alert('İş planı oluşturulurken bir hata oluştu.');
       }
     }
 
@@ -10446,12 +10537,12 @@
           })
         });
         const data = await res.json();
-        if (!res.ok) { showToast('Hata: ' + (data.error || 'İşlem yapılamadı.'), 'error'); return; }
+        if (!res.ok) { alert('Hata: ' + (data.error || 'İşlem yapılamadı.')); return; }
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
         console.error('Aşama durumu hatası:', err);
-        showToast('Aşama durumu güncellenirken bir hata oluştu.', 'error');
+        alert('Aşama durumu güncellenirken bir hata oluştu.');
       }
     }
 
@@ -10463,7 +10554,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userRole: currentUser.role })
         });
-        if (!res.ok) { const d = await res.json(); showToast('Hata: ' + (d.error || 'Sıfırlanamadı.'), 'error'); return; }
+        if (!res.ok) { const d = await res.json(); alert('Hata: ' + (d.error || 'Sıfırlanamadı.')); return; }
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
@@ -10481,7 +10572,7 @@
           body: JSON.stringify({ yeniBitis, userRole: currentUser.role })
         });
         const data = await res.json();
-        if (!res.ok) { showToast('Hata: ' + (data.error || 'Güncellenemedi.'), 'error'); return; }
+        if (!res.ok) { alert('Hata: ' + (data.error || 'Güncellenemedi.')); return; }
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
@@ -10494,7 +10585,7 @@
       try {
         const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/complete`, { method: 'PUT' });
         if (response.ok) {
-          showToast('Görev başarıyla tamamlandı olarak işaretlendi ve bildirim gönderildi!', 'success');
+          alert('Görev başarıyla tamamlandı olarak işaretlendi ve bildirim gönderildi!');
           await loadTasks();
         }
       } catch (err) { console.error('Hata:', err); }
@@ -10508,12 +10599,12 @@
           headers: { 'user-role': currentUser.role }
         });
         if (res.ok) {
-          showToast('Görev silindi.', 'success');
+          alert('Görev silindi.');
           await loadTasks();
           renderInternStatusList();
         } else {
           const data = await res.json();
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) { console.error('Hata:', err); }
     }
@@ -10543,11 +10634,11 @@
 
         const data = await res.json();
         if (res.ok) {
-          showToast(data.message || 'Revize talebi iletildi.', 'success');
+          alert(data.message || 'Revize talebi iletildi.');
           closeRevisionModal();
           await loadTasks();
         } else {
-          showToast('Hata: ' + data.error, 'error');
+          alert("Hata: " + data.error);
         }
       } catch (err) {
         console.error("Revize gönderme hatası:", err);
@@ -10562,18 +10653,18 @@
           body: JSON.stringify({ action, comment, userRole: currentUser.role })
         });
         if (response.ok) {
-          showToast(action === 'APPROVE' ? 'Görev onaylandı!' : 'Revize isteği iletildi.', 'success');
+          alert(action === 'APPROVE' ? 'Görev onaylandı!' : 'Revize isteği iletildi.');
           await loadTasks();
           if (['ENGINEER', 'LEADER', 'MANAGER', 'ADMIN', 'HR'].includes(currentUser.role)) {
             renderInternStatusList();
           }
         } else {
           const errData = await response.json();
-          showToast('İşlem başarısız: ' + (errData.error || 'Bilinmeyen hata'), 'error');
+          alert('İşlem başarısız: ' + (errData.error || 'Bilinmeyen hata'));
         }
-      } catch (err) {
-        console.error('Hata:', err);
-        showToast('Sunucu ile iletişim kurulurken bir hata oluştu.', 'error');
+      } catch (err) { 
+        console.error('Hata:', err); 
+        alert('Sunucu ile iletişim kurulurken bir hata oluştu.');
       }
     }
 
@@ -10598,14 +10689,14 @@
         });
 
         if (res.ok) {
-          showToast('Günlük not eklendi!', 'success');
+          alert('Günlük not eklendi!');
           closeLogModal();
           await loadLogs();
           await loadTasks();
           checkDailyLogWarning();
         } else {
           const data = await res.json();
-          showToast('Hata: ' + data.error, 'error');
+          alert('Hata: ' + data.error);
         }
       } catch (err) {
         console.error('Log kaydetme hatası:', err);
@@ -10672,7 +10763,7 @@
       const isSelf = currentUser.role === 'INTERN' && currentUser.id == internId;
 
       if (!isEngineerOrLead && !isSelf) {
-        showToast('Bu staj raporunu indirmek için yetkiniz bulunmamaktadır.', 'error');
+        alert("Bu staj raporunu indirmek için yetkiniz bulunmamaktadır.");
         return;
       }
 
@@ -11102,7 +11193,7 @@
         if (res.ok) {
           gcalConnected = false;
           updateGcalButton();
-          showToast('Google Takvim bağlantısı kaldırıldı.', 'success');
+          alert('Google Takvim bağlantısı kaldırıldı.');
         }
       } catch (err) {
         console.error('Google bağlantı kaldırma hatası:', err);
@@ -11142,7 +11233,7 @@
           denied: 'Google Takvim bağlantısına izin verilmedi.',
           error: 'Google Takvim bağlanırken bir hata oluştu. Lütfen tekrar deneyin.'
         };
-        if (messages[gcal]) setTimeout(() => showToast(messages[gcal], gcal === 'connected' ? 'success' : 'error'), 300);
+        if (messages[gcal]) setTimeout(() => alert(messages[gcal]), 300);
         // URL'i temizle (yenilemede tekrar uyarı çıkmasın)
         params.delete('gcal');
         const clean = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
