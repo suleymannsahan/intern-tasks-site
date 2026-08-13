@@ -3284,12 +3284,12 @@
         });
 
         if (res.ok) {
-          alert('Görev detayları güncellendi.');
+          showToast('Görev detayları güncellendi.', 'success');
           closeEditTaskModal();
           await loadTasks();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Görev güncelleme hatası:', err);
@@ -3327,7 +3327,7 @@
 
         const data = await res.json();
         if (res.ok) {
-          alert("Profil bilgileriniz başarıyla güncellendi!");
+          showToast('Profil bilgileriniz başarıyla güncellendi!', 'success');
           currentUser.name = name;
           currentUser.username = username;
           currentUser.email = email;
@@ -3346,7 +3346,7 @@
           await loadUsers();
           await showDashboard();
         } else {
-          alert("Hata: " + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Profil güncelleme hatası:", err);
@@ -3364,12 +3364,12 @@
         });
 
         if (res.ok) {
-          alert("Hesabınız başarıyla silindi.");
+          showToast('Hesabınız başarıyla silindi.', 'success');
           closeEditProfileModal();
           handleLogout();
         } else {
           const data = await res.json();
-          alert("Silme Hatası: " + data.error);
+          showToast('Silme Hatası: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Hesap silme hatası:", err);
@@ -3456,17 +3456,17 @@
       const subArea = department === 'ELEKTRONIK' ? document.getElementById('regSubArea').value : null;
 
       if (department === 'ELEKTRONIK' && !subArea) {
-        alert('Lütfen bir alt alan seçiniz.');
+        showToast('Lütfen bir alt alan seçiniz.', 'error');
         return;
       }
 
       // E-posta ve telefon zorunlu
       if (!email) {
-        alert('Lütfen e-posta adresinizi giriniz.');
+        showToast('Lütfen e-posta adresinizi giriniz.', 'error');
         return;
       }
       if (!phone) {
-        alert('Lütfen telefon numaranızı giriniz.');
+        showToast('Lütfen telefon numaranızı giriniz.', 'error');
         return;
       }
 
@@ -3474,7 +3474,7 @@
       const role = isHR ? 'HR' : document.getElementById('regRole').value;
 
       if (!isHR && !role) {
-        alert('Lütfen bir rol seçiniz.');
+        showToast('Lütfen bir rol seçiniz.', 'error');
         return;
       }
 
@@ -3487,7 +3487,7 @@
         startDate = document.getElementById('regStartDate').value;
         endDate = document.getElementById('regEndDate').value;
         if (!startDate || !endDate) {
-          alert('Stajyerler için başlangıç ve bitiş tarihleri zorunludur!');
+          showToast('Stajyerler için başlangıç ve bitiş tarihleri zorunludur!', 'error');
           return;
         }
       }
@@ -3515,19 +3515,19 @@
         if (res.ok) {
           // Sunucunun döndürdüğü statüye göre bilgi mesajı göster (Ekip Lideri, Müdür veya İnsan Kaynakları onay bekler)
           if (data.status === 'PENDING') {
-            alert("Hesabınız oluşturuldu! Bu rol/departman için hesabınız Admin onayından sonra aktifleşecektir.");
+            showToast('Hesabınız oluşturuldu! Bu rol/departman için hesabınız Admin onayından sonra aktifleşecektir.', 'success');
           } else {
-            alert("Hesabınız başarıyla oluşturuldu! Giriş yapabilirsiniz.");
+            showToast('Hesabınız başarıyla oluşturuldu! Giriş yapabilirsiniz.', 'success');
           }
-          
+
           await loadUsers();
           switchAuthTab('login');
         } else {
-          alert(data.error || "Kayıt sırasında bir hata oluştu.");
+          showToast(data.error || 'Kayıt sırasında bir hata oluştu.', 'error');
         }
       } catch (err) {
         console.error("Kayıt hatası:", err);
-        alert("Sunucuya bağlanırken bir sorun oluştu.");
+        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
       }
     }
 
@@ -5388,13 +5388,13 @@
         const data = await res.json();
 
         if (!res.ok) {
-          alert(data.error || 'Veri alınamadı.');
+          showToast(data.error || 'Veri alınamadı.', 'error');
           return;
         }
 
         const person = data.people && data.people[0];
         if (!person) {
-          alert('Kullanıcı bulunamadı.');
+          showToast('Kullanıcı bulunamadı.', 'error');
           return;
         }
 
@@ -5727,7 +5727,7 @@
           body: JSON.stringify({ userRole: currentUser.role })
         });
         const data = await safeJson(res);
-        if (!res.ok) { alert(data.error || 'Talep silinemedi.'); return; }
+        if (!res.ok) { showToast(data.error || 'Talep silinemedi.', 'error'); return; }
         await loadMeetings();
       } catch (err) {
         console.error('Toplantı talebi silme hatası:', err);
@@ -5812,11 +5812,11 @@
       });
 
       if (CROSS_DEPT_MEETING_ROLES.includes(currentUser.role) && !targetDepartment) {
-        alert('Lütfen bir birim seçiniz.');
+        showToast('Lütfen bir birim seçiniz.', 'error');
         return;
       }
       if (targetDepartment && meetingSubs.length > 0 && !meetingSubVal) {
-        alert('Lütfen bir alt alan seçiniz.');
+        showToast('Lütfen bir alt alan seçiniz.', 'error');
         return;
       }
 
@@ -5838,11 +5838,11 @@
 
         const data = await res.json();
         if (res.ok) {
-          alert('Toplantı talebiniz iletildi.');
+          showToast('Toplantı talebiniz iletildi.', 'success');
           e.target.reset();
           await loadMeetings();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Toplantı talebi gönderme hatası:", err);
@@ -5888,7 +5888,7 @@
           closeEditMeetingModal();
           await loadMeetings();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Toplantı talebi düzenleme hatası:', err);
@@ -5918,7 +5918,7 @@
         if (res.ok) {
           await loadMeetings();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Toplantı talebi güncelleme hatası:", err);
@@ -6833,12 +6833,12 @@
 
         const data = await res.json();
         if (res.ok) {
-          alert('Kullanıcı başarıyla oluşturuldu.');
+          showToast('Kullanıcı başarıyla oluşturuldu.', 'success');
           closeAddUserModal();
           await fetchAdminUsers();
           await fetchAdminStats();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Kullanıcı oluşturma hatası:", err);
@@ -6978,7 +6978,7 @@
           await fetchAdminUsers();
           await fetchAdminStats();
         } else {
-          alert('Hata: ' + ((data && data.error) || 'Güncellenemedi.'));
+          showToast('Hata: ' + ((data && data.error) || 'Güncellenemedi.'), 'error');
         }
       } catch (err) {
         console.error('Kullanıcı güncelleme hatası:', err);
@@ -7000,7 +7000,7 @@
           await fetchAdminUsers();
           await fetchAdminStats();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Kullanıcı silme hatası:", err);
@@ -7022,7 +7022,7 @@
     async function sendLeaderVerificationCode() {
       const emailInput = document.getElementById('regEmail');
       if (!emailInput || !emailInput.value) {
-        alert("Geçerli bir e-posta girin.");
+        showToast('Geçerli bir e-posta girin.', 'error');
         return;
       }
 
@@ -7033,7 +7033,7 @@
           body: JSON.stringify({ email: emailInput.value })
         });
 
-        if (response.ok) alert('Doğrulama kodu e-postanıza gönderildi!');
+        if (response.ok) showToast('Doğrulama kodu e-postanıza gönderildi!', 'success');
       } catch (error) {
         console.error('Hata:', error);
       }
@@ -7173,13 +7173,13 @@
           body: JSON.stringify({ name, email, role, requesterId: currentUser.id })
         });
         if (res.ok) {
-          alert('Kullanıcı bilgileri güncellendi.');
+          showToast('Kullanıcı bilgileri güncellendi.', 'success');
           closeManageUserModal();
           await loadUsers();
           renderSidebarDirectory();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Kullanıcı güncelleme hatası:', err);
@@ -7196,12 +7196,12 @@
           body: JSON.stringify({ requesterId: currentUser.id })
         });
         if (res.ok) {
-          alert('Kullanıcı silindi.');
+          showToast('Kullanıcı silindi.', 'success');
           await loadUsers();
           renderSidebarDirectory();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Kullanıcı silme hatası:', err);
@@ -7283,7 +7283,7 @@
           setInterval(() => loadNotifications(false), 60000);
 
         } else {
-          alert(data.error);
+          showToast(data.error, 'error');
         }
       } catch (err) {
         console.error("Giriş hatası:", err);
@@ -7370,14 +7370,14 @@
           body: JSON.stringify({ username, email })
         });
         const data = await safeJson(res);
-        if (!res.ok) { alert(data.error || 'Kod gönderilemedi.'); return; }
+        if (!res.ok) { showToast(data.error || 'Kod gönderilemedi.', 'error'); return; }
 
         const emailLabel = document.getElementById('resetStep2Email');
         if (emailLabel) emailLabel.innerText = email;
         resetToStep(2);
-        if (isResend) alert('Doğrulama kodu tekrar gönderildi.');
+        if (isResend) showToast('Doğrulama kodu tekrar gönderildi.', 'success');
       } catch (err) {
-        alert('Sunucuya bağlanırken bir sorun oluştu.');
+        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = 'Kod Gönder'; }
       }
@@ -7400,12 +7400,12 @@
           body: JSON.stringify({ username, email, code })
         });
         const data = await safeJson(res);
-        if (!res.ok) { alert(data.error || 'Kod doğrulanamadı.'); return; }
+        if (!res.ok) { showToast(data.error || 'Kod doğrulanamadı.', 'error'); return; }
 
         resetVerifiedToken = data.token;
         resetToStep(3);
       } catch (err) {
-        alert('Sunucuya bağlanırken bir sorun oluştu.');
+        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = 'Kodu Doğrula'; }
       }
@@ -7420,11 +7420,11 @@
       const newPasswordConfirm = document.getElementById('resetNewPassConfirm').value;
 
       if (newPassword !== newPasswordConfirm) {
-        alert('Girdiğiniz şifreler birbiriyle eşleşmiyor.');
+        showToast('Girdiğiniz şifreler birbiriyle eşleşmiyor.', 'error');
         return;
       }
       if (!resetVerifiedToken) {
-        alert('Doğrulama oturumu bulunamadı. Lütfen baştan başlayın.');
+        showToast('Doğrulama oturumu bulunamadı. Lütfen baştan başlayın.', 'error');
         resetToStep(1);
         return;
       }
@@ -7439,16 +7439,16 @@
           body: JSON.stringify({ username, email, token: resetVerifiedToken, newPassword })
         });
         const data = await safeJson(res);
-        if (!res.ok) { alert(data.error || 'Şifre güncellenemedi.'); return; }
+        if (!res.ok) { showToast(data.error || 'Şifre güncellenemedi.', 'error'); return; }
 
-        alert('Şifreniz başarıyla güncellendi! Yeni şifrenizle giriş yapabilirsiniz.');
+        showToast('Şifreniz başarıyla güncellendi! Yeni şifrenizle giriş yapabilirsiniz.', 'success');
         closeResetModal();
         document.getElementById('resetUsername').value = '';
         document.getElementById('resetEmail').value = '';
         document.getElementById('resetNewPass').value = '';
         document.getElementById('resetNewPassConfirm').value = '';
       } catch (err) {
-        alert('Sunucuya bağlanırken bir sorun oluştu.');
+        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = 'Şifreyi Güncelle'; }
       }
@@ -8497,7 +8497,7 @@
           await loadTasks();
         } else {
           const data = await res.json();
-          alert('Hata: ' + (data.error || 'Görev eklenemedi.'));
+          showToast('Hata: ' + (data.error || 'Görev eklenemedi.'), 'error');
         }
       } catch (err) { console.error('Kendime görev ekleme hatası:', err); }
     }
@@ -8896,7 +8896,7 @@
           await loadTasks();
         } else {
           const data = await res.json();
-          alert('Hata: ' + (data.error || 'Görev eklenemedi.'));
+          showToast('Hata: ' + (data.error || 'Görev eklenemedi.'), 'error');
         }
       } catch (err) { console.error('Kendime görev ekleme hatası:', err); }
     }
@@ -9785,8 +9785,8 @@
     function handleUploadAttachment(taskId) {
       const input = document.getElementById(`taskAttachmentInput_${taskId}`);
       const file = input && input.files && input.files[0];
-      if (!file) { alert('Lütfen bir dosya seçin.'); return; }
-      if (file.size > 10 * 1024 * 1024) { alert('Dosya boyutu 10MB sınırını aşıyor.'); return; }
+      if (!file) { showToast('Lütfen bir dosya seçin.', 'error'); return; }
+      if (file.size > 10 * 1024 * 1024) { showToast('Dosya boyutu 10MB sınırını aşıyor.', 'error'); return; }
 
       const reader = new FileReader();
       reader.onload = async () => {
@@ -9805,11 +9805,11 @@
             })
           });
           const data = await res.json();
-          if (!res.ok) { alert('Hata: ' + (data.error || 'Belge yüklenemedi.')); return; }
+          if (!res.ok) { showToast('Hata: ' + (data.error || 'Belge yüklenemedi.'), 'error'); return; }
           await renderTaskAttachments(taskId);
         } catch (err) {
           console.error('Belge yükleme hatası:', err);
-          alert('Belge yüklenirken bir hata oluştu.');
+          showToast('Belge yüklenirken bir hata oluştu.', 'error');
         }
       };
       reader.readAsDataURL(file);
@@ -9824,7 +9824,7 @@
           body: JSON.stringify({ userId: currentUser.id, userRole: currentUser.role })
         });
         const data = await res.json();
-        if (!res.ok) { alert('Hata: ' + (data.error || 'Belge silinemedi.')); return; }
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Belge silinemedi.'), 'error'); return; }
         await renderTaskAttachments(taskId);
       } catch (err) {
         console.error('Belge silme hatası:', err);
@@ -10003,20 +10003,20 @@
       if (!task) return;
       const kategori = document.getElementById('isPlaniKategori').value;
       const dokumanTarihi = document.getElementById('isPlaniDokumanTarihi').value;
-      if (!dokumanTarihi) { alert('Plan başlangıç tarihini seçiniz.'); return; }
+      if (!dokumanTarihi) { showToast('Plan başlangıç tarihini seçiniz.', 'error'); return; }
 
       // Her aşamanın bitişini topla (başlangıçlar otomatik zincirlenir)
       const asamaBitisleri = [];
       for (let i = 0; i < IS_PLANI_ADIMLAR.length; i++) {
         const v = (document.getElementById('ipBit_' + i) || {}).value;
-        if (!v) { alert(`${i + 1}. aşamanın (${IS_PLANI_ADIMLAR[i]}) bitiş tarihini giriniz.`); return; }
+        if (!v) { showToast(`${i + 1}. aşamanın (${IS_PLANI_ADIMLAR[i]}) bitiş tarihini giriniz.`, 'error'); return; }
         asamaBitisleri.push(v);
       }
       // Sıralı ve artan olmalı (ISO tarih string karşılaştırması yeterli)
       let onceki = dokumanTarihi;
       for (let i = 0; i < asamaBitisleri.length; i++) {
         if (asamaBitisleri[i] <= onceki) {
-          alert(`${i + 1}. aşamanın (${IS_PLANI_ADIMLAR[i]}) bitişi, başlangıcından (${onceki}) sonra olmalı.`);
+          showToast(`${i + 1}. aşamanın (${IS_PLANI_ADIMLAR[i]}) bitişi, başlangıcından (${onceki}) sonra olmalı.`, 'error');
           return;
         }
         onceki = asamaBitisleri[i];
@@ -10029,20 +10029,20 @@
           body: JSON.stringify({ kartIsmi: task.title, kategori, dokumanTarihi, asamaBitisleri, userRole: currentUser.role })
         });
         const plan = await res.json();
-        if (!res.ok) { alert('Hata: ' + (plan.error || 'Plan oluşturulamadı.')); return; }
+        if (!res.ok) { showToast('Hata: ' + (plan.error || 'Plan oluşturulamadı.'), 'error'); return; }
 
         const saveRes = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-kaydet`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ plan, userRole: currentUser.role })
         });
-        if (!saveRes.ok) { const d = await saveRes.json(); alert('Hata: ' + (d.error || 'Plan kaydedilemedi.')); return; }
+        if (!saveRes.ok) { const d = await saveRes.json(); showToast('Hata: ' + (d.error || 'Plan kaydedilemedi.'), 'error'); return; }
 
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
         console.error('İş planı oluşturma hatası:', err);
-        alert('İş planı oluşturulurken bir hata oluştu.');
+        showToast('İş planı oluşturulurken bir hata oluştu.', 'error');
       }
     }
 
@@ -10057,12 +10057,12 @@
           })
         });
         const data = await res.json();
-        if (!res.ok) { alert('Hata: ' + (data.error || 'İşlem yapılamadı.')); return; }
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'İşlem yapılamadı.'), 'error'); return; }
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
         console.error('Aşama durumu hatası:', err);
-        alert('Aşama durumu güncellenirken bir hata oluştu.');
+        showToast('Aşama durumu güncellenirken bir hata oluştu.', 'error');
       }
     }
 
@@ -10074,7 +10074,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userRole: currentUser.role })
         });
-        if (!res.ok) { const d = await res.json(); alert('Hata: ' + (d.error || 'Sıfırlanamadı.')); return; }
+        if (!res.ok) { const d = await res.json(); showToast('Hata: ' + (d.error || 'Sıfırlanamadı.'), 'error'); return; }
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
@@ -10092,7 +10092,7 @@
           body: JSON.stringify({ yeniBitis, userRole: currentUser.role })
         });
         const data = await res.json();
-        if (!res.ok) { alert('Hata: ' + (data.error || 'Güncellenemedi.')); return; }
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Güncellenemedi.'), 'error'); return; }
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
@@ -10105,7 +10105,7 @@
       try {
         const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/complete`, { method: 'PUT' });
         if (response.ok) {
-          alert('Görev başarıyla tamamlandı olarak işaretlendi ve bildirim gönderildi!');
+          showToast('Görev başarıyla tamamlandı olarak işaretlendi ve bildirim gönderildi!', 'success');
           await loadTasks();
         }
       } catch (err) { console.error('Hata:', err); }
@@ -10119,12 +10119,12 @@
           headers: { 'user-role': currentUser.role }
         });
         if (res.ok) {
-          alert('Görev silindi.');
+          showToast('Görev silindi.', 'success');
           await loadTasks();
           renderInternStatusList();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) { console.error('Hata:', err); }
     }
@@ -10154,11 +10154,11 @@
 
         const data = await res.json();
         if (res.ok) {
-          alert(data.message || 'Revize talebi iletildi.');
+          showToast(data.message || 'Revize talebi iletildi.', 'success');
           closeRevisionModal();
           await loadTasks();
         } else {
-          alert("Hata: " + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Revize gönderme hatası:", err);
@@ -10173,18 +10173,18 @@
           body: JSON.stringify({ action, comment, userRole: currentUser.role })
         });
         if (response.ok) {
-          alert(action === 'APPROVE' ? 'Görev onaylandı!' : 'Revize isteği iletildi.');
+          showToast(action === 'APPROVE' ? 'Görev onaylandı!' : 'Revize isteği iletildi.', 'success');
           await loadTasks();
           if (['ENGINEER', 'LEADER', 'MANAGER', 'ADMIN', 'HR'].includes(currentUser.role)) {
             renderInternStatusList();
           }
         } else {
           const errData = await response.json();
-          alert('İşlem başarısız: ' + (errData.error || 'Bilinmeyen hata'));
+          showToast('İşlem başarısız: ' + (errData.error || 'Bilinmeyen hata'), 'error');
         }
-      } catch (err) { 
-        console.error('Hata:', err); 
-        alert('Sunucu ile iletişim kurulurken bir hata oluştu.');
+      } catch (err) {
+        console.error('Hata:', err);
+        showToast('Sunucu ile iletişim kurulurken bir hata oluştu.', 'error');
       }
     }
 
@@ -10209,14 +10209,14 @@
         });
 
         if (res.ok) {
-          alert('Günlük not eklendi!');
+          showToast('Günlük not eklendi!', 'success');
           closeLogModal();
           await loadLogs();
           await loadTasks();
           checkDailyLogWarning();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Log kaydetme hatası:', err);
@@ -10283,7 +10283,7 @@
       const isSelf = currentUser.role === 'INTERN' && currentUser.id == internId;
 
       if (!isEngineerOrLead && !isSelf) {
-        alert("Bu staj raporunu indirmek için yetkiniz bulunmamaktadır.");
+        showToast('Bu staj raporunu indirmek için yetkiniz bulunmamaktadır.', 'error');
         return;
       }
 
@@ -10713,7 +10713,7 @@
         if (res.ok) {
           gcalConnected = false;
           updateGcalButton();
-          alert('Google Takvim bağlantısı kaldırıldı.');
+          showToast('Google Takvim bağlantısı kaldırıldı.', 'success');
         }
       } catch (err) {
         console.error('Google bağlantı kaldırma hatası:', err);
@@ -10753,7 +10753,7 @@
           denied: 'Google Takvim bağlantısına izin verilmedi.',
           error: 'Google Takvim bağlanırken bir hata oluştu. Lütfen tekrar deneyin.'
         };
-        if (messages[gcal]) setTimeout(() => alert(messages[gcal]), 300);
+        if (messages[gcal]) setTimeout(() => showToast(messages[gcal], gcal === 'connected' ? 'success' : 'error'), 300);
         // URL'i temizle (yenilemede tekrar uyarı çıkmasın)
         params.delete('gcal');
         const clean = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
