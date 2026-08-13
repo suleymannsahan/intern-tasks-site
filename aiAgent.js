@@ -47,6 +47,20 @@ const GOREV_YAZMA_ROLLERI = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'];
 // İş planı uzatabilen roller (ai.js IS_PLANI_YETKILI ile aynı)
 const IS_PLANI_YETKILI = ['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'];
 
+// ---- TOPLANTI: server.js POST /api/meetings ile BİREBİR aynı yetki kuralları ----
+// Toplantı talebi oluşturabilen roller
+const TOPLANTI_YAZMA_ROLLERI = ['ENGINEER', 'LEADER', 'MANAGER', 'ADMIN', 'HR'];
+// Hangi rol, hangi rolleri toplantıya çağırabilir (server.js ALLOWED_TARGETS ile aynı)
+const TOPLANTI_HEDEF_ROLLERI = {
+  LEADER:   ['INTERN', 'TECHNICIAN', 'ENGINEER', 'LEADER'],
+  MANAGER:  ['INTERN', 'TECHNICIAN', 'ENGINEER', 'LEADER'],
+  ADMIN:    ['MANAGER', 'LEADER', 'ENGINEER'],
+  HR:       ['MANAGER', 'LEADER', 'ENGINEER'],
+  ENGINEER: ['INTERN']
+};
+// Birim seçmek zorunda olan (başka birime de toplantı açabilen) roller
+const TOPLANTI_CROSS_DEPT_ROLLERI = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'];
+
 const DURUM_TR = {
   IN_PROGRESS: 'Devam ediyor',
   COMPLETED: 'Tamamlandı (onay bekliyor)',
@@ -67,6 +81,30 @@ function parseTR(s) {
   return new Date(y, a - 1, g);
 }
 
+// server.js'teki nowTurkeyLocal ile birebir aynı biçim (UTC+3, "YYYY-MM-DD HH:MM:SS")
+function agentNowTurkeyLocal() {
+  return new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+}
+
+// server.js'teki createNotification/notifyUsers ile aynı tabloya yazar. Hatayı yutar ki
+// asıl işlem (toplantı oluşturma) bildirim yüzünden bozulmasın. db, dış kapsamdan gelir.
+function makeAgentNotifyUsers(db) {
+  return async function agentNotifyUsers(userIds, type, box, title, message, refId) {
+    const uniqueIds = [...new Set((userIds || []).filter(Boolean).map(Number))];
+    for (const uid of uniqueIds) {
+      if (!uid) continue;
+      try {
+        await db.execute({
+          sql: `INSERT INTO notifications (user_id, type, box, title, message, ref_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [uid, type, box, title, message || null, refId != null ? refId : null, agentNowTurkeyLocal()]
+        });
+      } catch (e) {
+        console.error('Ajan bildirimi oluşturulamadı:', e.message);
+      }
+    }
+  };
+}
+
 // ============================================================
 // ÖZELLİK 6 — DİNAMİK SYSTEM PROMPT: role göre AI'nın dili ve odağı değişir
 // ============================================================
@@ -77,9 +115,10 @@ Kullanıcı: ${name || 'bilinmiyor'} (rol: ${role || 'bilinmiyor'}${department ?
 GENEL KURALLAR:
 - SADECE Türkçe yaz. Markdown/işaret (*, #, **) KULLANMA.
 - "sa", "selam", "merhaba", "nasılsın" gibi kısa selam/sohbet mesajlarında HİÇBİR araç (function) çağırma; doğrudan kısa ve samimi cevap ver.
-- Araçları YALNIZCA kullanıcı gerçekten görev listeleme, atama, tarih/durum değiştirme, risk, atama önerisi, özet veya geçmiş görev araması istediğinde çağır.
+- Araçları YALNIZCA kullanıcı gerçekten görev listeleme, atama, tarih/durum değiştirme, risk, atama önerisi, özet, geçmiş görev araması veya TOPLANTI oluşturma istediğinde çağır.
 - Bir işlem yapman istendiğinde uygun aracı çağır; veriyi UYDURMA.
-- Bir görevi güncellemeden/atamadan önce doğru görevi bulduğundan emin ol; şüphedeysen kullanıcıya sor.`;
+- Bir görevi güncellemeden/atamadan önce doğru görevi bulduğundan emin ol; şüphedeysen kullanıcıya sor.
+- TOPLANTI: Kullanıcı "toplantı oluştur / X ile toplantı ayarla / şunları toplantıya çağır" derse toplanti_olustur aracını kullan. Belirli bir kişiyi (ör. "Ayberk") çağırman istenirse ÖNCE is_yuku_ozeti aracını çağırıp o ismin kullaniciId değerini bul, sonra toplanti_olustur'u hedefKullaniciIds ile çağır. Konu belirtilmemişse kullanıcıya kısaca konuyu sor. Kişinin ismi listede yoksa uydurma; bulunamadığını söyle. Toplantı oluşturma bir onay kartıyla kullanıcıya doğrulatılır, sen sadece aracı çağır.`;
 
   if (role === 'ENGINEER' || role === 'TECHNICIAN') {
     return `${ortak}
@@ -91,7 +130,8 @@ takvimdeki sıkışıklığa odaklan. Kısa, uygulanabilir öneriler ver.`;
     return `${ortak}
 
 ÜSLUP (Stajyer): Sade ve yönlendirici ol. Yalnızca kendi görevlerini görebildiğini
-unutma; başkasına görev atama gibi yetkin yok, bu tür istekleri kibarca reddet.`;
+unutma; başkasına görev atama veya toplantı oluşturma gibi yetkin yok, bu tür
+istekleri kibarca reddet.`;
   }
   // ADMIN / HR / MANAGER / LEADER
   return `${ortak}
@@ -268,6 +308,37 @@ const ARAC_TANIMLARI = {
         }
       }
     }
+  },
+  toplanti_olustur: {
+    yazma: true,
+    yetki: TOPLANTI_YAZMA_ROLLERI,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'toplanti_olustur',
+        description: 'Yeni bir toplantı talebi oluşturur ve seçilen kişileri/rolleri toplantıya çağırır (onlara bildirim düşer). Kullanıcı "toplantı oluştur", "X ile toplantı ayarla", "şu kişileri toplantıya çağır" dediğinde kullan. Belirli kişileri çağırmak için önce is_yuku_ozeti aracıyla o kişilerin kullaniciId değerlerini öğren, sonra hedefKullaniciIds içine koy. Kişi yerine tüm bir rolü çağırmak istenirse hedefRoller kullan.',
+        parameters: {
+          type: 'object',
+          properties: {
+            konu: { type: 'string', description: 'Toplantının konusu/başlığı (zorunlu).' },
+            tarih: { type: 'string', description: 'YYYY-MM-DD biçiminde tercih edilen tarih (isteğe bağlı).' },
+            aciklama: { type: 'string', description: 'Toplantı açıklaması / gündem (isteğe bağlı).' },
+            birim: { type: 'string', description: 'Toplantının hedef birimi (department key). Belirtilmezse kullanıcının kendi birimi kullanılır.' },
+            hedefKullaniciIds: {
+              type: 'array',
+              items: { type: 'integer' },
+              description: 'Toplantıya çağrılacak belirli kişilerin kullaniciId listesi. Tek tek kişi çağırmak için bunu kullan.'
+            },
+            hedefRoller: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Kişi yerine bütün bir rolü çağırmak için rol listesi (ör. ["INTERN"]).'
+            }
+          },
+          required: ['konu']
+        }
+      }
+    }
   }
 };
 
@@ -294,6 +365,9 @@ function aracYetkiliMi(name, role) {
 // ============================================================
 function createAgentRouter(db, { isAdmin }) {
   const router = express.Router();
+
+  // Toplantı bildirimlerini server.js ile aynı tabloya yazan yardımcı (db'ye bağlı)
+  const agentNotifyUsers = makeAgentNotifyUsers(db);
 
   router.use((req, res, next) => {
     if (!MISTRAL_API_KEY) {
@@ -478,6 +552,21 @@ function createAgentRouter(db, { isAdmin }) {
       const baslik = t.rows[0] ? t.rows[0].title : ('#' + args.gorevId);
       return `"${baslik}" görevinin durumu "${DURUM_TR[args.durum] || args.durum}" olarak değiştirilecek.`;
     }
+    if (name === 'toplanti_olustur') {
+      const parcalar = [`"${args.konu || '(konu yok)'}" konulu bir toplantı talebi oluşturulacak`];
+      if (args.tarih) parcalar.push(`tarih: ${args.tarih}`);
+      // Çağrılacak kişilerin isimlerini kart için çöz
+      const ids = Array.isArray(args.hedefKullaniciIds) ? args.hedefKullaniciIds.map(Number).filter(Number.isInteger) : [];
+      if (ids.length) {
+        const ph = ids.map(() => '?').join(',');
+        const u = await db.execute({ sql: `SELECT name FROM users WHERE id IN (${ph})`, args: ids });
+        const isimler = u.rows.map(r => r.name).filter(Boolean);
+        if (isimler.length) parcalar.push(`çağrılacak kişiler: ${isimler.join(', ')}`);
+      }
+      const roller = Array.isArray(args.hedefRoller) ? args.hedefRoller.filter(Boolean) : [];
+      if (roller.length) parcalar.push(`çağrılacak roller: ${roller.join(', ')}`);
+      return parcalar.join('; ') + '. Çağrılan kişilere bildirim gidecek. Onaylıyor musunuz?';
+    }
     return 'Bu işlem uygulanacak.';
   }
 
@@ -573,6 +662,83 @@ function createAgentRouter(db, { isAdmin }) {
       if (!aracYetkiliMi(action.name, role)) return res.status(403).json({ error: 'Bu işlem için yetkiniz yok.' });
 
       const args = action.args || {};
+
+      // --- toplanti_olustur ---------------------------------------------------
+      // Görevle ilgisi yok; kendi doğrulamasını yapıp erken döner (aşağıdaki görev
+      // sorgusuna DÜŞMEZ). Yetki/hedef kuralları server.js POST /api/meetings ile aynı.
+      if (action.name === 'toplanti_olustur') {
+        if (!args.konu || !String(args.konu).trim()) {
+          return res.status(400).json({ error: 'Toplantı konusu zorunludur.' });
+        }
+        if (args.tarih && !/^\d{4}-\d{2}-\d{2}$/.test(String(args.tarih))) {
+          return res.status(400).json({ error: 'Tarih YYYY-AA-GG biçiminde olmalı.' });
+        }
+
+        // Birimi belirle: cross-dept roller birim seçebilir; seçmezse kendi birimi.
+        let hedefBirim = null;
+        if (TOPLANTI_CROSS_DEPT_ROLLERI.includes(role)) {
+          hedefBirim = args.birim || department || null;
+          if (!hedefBirim) return res.status(400).json({ error: 'Lütfen bir birim belirtin.' });
+        } else {
+          const ur = await db.execute({ sql: `SELECT department FROM users WHERE id = ?`, args: [userId] });
+          if (!ur.rows[0]) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+          hedefBirim = ur.rows[0].department;
+        }
+
+        // Hedef rolleri yetkiye göre filtrele (server.js ile aynı)
+        const izinliRoller = TOPLANTI_HEDEF_ROLLERI[role] || [];
+        let rolesArr = Array.isArray(args.hedefRoller) ? args.hedefRoller.map(r => String(r).trim()).filter(Boolean) : [];
+        rolesArr = rolesArr.filter(r => izinliRoller.includes(r));
+
+        // Belirli kişiler: yalnızca izinli rollerden VE bu birimden olanlar (sunucu doğrulaması)
+        let idsArr = Array.isArray(args.hedefKullaniciIds) ? args.hedefKullaniciIds.map(Number).filter(Number.isInteger) : [];
+        if (idsArr.length > 0 && izinliRoller.length > 0) {
+          const ph = idsArr.map(() => '?').join(',');
+          const rolePh = izinliRoller.map(() => '?').join(',');
+          const vr = await db.execute({
+            sql: `SELECT id FROM users WHERE id IN (${ph}) AND department = ? AND role IN (${rolePh}) AND status = 'APPROVED'`,
+            args: [...idsArr, hedefBirim, ...izinliRoller]
+          });
+          const gecerli = new Set(vr.rows.map(r => Number(r.id)));
+          idsArr = idsArr.filter(id => gecerli.has(id));
+        } else {
+          idsArr = [];
+        }
+
+        if (rolesArr.length === 0 && idsArr.length === 0) {
+          return res.status(400).json({ error: 'Toplantıya çağrılacak geçerli kişi/rol bulunamadı. Yetkiniz dahilinde bir kişi veya rol seçin.' });
+        }
+
+        const targetRolesStr = rolesArr.length ? rolesArr.join(',') : null;
+        const targetUserIdsStr = idsArr.length ? `,${idsArr.join(',')},` : null;
+        const now = agentNowTurkeyLocal();
+
+        const ins = await db.execute({
+          sql: `INSERT INTO meeting_requests (requested_by, department, subject, description, preferred_date, status, created_at, target_roles, target_user_ids)
+                VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)`,
+          args: [userId, hedefBirim || null, String(args.konu).trim(), args.aciklama || null, args.tarih || null, now, targetRolesStr, targetUserIdsStr]
+        });
+        const yeniId = Number(ins.lastInsertRowid);
+
+        // Çağrılanlara bildirim düş (rol bazlı + tekil seçilenler), talep edeni hariç tut
+        try {
+          const alicilar = new Set(idsArr);
+          if (rolesArr.length) {
+            const rolePh = rolesArr.map(() => '?').join(',');
+            const ru = await db.execute({
+              sql: `SELECT id FROM users WHERE department = ? AND role IN (${rolePh}) AND status = 'APPROVED'`,
+              args: [hedefBirim, ...rolesArr]
+            });
+            ru.rows.forEach(r => alicilar.add(Number(r.id)));
+          }
+          alicilar.delete(Number(userId));
+          await agentNotifyUsers([...alicilar], 'MEETING_REQUEST', 'MEETINGS', 'Yeni Toplantı Talebi', String(args.konu).trim(), yeniId);
+        } catch (bildirimHata) {
+          console.error('Ajan toplantı bildirimi hatası:', bildirimHata.message);
+        }
+
+        return res.json({ reply: `"${String(args.konu).trim()}" konulu toplantı talebi oluşturuldu ve ilgili kişilere iletildi.` });
+      }
 
       // Hedef görevi al + birim bazlı güvenlik: yönetici olmayan yalnızca kendi birimine dokunur
       const tr = await db.execute({
