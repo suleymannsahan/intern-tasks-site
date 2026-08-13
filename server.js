@@ -3166,7 +3166,7 @@ app.get('/api/projects/:id', async (req, res) => {
     });
     if (pr.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
     const progress = await db.execute({
-      sql: `SELECT id, log_date, planned, actual, note FROM project_progress WHERE project_id = ? ORDER BY log_date ASC`,
+      sql: `SELECT id, log_date, planned, actual, note FROM project_progress WHERE project_id = ? ORDER BY log_date ASC, id ASC`,
       args: [pid]
     });
     res.json({ project: pr.rows[0], progress: progress.rows });

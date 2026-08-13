@@ -1613,9 +1613,8 @@
               </div>
               <div id="pdProjAddForm" class="hidden pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
                 <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Yeni İlerleme Ekle</h4>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input type="date" id="pdProjDate" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-                  <input type="number" id="pdProjPlanned" min="0" max="100" placeholder="Planlanan %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
                   <input type="number" id="pdProjActual" min="0" max="100" placeholder="Gerçekleşen %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
                 </div>
                 <input type="text" id="pdProjNote" placeholder="Not (opsiyonel)" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
@@ -1660,9 +1659,8 @@
             </div>
             <div id="projDetAddForm" class="hidden pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
               <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Yeni İlerleme Ekle</h4>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input type="date" id="projDetDate" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-                <input type="number" id="projDetPlanned" min="0" max="100" placeholder="Planlanan %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
                 <input type="number" id="projDetActual" min="0" max="100" placeholder="Gerçekleşen %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
               </div>
               <input type="text" id="projDetNote" placeholder="Not (opsiyonel)" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
@@ -5180,6 +5178,19 @@
       renderPersonProjectModal(data);
     }
 
+    // "Planlanan %": manuel girilmez, proje başlangıç/bitiş tarihine göre doğrusal olarak
+    // arka planda hesaplanır (log_date, projenin süresi içinde nerede duruyor).
+    function computePlannedPct(logDate, startDate, endDate) {
+      if (!logDate || !startDate || !endDate) return 0;
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T00:00:00');
+      const cur = new Date(logDate + 'T00:00:00');
+      const totalMs = end - start;
+      if (totalMs <= 0) return 100;
+      const pct = ((cur - start) / totalMs) * 100;
+      return Math.max(0, Math.min(100, Math.round(pct)));
+    }
+
     function renderPersonProjectModal(data) {
       const idp = ppIdPrefix;
       const project = data.project;
@@ -5191,7 +5202,7 @@
       const sorted = [...progress].sort((a, b) => a.log_date.localeCompare(b.log_date));
       const last = sorted.length ? sorted[sorted.length - 1] : null;
       const actual = last ? Number(last.actual) : 0;
-      const planned = last ? Number(last.planned) : 0;
+      const planned = last ? computePlannedPct(last.log_date, project.start_date, project.end_date) : 0;
       const behind = actual < planned - 5;
 
       let daysBadge, daysCls;
@@ -5211,16 +5222,21 @@
       personProjectChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: sorted.map(p => p.log_date),
+          // X ekseni takvim gününe göre değil, girilme sırasına (her ekleme kendi noktası) göredir —
+          // aynı günde birden fazla giriş yapılsa bile üst üste binmeden ayrı ayrı gösterilir.
+          labels: sorted.map((p, i) => `${i + 1}. Giriş`),
           datasets: [
-            { label: 'Planlanan %', data: sorted.map(p => Number(p.planned)), borderColor: '#6366f1', backgroundColor: 'transparent', tension: 0.3 },
+            { label: 'Planlanan %', data: sorted.map(p => computePlannedPct(p.log_date, project.start_date, project.end_date)), borderColor: '#6366f1', backgroundColor: 'transparent', tension: 0.3 },
             { label: 'Gerçekleşen %', data: sorted.map(p => Number(p.actual)), borderColor: '#06b6d4', backgroundColor: 'transparent', tension: 0.3 }
           ]
         },
         options: {
           responsive: true,
           scales: { y: { min: 0, max: 100 } },
-          plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } }
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
+            tooltip: { callbacks: { afterTitle: (items) => sorted[items[0].dataIndex] ? sorted[items[0].dataIndex].log_date : '' } }
+          }
         }
       });
 
@@ -5235,9 +5251,8 @@
           if (isAdminViewer && ppEditingId == p.id) {
             return `
               <div class="bg-slate-100 dark:bg-slate-800/70 border border-cyan-500/50 rounded-lg p-2.5 text-xs space-y-1.5">
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   <input type="date" id="${idp}EditDate_${p.id}" value="${p.log_date}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
-                  <input type="number" id="${idp}EditPlanned_${p.id}" min="0" max="100" value="${p.planned}" placeholder="Planlanan %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
                   <input type="number" id="${idp}EditActual_${p.id}" min="0" max="100" value="${p.actual}" placeholder="Gerçekleşen %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
                 </div>
                 <input type="text" id="${idp}EditNote_${p.id}" value="${(p.note || '').replace(/"/g, '&quot;')}" placeholder="Not (opsiyonel)" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
@@ -5251,7 +5266,7 @@
           return `
             <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-xs">
               <div class="flex justify-between items-start gap-2">
-                <div class="flex justify-between flex-1 min-w-0 text-slate-500 dark:text-slate-400"><span>${p.log_date}</span><span>Plan %${p.planned} · Gerçek %${p.actual}</span></div>
+                <div class="flex justify-between flex-1 min-w-0 text-slate-500 dark:text-slate-400"><span>${p.log_date}</span><span>Plan %${computePlannedPct(p.log_date, project.start_date, project.end_date)} · Gerçek %${p.actual}</span></div>
                 ${isAdminViewer ? `
                   <div class="flex items-center gap-1 shrink-0">
                     <button onclick="openEditProgressNote(${p.id})" title="Düzenle" class="text-amber-500 p-0.5"><i class="fa-solid fa-pen"></i></button>
@@ -5277,10 +5292,11 @@
       if (!personProjectCurrentId) return;
       const idp = ppIdPrefix;
       const log_date = document.getElementById(idp + 'Date').value;
-      const planned = document.getElementById(idp + 'Planned').value;
       const actual = document.getElementById(idp + 'Actual').value;
       const note = document.getElementById(idp + 'Note').value.trim();
       if (!log_date) { showToast('Tarih gerekli.', 'error'); return; }
+      const project = personProjectData ? personProjectData.project : null;
+      const planned = project ? computePlannedPct(log_date, project.start_date, project.end_date) : 0;
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects/${personProjectCurrentId}/progress`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5289,7 +5305,6 @@
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Kaydedilemedi.', 'error'); return; }
         showToast('İlerleme kaydedildi.', 'success');
-        document.getElementById(idp + 'Planned').value = '';
         document.getElementById(idp + 'Actual').value = '';
         document.getElementById(idp + 'Note').value = '';
         await refreshPersonProjectView();
@@ -5311,10 +5326,11 @@
     async function saveEditedProgressNote(progressId) {
       const idp = ppIdPrefix;
       const log_date = document.getElementById(`${idp}EditDate_${progressId}`).value;
-      const planned = document.getElementById(`${idp}EditPlanned_${progressId}`).value;
       const actual = document.getElementById(`${idp}EditActual_${progressId}`).value;
       const note = document.getElementById(`${idp}EditNote_${progressId}`).value.trim();
       if (!log_date) { showToast('Tarih gerekli.', 'error'); return; }
+      const project = personProjectData ? personProjectData.project : null;
+      const planned = project ? computePlannedPct(log_date, project.start_date, project.end_date) : 0;
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/progress/${progressId}`, {
