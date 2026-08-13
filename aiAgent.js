@@ -73,6 +73,14 @@ const TOPLANTI_INCELEME_ROLLERI = ['MANAGER', 'LEADER', 'ADMIN', 'HR'];
 // Rol hiyerarşisi (server.js ROLE_HIERARCHY ile aynı; ADMIN/HR bu listenin DIŞINDA, hiyerarşi üstü)
 const ROL_HIYERARSISI = ['MANAGER', 'LEADER', 'ENGINEER', 'TECHNICIAN', 'INTERN'];
 
+// ---- PROJE MODÜLÜ: server.js ile aynı kurallar ----
+// Firma/proje oluşturabilen roller (Admin/İK her birim; Müdür/Ekip Lideri kendi birimi)
+const PROJE_YAZMA_ROLLERI = ['ADMIN', 'HR', 'MANAGER', 'LEADER'];
+// Birim-kilitli roller: kendi biriminden başka birim seçemez (server.js isDeptLockedRole)
+function birimKilitliMi(role) { return role === 'MANAGER' || role === 'LEADER'; }
+// server.js todayISO ile aynı (YYYY-MM-DD)
+function agentTodayISO() { return new Date().toISOString().substring(0, 10); }
+
 const DURUM_TR = {
   IN_PROGRESS: 'Devam ediyor',
   COMPLETED: 'Tamamlandı (onay bekliyor)',
@@ -135,7 +143,9 @@ GENEL KURALLAR:
 - GÖREV TAMAMLAMA: "şu görevi tamamladım/bitirdim" denince gorev_tamamla aracını kullan. Hangi görev olduğu belirsizse önce gorevleri_listele ile doğru görevi bul.
 - GÖREV İNCELEME: "şu görevi onayla" ya da "revize iste/geri gönder" denince gorev_incele aracını (islem: ONAYLA veya REVIZE) kullan. Revize isteniyorsa mutlaka bir açıklama iste; açıklama yoksa kullanıcıya sor.
 - TOPLANTI ONAYI: "şu toplantı talebini onayla/reddet" denince toplanti_incele aracını (islem: ONAYLA veya REDDET) kullan. Hangi talep olduğu belirsizse önce toplantilari_listele ile bekleyen talepleri göster ve doğru toplantiId'yi bul.
-- GÜNLÜK NOT: "bugün şunu yaptım", "şu göreve günlük not ekle" denince gunluk_not_ekle aracını kullan. Hangi göreve ekleneceği belirsizse önce gorevleri_listele ile kullanıcının görevlerini göster.`;
+- GÜNLÜK NOT: "bugün şunu yaptım", "şu göreve günlük not ekle" denince gunluk_not_ekle aracını kullan. Hangi göreve ekleneceği belirsizse önce gorevleri_listele ile kullanıcının görevlerini göster.
+- FİRMA/PROJE: "yeni firma ekle" denince firma_olustur; "yeni proje aç" denince proje_olustur aracını kullan. Proje için firmaId gerekir; bilinmiyorsa önce firmalari_listele ile bul. Proje başlangıç ve bitiş tarihi zorunludur, yoksa kullanıcıya sor.
+- İLERLEME: "projeye ilerleme kaydı gir" denince ilerleme_ekle aracını kullan. projeId bilinmiyorsa önce projeleri_listele ile bul. İlerlemeyi yalnızca Admin/İK veya projenin sorumlusu ekleyebilir.`;
 
   if (role === 'ENGINEER' || role === 'TECHNICIAN') {
     return `${ortak}
@@ -476,6 +486,98 @@ const ARAC_TANIMLARI = {
         }
       }
     }
+  },
+  firmalari_listele: {
+    yazma: false,
+    yetki: PROJE_YAZMA_ROLLERI,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'firmalari_listele',
+        description: 'Kayıtlı firmaları listeler. Proje oluştururken doğru firmaId değerini bulmak için kullan.',
+        parameters: { type: 'object', properties: {} }
+      }
+    }
+  },
+  projeleri_listele: {
+    yazma: false,
+    yetki: PROJE_YAZMA_ROLLERI,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'projeleri_listele',
+        description: 'Projeleri listeler. İlerleme kaydı eklerken doğru projeId değerini bulmak için kullan.',
+        parameters: { type: 'object', properties: {} }
+      }
+    }
+  },
+  firma_olustur: {
+    yazma: true,
+    yetki: PROJE_YAZMA_ROLLERI,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'firma_olustur',
+        description: 'Yeni bir firma (müşteri) kaydı oluşturur. Kullanıcı "yeni firma ekle" dediğinde kullan. Admin/İK birim seçebilir; Müdür/Ekip Lideri kendi birimine ekler.',
+        parameters: {
+          type: 'object',
+          properties: {
+            ad: { type: 'string', description: 'Firma adı (zorunlu).' },
+            birim: { type: 'string', description: 'Birim (department key). Sadece Admin/İK için anlamlı; belirtilmezse uygun varsayılan kullanılır.' }
+          },
+          required: ['ad']
+        }
+      }
+    }
+  },
+  proje_olustur: {
+    yazma: true,
+    yetki: PROJE_YAZMA_ROLLERI,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'proje_olustur',
+        description: 'Bir firmaya bağlı yeni proje oluşturur. Kullanıcı "yeni proje aç" dediğinde kullan. firmaId bilinmiyorsa önce firmalari_listele ile bul. Başlangıç ve bitiş tarihi zorunludur.',
+        parameters: {
+          type: 'object',
+          properties: {
+            firmaId: { type: 'integer', description: 'Projenin bağlı olduğu firmanın kimliği (zorunlu).' },
+            ad: { type: 'string', description: 'Proje adı (zorunlu).' },
+            baslangicTarihi: { type: 'string', description: 'YYYY-MM-DD başlangıç tarihi (zorunlu).' },
+            bitisTarihi: { type: 'string', description: 'YYYY-MM-DD bitiş tarihi (zorunlu).' },
+            birim: { type: 'string', description: 'Birim (department key). Sadece Admin/İK için; Müdür/Lider kendi birimine açar.' },
+            sorumluId: { type: 'integer', description: 'Projeden sorumlu kişinin kullaniciId değeri (isteğe bağlı).' },
+            oncelik: { type: 'string', description: 'Öncelik (ör. NORMAL, YUKSEK). İsteğe bağlı, varsayılan NORMAL.' },
+            not: { type: 'string', description: 'İsteğe bağlı proje notu.' }
+          },
+          required: ['firmaId', 'ad', 'baslangicTarihi', 'bitisTarihi']
+        }
+      }
+    }
+  },
+  ilerleme_ekle: {
+    yazma: true,
+    // Admin/İK VEYA projenin sahibi ekleyebilir. Yetki execute'ta sahiplik ile daraltılır;
+    // burada geniş tutuyoruz ki proje sahibi bir mühendis de kullanabilsin.
+    yetki: ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER', 'TECHNICIAN', 'INTERN'],
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'ilerleme_ekle',
+        description: 'Bir projeye ilerleme (gidişat) noktası ekler. Kullanıcı "projeye ilerleme kaydı gir", "planlanan/gerçekleşen değerleri ekle" dediğinde kullan. Yalnızca Admin/İK veya projenin sorumlusu ekleyebilir. projeId bilinmiyorsa önce projeleri_listele ile bul.',
+        parameters: {
+          type: 'object',
+          properties: {
+            projeId: { type: 'integer', description: 'İlerleme eklenecek projenin kimliği (zorunlu).' },
+            tarih: { type: 'string', description: 'YYYY-MM-DD ilerleme tarihi (zorunlu).' },
+            planlanan: { type: 'integer', description: 'Planlanan yüzde/değer (isteğe bağlı, varsayılan 0).' },
+            gerceklesen: { type: 'integer', description: 'Gerçekleşen yüzde/değer (isteğe bağlı, varsayılan 0).' },
+            not: { type: 'string', description: 'İsteğe bağlı not.' }
+          },
+          required: ['projeId', 'tarih']
+        }
+      }
+    }
   }
 };
 
@@ -688,6 +790,40 @@ function createAgentRouter(db, { isAdmin }) {
         }));
       } catch (e) { return { hata: 'Toplantılar listelenemedi: ' + e.message }; }
     }
+    if (name === 'firmalari_listele') {
+      try {
+        let sql = `SELECT id, name, department FROM companies`;
+        const sqlArgs = [];
+        // Müdür/Ekip Lideri yalnızca kendi biriminin (veya birimsiz/genel) firmalarını görür
+        if (birimKilitliMi(user.role) && user.department) {
+          sql += ` WHERE department = ? OR department IS NULL`;
+          sqlArgs.push(user.department);
+        }
+        sql += ` ORDER BY name ASC LIMIT 100`;
+        const r = await db.execute({ sql, args: sqlArgs });
+        return r.rows.map(c => ({ firmaId: c.id, ad: c.name, birim: c.department }));
+      } catch (e) { return { hata: 'Firmalar listelenemedi: ' + e.message }; }
+    }
+    if (name === 'projeleri_listele') {
+      try {
+        let sql = `SELECT projects.id, projects.name, projects.department, projects.status,
+                          projects.owner_id, u.name AS owner_name, c.name AS company_name
+                   FROM projects
+                   LEFT JOIN users u ON u.id = projects.owner_id
+                   LEFT JOIN companies c ON c.id = projects.company_id`;
+        const sqlArgs = [];
+        if (birimKilitliMi(user.role) && user.department) {
+          sql += ` WHERE projects.department = ?`;
+          sqlArgs.push(user.department);
+        }
+        sql += ` ORDER BY projects.id DESC LIMIT 100`;
+        const r = await db.execute({ sql, args: sqlArgs });
+        return r.rows.map(p => ({
+          projeId: p.id, ad: p.name, firma: p.company_name, birim: p.department,
+          durum: p.status, sorumluId: p.owner_id, sorumlu: p.owner_name || '—'
+        }));
+      } catch (e) { return { hata: 'Projeler listelenemedi: ' + e.message }; }
+    }
     return { hata: 'Bilinmeyen araç.' };
   }
 
@@ -759,6 +895,27 @@ function createAgentRouter(db, { isAdmin }) {
       const baslik = t.rows[0] ? t.rows[0].title : ('#' + args.gorevId);
       const kisa = String(args.not || '').slice(0, 80);
       return `"${baslik}" görevine bugünkü not eklenecek: "${kisa}${String(args.not||'').length > 80 ? '…' : ''}". Onaylıyor musunuz?`;
+    }
+    if (name === 'firma_olustur') {
+      return `"${String(args.ad || '').trim()}" adlı yeni firma kaydı oluşturulacak. Onaylıyor musunuz?`;
+    }
+    if (name === 'proje_olustur') {
+      const c = await db.execute({ sql: `SELECT name FROM companies WHERE id = ?`, args: [args.firmaId] });
+      const firma = c.rows[0] ? c.rows[0].name : ('#' + args.firmaId);
+      const parca = [`"${String(args.ad || '').trim()}" projesi ${firma} firmasına bağlı olarak oluşturulacak`];
+      if (args.baslangicTarihi && args.bitisTarihi) parca.push(`süre: ${args.baslangicTarihi} → ${args.bitisTarihi}`);
+      if (args.sorumluId) {
+        const u = await db.execute({ sql: `SELECT name FROM users WHERE id = ?`, args: [args.sorumluId] });
+        if (u.rows[0]) parca.push(`sorumlu: ${u.rows[0].name}`);
+      }
+      return parca.join('; ') + '. Onaylıyor musunuz?';
+    }
+    if (name === 'ilerleme_ekle') {
+      const p = await db.execute({ sql: `SELECT name FROM projects WHERE id = ?`, args: [args.projeId] });
+      const proje = p.rows[0] ? p.rows[0].name : ('#' + args.projeId);
+      const pl = Number.isInteger(Number(args.planlanan)) ? Number(args.planlanan) : 0;
+      const ge = Number.isInteger(Number(args.gerceklesen)) ? Number(args.gerceklesen) : 0;
+      return `"${proje}" projesine ${args.tarih} tarihli ilerleme eklenecek (planlanan: ${pl}, gerçekleşen: ${ge}). Onaylıyor musunuz?`;
     }
     return 'Bu işlem uygulanacak.';
   }
@@ -1117,6 +1274,114 @@ function createAgentRouter(db, { isAdmin }) {
           args: [args.gorevId, userId, bugun, String(args.not).trim()]
         });
         return res.json({ reply: `"${g.title}" görevine bugünkü not eklendi.` });
+      }
+
+      // --- firma_olustur ------------------------------------------------------
+      if (action.name === 'firma_olustur') {
+        if (!args.ad || !String(args.ad).trim()) {
+          return res.status(400).json({ error: 'Firma adı gerekli.' });
+        }
+        // Birim: Admin/İK serbest seçer; Müdür/Ekip Lideri kendi birimine kilitli
+        let finalBirim = args.birim || null;
+        if (isAdmin(role)) {
+          // finalBirim gönderileni kullanır (null = genel)
+        } else if (birimKilitliMi(role)) {
+          const u = await db.execute({ sql: `SELECT department FROM users WHERE id = ?`, args: [userId] });
+          if (!u.rows[0]) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+          finalBirim = u.rows[0].department; // kendi biriminden başkası yok sayılır
+        } else {
+          return res.status(403).json({ error: 'Yetkisiz erişim.' });
+        }
+        const r = await db.execute({
+          sql: `INSERT INTO companies (name, department, created_at) VALUES (?, ?, ?)`,
+          args: [String(args.ad).trim(), finalBirim, agentTodayISO()]
+        });
+        return res.json({ reply: `"${String(args.ad).trim()}" firması eklendi.`, id: Number(r.lastInsertRowid) });
+      }
+
+      // --- proje_olustur ------------------------------------------------------
+      if (action.name === 'proje_olustur') {
+        if (!args.firmaId || !args.ad || !String(args.ad).trim() || !args.baslangicTarihi || !args.bitisTarihi) {
+          return res.status(400).json({ error: 'Firma, proje adı ve tarihler zorunludur.' });
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(args.baslangicTarihi)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(args.bitisTarihi))) {
+          return res.status(400).json({ error: 'Tarihler YYYY-AA-GG biçiminde olmalı.' });
+        }
+        // Firma gerçekten var mı?
+        const fr = await db.execute({ sql: `SELECT id, department FROM companies WHERE id = ?`, args: [args.firmaId] });
+        if (!fr.rows[0]) return res.status(404).json({ error: 'Firma bulunamadı.' });
+
+        // Birim: Admin/İK seçer; Müdür/Ekip Lideri kendi birimine kilitli
+        let finalBirim;
+        if (isAdmin(role)) {
+          finalBirim = args.birim || fr.rows[0].department || null;
+          if (!finalBirim) return res.status(400).json({ error: 'Birim zorunludur.' });
+        } else if (birimKilitliMi(role)) {
+          const u = await db.execute({ sql: `SELECT department FROM users WHERE id = ?`, args: [userId] });
+          if (!u.rows[0]) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+          finalBirim = u.rows[0].department;
+        } else {
+          return res.status(403).json({ error: 'Yetkisiz erişim.' });
+        }
+
+        // Sorumlu seçildiyse geçerli ve onaylı bir kullanıcı olmalı
+        let sorumlu = null;
+        if (args.sorumluId) {
+          const sr = await db.execute({ sql: `SELECT id, name, status FROM users WHERE id = ?`, args: [args.sorumluId] });
+          if (!sr.rows[0] || sr.rows[0].status !== 'APPROVED') {
+            return res.status(400).json({ error: 'Geçersiz sorumlu seçimi.' });
+          }
+          sorumlu = sr.rows[0];
+        }
+
+        const r = await db.execute({
+          sql: `INSERT INTO projects (company_id, name, department, owner_id, start_date, end_date, priority, status, note, created_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`,
+          args: [args.firmaId, String(args.ad).trim(), finalBirim, args.sorumluId || null,
+                 args.baslangicTarihi, args.bitisTarihi, args.oncelik || 'NORMAL', args.not || null, name || null, agentTodayISO()]
+        });
+        const yeniProjeId = Number(r.lastInsertRowid);
+        // Sorumluya bildirim
+        if (sorumlu) {
+          try {
+            await agentNotifyUsers([args.sorumluId], 'PROJECT_ASSIGNED', 'PROJECTS', 'Yeni Proje Atandı',
+              `"${String(args.ad).trim()}" projesi size atandı.`, yeniProjeId);
+          } catch (e) { console.error('Ajan proje bildirimi hatası:', e.message); }
+        }
+        return res.json({ reply: `"${String(args.ad).trim()}" projesi oluşturuldu.`, id: yeniProjeId });
+      }
+
+      // --- ilerleme_ekle ------------------------------------------------------
+      // Admin/İK VEYA projenin sorumlusu ekleyebilir (server.js POST /projects/:id/progress).
+      if (action.name === 'ilerleme_ekle') {
+        if (!args.projeId) return res.status(400).json({ error: 'Proje kimliği gerekli.' });
+        if (!args.tarih || !/^\d{4}-\d{2}-\d{2}$/.test(String(args.tarih))) {
+          return res.status(400).json({ error: 'Tarih YYYY-AA-GG biçiminde olmalı.' });
+        }
+        const pr = await db.execute({ sql: `SELECT owner_id, name FROM projects WHERE id = ?`, args: [args.projeId] });
+        const proje = pr.rows[0];
+        if (!proje) return res.status(404).json({ error: 'Proje bulunamadı.' });
+        const sahibiMi = Number(proje.owner_id) === Number(userId);
+        if (!isAdmin(role) && !sahibiMi) {
+          return res.status(403).json({ error: 'İlerleme yalnızca Admin/İK veya projenin sorumlusu tarafından eklenebilir.' });
+        }
+        await db.execute({
+          sql: `INSERT INTO project_progress (project_id, log_date, planned, actual, note, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+          args: [args.projeId, args.tarih, Number(args.planlanan) || 0, Number(args.gerceklesen) || 0, args.not || null, agentTodayISO()]
+        });
+        // Admin eklediyse sorumluya, sorumlu eklediyse adminlere bildirim
+        try {
+          const mesaj = `"${proje.name}" projesine yeni ilerleme noktası eklendi.`;
+          if (isAdmin(role)) {
+            if (proje.owner_id && Number(proje.owner_id) !== Number(userId)) {
+              await agentNotifyUsers([proje.owner_id], 'PROJECT_PROGRESS', 'PROJECTS', 'Proje İlerlemesi Güncellendi', mesaj, Number(args.projeId));
+            }
+          } else {
+            const ar = await db.execute(`SELECT id FROM users WHERE role IN ('ADMIN', 'HR')`);
+            await agentNotifyUsers(ar.rows.map(x => x.id), 'PROJECT_PROGRESS', 'PROJECTS', 'Proje İlerlemesi Güncellendi', mesaj, Number(args.projeId));
+          }
+        } catch (e) { console.error('Ajan ilerleme bildirimi hatası:', e.message); }
+        return res.json({ reply: `"${proje.name}" projesine ilerleme kaydedildi.` });
       }
 
       // Hedef görevi al + birim bazlı güvenlik: yönetici olmayan yalnızca kendi birimine dokunur
