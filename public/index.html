@@ -9435,10 +9435,10 @@
 
       return (tasksList || []).filter(t => {
         if (t.assigned_to == currentUser.id) return false; // kendi görevi değil
+        if (isAdmin) return true; // Admin/İK: kendine hatırlatma amaçlı görevler dahil, herkesin tüm görevlerini görür
         // Stajyerin kendine hatırlatma amaçlı eklediği görevler (oluşturan = atanan kişi) yalnızca
         // kendi panelinde (Görevlerim) görünür; yöneticilerin "Görevler" (ekip) listesine sızmaz.
         if (t.created_by && t.assignee_name && t.created_by === t.assignee_name) return false;
-        if (isAdmin) return true;
         const arole = getAssigneeRole(t);
         if (!arole) return false;
         return subRoles.includes(arole);
