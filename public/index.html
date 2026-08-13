@@ -4813,7 +4813,7 @@
     function getCurrentVisibleMainSection() {
       const main = document.getElementById('mainScrollArea');
       if (!main) return null;
-      const visible = Array.from(main.children).find(el => el.tagName === 'SECTION' && el.id && !el.classList.contains('hidden'));
+      const visible = Array.from(main.querySelectorAll('section[id]')).find(el => !el.classList.contains('hidden'));
       return visible ? visible.id : null;
     }
 
