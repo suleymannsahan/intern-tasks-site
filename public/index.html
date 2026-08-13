@@ -4179,7 +4179,8 @@
       const overdue = engineerOwnedProjects.filter(p => p.days_left < 0).sort((a, b) => a.days_left - b.days_left);
       const upcoming = engineerOwnedProjects.filter(p => p.days_left >= 0 && p.days_left <= 3).sort((a, b) => a.days_left - b.days_left);
 
-      const cardHtml = (p, text) => `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
+      const homeSectionId = isTechnicianView ? 'technicianHomeSection' : 'engineerHomeSection';
+      const cardHtml = (p, text) => `<button type="button" onclick="openProjectDetailPage(${p.id}, '${homeSectionId}')" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
           <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
           <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-end mt-0.5">
             <span class="text-rose-500 font-bold">${text}</span>
@@ -9434,10 +9435,10 @@
 
       return (tasksList || []).filter(t => {
         if (t.assigned_to == currentUser.id) return false; // kendi görevi değil
+        if (isAdmin) return true; // Admin/İK: kendine hatırlatma amaçlı görevler dahil, herkesin tüm görevlerini görür
         // Stajyerin kendine hatırlatma amaçlı eklediği görevler (oluşturan = atanan kişi) yalnızca
         // kendi panelinde (Görevlerim) görünür; yöneticilerin "Görevler" (ekip) listesine sızmaz.
         if (t.created_by && t.assignee_name && t.created_by === t.assignee_name) return false;
-        if (isAdmin) return true;
         const arole = getAssigneeRole(t);
         if (!arole) return false;
         return subRoles.includes(arole);
