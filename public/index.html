@@ -1592,6 +1592,45 @@
               </div>
             </div>
           </div>
+
+          <!-- Kişi kartının üstü (kimlik + sayaçlar) sabit kalır; bir proje/göreve tıklanınca ayrı
+               bir pencere yerine burada "sayfa gibi" açılır, Geri ile pdGrid'e dönülür. Proje ve
+               görev görünümleri karşılıklı dışlayan iki blok halinde (pdSubProjectView / pdSubTaskView). -->
+          <div id="pdSubView" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+            <button onclick="closePersonSubView()" class="flex items-center gap-1.5 text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:underline mb-4">
+              <i class="fa-solid fa-arrow-left"></i> Geri
+            </button>
+
+            <!-- Proje ilerleme görünümü (openPersonProjectInline → renderPersonProjectModal, ppIdPrefix='pdProj') -->
+            <div id="pdSubProjectView" class="hidden space-y-4">
+              <h3 id="pdProjTitle" class="font-bold text-lg text-indigo-600 dark:text-indigo-400 break-words"></h3>
+              <div id="pdProjBadges" class="flex flex-wrap gap-1.5"></div>
+              <canvas id="pdProjChart" height="90"></canvas>
+              <div>
+                <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">İlerleme Notları</h4>
+                <div id="pdProjLogs" class="space-y-2 max-h-64 overflow-y-auto"></div>
+              </div>
+              <div id="pdProjAddForm" class="hidden pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Yeni İlerleme Ekle</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input type="date" id="pdProjDate" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                  <input type="number" id="pdProjPlanned" min="0" max="100" placeholder="Planlanan %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                  <input type="number" id="pdProjActual" min="0" max="100" placeholder="Gerçekleşen %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                </div>
+                <input type="text" id="pdProjNote" placeholder="Not (opsiyonel)" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                <button onclick="submitPersonProjectProgress()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold py-2 rounded-lg transition-all">Kaydet</button>
+              </div>
+            </div>
+
+            <!-- Görev detay görünümü (openPersonTaskInline → buildTaskDetailBodyHtml) -->
+            <div id="pdSubTaskView" class="hidden">
+              <div class="flex items-start justify-between gap-3 mb-4">
+                <h3 id="pdTaskTitle" class="font-bold text-xl text-slate-900 dark:text-slate-100 break-words"></h3>
+                <div id="pdTaskStatus" class="shrink-0"></div>
+              </div>
+              <div id="pdTaskBody" class="space-y-4"></div>
+            </div>
+          </div>
         </section>
 
         <!-- MÜHENDİS ANA EKRANI: Lider/Müdür/Admin ile aynı düzende, sadece başlıklı kutucuklar -->
@@ -4811,6 +4850,11 @@
       document.getElementById('pdTasks').innerHTML = '';
       document.getElementById('pdLogs').innerHTML = '';
       document.getElementById('pdAssignedInternsWrap').classList.add('hidden');
+      // Başka bir kişiye geçiliyor olabilir (Atanmış Stajyerler üzerinden) — önceki kişiden kalan
+      // proje/görev satır-altı görünümü varsa kapatılıp normal görünüme (pdGrid) dönülür.
+      document.getElementById('pdSubView').classList.add('hidden');
+      document.getElementById('pdGrid').classList.remove('hidden');
+      if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/person/${userId}/detail`);
@@ -4930,7 +4974,7 @@
         projEl.innerHTML = projects.map(p => {
           const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
           const daysCls = p.days_left < 0 ? 'text-rose-500' : p.days_left <= 3 ? 'text-amber-500' : 'text-emerald-500';
-          return `<button type="button" onclick="openPersonProjectModal(${p.id}, ${u.id})" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-lg p-3 transition-all">
+          return `<button type="button" onclick="openPersonProjectInline(${p.id}, ${u.id})" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-lg p-3 transition-all">
             <div class="flex items-center justify-between gap-2">
               <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
               <span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>
@@ -4958,7 +5002,8 @@
         const isManagerView = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && u.id != currentUser.id;
         personTasks.forEach(t => {
           const isPast = t.status === 'APPROVED' || t.status === 'COMPLETED';
-          taskEl.appendChild(createTaskCard(t, isPast, isManagerView));
+          // Kişi Detayı sayfasında: ayrı pencere yerine aynı sayfa içinde (pdSubView) açılır
+          taskEl.appendChild(createTaskCard(t, isPast, isManagerView, () => openPersonTaskInline(t.id, isManagerView)));
         });
       }
 
@@ -5002,8 +5047,13 @@
     let personProjectOwnerId = null;
     let personProjectData = null; // son çekilen {project, progress} — yeniden fetch etmeden yeniden çizmek için
     let ppEditingId = null;       // şu an satır-içi düzenlenen ilerleme notunun id'si (Admin)
+    // Hangi görünüme yazılacağını belirler: 'pp' = personProjectModal (bağımsız pencere),
+    // 'pdProj' = Kişi Detayı sayfası içindeki satır-altı (pdSubView) görünüm. Aynı render/CRUD
+    // fonksiyonları her iki bağlamda da bu önek üzerinden doğru DOM elemanlarını hedefler.
+    let ppIdPrefix = 'pp';
 
     async function openPersonProjectModal(projectId, ownerId) {
+      ppIdPrefix = 'pp';
       personProjectCurrentId = projectId;
       personProjectOwnerId = ownerId;
       ppEditingId = null;
@@ -5021,10 +5071,51 @@
       document.getElementById('personProjectModal').classList.add('hidden');
     }
 
+    // Kişi Detayı sayfasındaki satır-altı görünümü (proje ya da görev) kapatıp pdGrid'e (kişi
+    // kimlik kartının altındaki normal içerik) geri döner — sayfa değişmez, sadece içerik geri gelir.
+    function closePersonSubView() {
+      document.getElementById('pdSubView').classList.add('hidden');
+      document.getElementById('pdGrid').classList.remove('hidden');
+      if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
+      scrollMainTo(0, true);
+    }
+
+    // Kişi Detayı sayfasından: proje ilerlemesini ayrı bir pencere yerine, üstteki kişi kimlik
+    // kartı sabit kalacak şekilde aynı sayfa içinde (pdSubView) "sayfa gibi" açar.
+    async function openPersonProjectInline(projectId, ownerId) {
+      ppIdPrefix = 'pdProj';
+      personProjectCurrentId = projectId;
+      personProjectOwnerId = ownerId;
+      ppEditingId = null;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}`);
+        const data = await safeJson(res);
+        if (!res.ok) { showToast(data.error || 'Proje yüklenemedi.', 'error'); return; }
+        personProjectData = data;
+        renderPersonProjectModal(data);
+        document.getElementById('pdGrid').classList.add('hidden');
+        document.getElementById('pdSubProjectView').classList.remove('hidden');
+        document.getElementById('pdSubTaskView').classList.add('hidden');
+        document.getElementById('pdSubView').classList.remove('hidden');
+        scrollMainTo(0, true);
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    // Aktif görünüme (bağımsız pencere ya da Kişi Detayı içindeki satır-altı görünüm) göre
+    // güncel projeyi yeniden çeker ve yeniden çizer — ekleme/düzenleme/silme sonrası ortak yenileme.
+    async function refreshPersonProjectView() {
+      if (ppIdPrefix === 'pdProj') {
+        await openPersonProjectInline(personProjectCurrentId, personProjectOwnerId);
+      } else {
+        await openPersonProjectModal(personProjectCurrentId, personProjectOwnerId);
+      }
+    }
+
     function renderPersonProjectModal(data) {
+      const idp = ppIdPrefix;
       const project = data.project;
       const progress = data.progress || [];
-      document.getElementById('ppTitle').innerText = `${project.company_name || ''} — ${project.name}`;
+      document.getElementById(idp + 'Title').innerText = `${project.company_name || ''} — ${project.name}`;
 
       const today = new Date().toISOString().substring(0, 10);
       const daysLeft = Math.round((new Date(project.end_date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
@@ -5039,13 +5130,13 @@
       else if (daysLeft <= 3) { daysBadge = `Son ${daysLeft} gün`; daysCls = 'bg-amber-500/15 text-amber-600 dark:text-amber-400'; }
       else { daysBadge = `${daysLeft} gün kaldı`; daysCls = 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'; }
 
-      document.getElementById('ppBadges').innerHTML = `
+      document.getElementById(idp + 'Badges').innerHTML = `
         <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${daysCls}">${daysBadge}</span>
         <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${behind ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400'}">${behind ? 'Planın gerisinde' : 'Yolunda'} · %${actual}</span>
       `;
 
       // Grafik: zaman içinde planlanan vs. gerçekleşen %
-      const canvas = document.getElementById('ppChart');
+      const canvas = document.getElementById(idp + 'Chart');
       const ctx = canvas.getContext('2d');
       if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
       personProjectChartInstance = new Chart(ctx, {
@@ -5067,7 +5158,7 @@
       // İlerleme notları (en yeni üstte). Admin/İK her notun tüm bilgilerini (tarih/plan/gerçek/not)
       // düzenleyebilir ve notu silebilir — server tarafında da isAdmin ile aynı kural uygulanır.
       const isAdminViewer = currentUser.role === 'ADMIN' || currentUser.role === 'HR';
-      const logsEl = document.getElementById('ppLogs');
+      const logsEl = document.getElementById(idp + 'Logs');
       if (sorted.length === 0) {
         logsEl.innerHTML = `<p class="text-xs text-slate-400">Henüz ilerleme kaydı yok.</p>`;
       } else {
@@ -5076,11 +5167,11 @@
             return `
               <div class="bg-slate-100 dark:bg-slate-800/70 border border-cyan-500/50 rounded-lg p-2.5 text-xs space-y-1.5">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-                  <input type="date" id="ppEditDate_${p.id}" value="${p.log_date}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
-                  <input type="number" id="ppEditPlanned_${p.id}" min="0" max="100" value="${p.planned}" placeholder="Planlanan %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
-                  <input type="number" id="ppEditActual_${p.id}" min="0" max="100" value="${p.actual}" placeholder="Gerçekleşen %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                  <input type="date" id="${idp}EditDate_${p.id}" value="${p.log_date}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                  <input type="number" id="${idp}EditPlanned_${p.id}" min="0" max="100" value="${p.planned}" placeholder="Planlanan %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                  <input type="number" id="${idp}EditActual_${p.id}" min="0" max="100" value="${p.actual}" placeholder="Gerçekleşen %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
                 </div>
-                <input type="text" id="ppEditNote_${p.id}" value="${(p.note || '').replace(/"/g, '&quot;')}" placeholder="Not (opsiyonel)" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                <input type="text" id="${idp}EditNote_${p.id}" value="${(p.note || '').replace(/"/g, '&quot;')}" placeholder="Not (opsiyonel)" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
                 <div class="flex gap-1.5">
                   <button onclick="saveEditedProgressNote(${p.id})" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold py-1.5 rounded-lg">Kaydet</button>
                   <button onclick="cancelEditProgressNote()" class="flex-1 bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold py-1.5 rounded-lg">Vazgeç</button>
@@ -5106,19 +5197,20 @@
       }
 
       // İlerleme ekleme formu: sadece projenin sahibi veya Admin görür (server de aynı kuralı uygular)
-      const addForm = document.getElementById('ppAddForm');
+      const addForm = document.getElementById(idp + 'AddForm');
       const canAdd = currentUser.role === 'ADMIN' || currentUser.role === 'HR' || (personProjectOwnerId && currentUser.id == personProjectOwnerId);
       addForm.classList.toggle('hidden', !canAdd);
-      const dEl = document.getElementById('ppDate');
+      const dEl = document.getElementById(idp + 'Date');
       if (dEl) dEl.value = today;
     }
 
     async function submitPersonProjectProgress() {
       if (!personProjectCurrentId) return;
-      const log_date = document.getElementById('ppDate').value;
-      const planned = document.getElementById('ppPlanned').value;
-      const actual = document.getElementById('ppActual').value;
-      const note = document.getElementById('ppNote').value.trim();
+      const idp = ppIdPrefix;
+      const log_date = document.getElementById(idp + 'Date').value;
+      const planned = document.getElementById(idp + 'Planned').value;
+      const actual = document.getElementById(idp + 'Actual').value;
+      const note = document.getElementById(idp + 'Note').value.trim();
       if (!log_date) { showToast('Tarih gerekli.', 'error'); return; }
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects/${personProjectCurrentId}/progress`, {
@@ -5128,10 +5220,10 @@
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Kaydedilemedi.', 'error'); return; }
         showToast('İlerleme kaydedildi.', 'success');
-        document.getElementById('ppPlanned').value = '';
-        document.getElementById('ppActual').value = '';
-        document.getElementById('ppNote').value = '';
-        await openPersonProjectModal(personProjectCurrentId, personProjectOwnerId);
+        document.getElementById(idp + 'Planned').value = '';
+        document.getElementById(idp + 'Actual').value = '';
+        document.getElementById(idp + 'Note').value = '';
+        await refreshPersonProjectView();
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
@@ -5148,10 +5240,11 @@
     }
 
     async function saveEditedProgressNote(progressId) {
-      const log_date = document.getElementById(`ppEditDate_${progressId}`).value;
-      const planned = document.getElementById(`ppEditPlanned_${progressId}`).value;
-      const actual = document.getElementById(`ppEditActual_${progressId}`).value;
-      const note = document.getElementById(`ppEditNote_${progressId}`).value.trim();
+      const idp = ppIdPrefix;
+      const log_date = document.getElementById(`${idp}EditDate_${progressId}`).value;
+      const planned = document.getElementById(`${idp}EditPlanned_${progressId}`).value;
+      const actual = document.getElementById(`${idp}EditActual_${progressId}`).value;
+      const note = document.getElementById(`${idp}EditNote_${progressId}`).value.trim();
       if (!log_date) { showToast('Tarih gerekli.', 'error'); return; }
 
       try {
@@ -5164,7 +5257,7 @@
         if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); return; }
         showToast('İlerleme notu güncellendi.', 'success');
         ppEditingId = null;
-        await openPersonProjectModal(personProjectCurrentId, personProjectOwnerId);
+        await refreshPersonProjectView();
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
@@ -5179,7 +5272,7 @@
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Silinemedi.', 'error'); return; }
         showToast('İlerleme notu silindi.', 'success');
-        await openPersonProjectModal(personProjectCurrentId, personProjectOwnerId);
+        await refreshPersonProjectView();
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
@@ -9351,12 +9444,14 @@
       }
     }
 
-    function createTaskCard(task, isPast, isManager) {
+    // onOpen: opsiyonel — verilmezse varsayılan davranış (openTaskDetailModal, ayrı pencere) kullanılır.
+    // Kişi Detayı sayfası gibi "aynı sayfada satır-altı aç" bağlamlarında farklı bir açıcı geçirilir.
+    function createTaskCard(task, isPast, isManager, onOpen) {
       const taskLogs = dailyLogsList.filter(l => l.task_id === task.id);
       const card = document.createElement('button');
       card.type = 'button';
       card.className = "text-left w-full bg-white/80 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 shadow-md backdrop-blur-sm hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-lg hover:-translate-y-0.5 transition-all";
-      card.onclick = () => openTaskDetailModal(task.id, isManager);
+      card.onclick = onOpen || (() => openTaskDetailModal(task.id, isManager));
 
       let statusBadge = `<span class="px-2 py-0.5 text-[11px] rounded-md font-bold bg-amber-500/10 text-amber-500 border border-amber-500/30">Devam Ediyor</span>`;
       if (task.status === 'COMPLETED') statusBadge = `<span class="px-2 py-0.5 text-[11px] rounded-md font-bold bg-cyan-500/10 text-cyan-500 border border-cyan-500/30">Onay Bekliyor</span>`;
@@ -9385,22 +9480,21 @@
       return card;
     }
 
-    // Görev detayını büyük modalde gösterir
-    function openTaskDetailModal(taskId, isManager) {
-      const task = (tasksList || []).find(t => t.id == taskId);
-      if (!task) return;
-
-      // Yönetim yetkisi verilmediyse rolden yeniden hesapla (güvenli varsayılan)
-      if (typeof isManager === 'undefined') {
-        isManager = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && task.assigned_to != currentUser.id;
-      }
-
-      const taskLogs = dailyLogsList.filter(l => l.task_id === task.id);
-
+    function getTaskStatusBadgeHtml(task) {
       let statusBadge = `<span class="px-2.5 py-1 text-xs rounded-md font-bold bg-amber-500/10 text-amber-500 border border-amber-500/30">Devam Ediyor</span>`;
       if (task.status === 'COMPLETED') statusBadge = `<span class="px-2.5 py-1 text-xs rounded-md font-bold bg-cyan-500/10 text-cyan-500 border border-cyan-500/30">Tamamlandı (Onay Bekliyor)</span>`;
       if (task.status === 'APPROVED') statusBadge = `<span class="px-2.5 py-1 text-xs rounded-md font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/30">Onaylandı</span>`;
       if (task.status === 'REVISION_REQUESTED') statusBadge = `<span class="px-2.5 py-1 text-xs rounded-md font-bold bg-rose-500/10 text-rose-500 border border-rose-500/30">Revize İsteniyor</span>`;
+      return statusBadge;
+    }
+
+    // Görev detay içeriğinin tüm HTML'ini üretir — hem gerçek modal (taskDetailModal) hem de
+    // Kişi Detayı sayfasındaki satır-altı görünüm (pdSubView) bunu kullanır. closeFnName, "Düzenle/
+    // Onayla/Revize Et/Sil/Not Ekle/Tamamla" butonlarının işlem sonrası hangi kapatma fonksiyonunu
+    // çağıracağını belirler (bağlama göre değişir), attachmentsContainerId ise belgelerin hangi
+    // konteynere yazılacağını.
+    function buildTaskDetailBodyHtml(task, isManager, closeFnName, attachmentsContainerId) {
+      const taskLogs = dailyLogsList.filter(l => l.task_id === task.id);
 
       let revisionsHtml = '';
       if (task.revisions && task.revisions.length > 0) {
@@ -9426,20 +9520,20 @@
       if (isManager) {
         managerReviewButtons = `
           <div class="flex flex-wrap gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-            <button onclick="openEditTaskModal(${task.id}); closeTaskDetailModal();" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-1">
+            <button onclick="openEditTaskModal(${task.id}); ${closeFnName}();" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-1">
               <i class="fa-solid fa-pen me-1"></i> Düzenle
             </button>
             ${task.status !== 'APPROVED' ? `
               ${task.status === 'COMPLETED' ? `
-                <button onclick="reviewTask(${task.id}, 'APPROVE'); closeTaskDetailModal();" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1">
+                <button onclick="reviewTask(${task.id}, 'APPROVE'); ${closeFnName}();" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1">
                   <i class="fa-solid fa-check"></i> Onayla
                 </button>
               ` : ''}
-              <button onclick="openRevisionModal(${task.id}); closeTaskDetailModal();" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1">
+              <button onclick="openRevisionModal(${task.id}); ${closeFnName}();" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1">
                 <i class="fa-solid fa-rotate-left"></i> Revize Et
               </button>
             ` : ''}
-            <button onclick="deleteTask(${task.id}); closeTaskDetailModal();" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 text-xs font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-1">
+            <button onclick="deleteTask(${task.id}); ${closeFnName}();" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 text-xs font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-1">
               <i class="fa-solid fa-trash-can"></i> Sil
             </button>
           </div>
@@ -9450,11 +9544,11 @@
       if (task.assigned_to === currentUser.id && task.status !== 'APPROVED') {
         internButtons = `
           <div class="flex flex-wrap gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-            <button onclick="openLogModal('${task.id}', '${(task.title || '').replace(/'/g, "\\'")}'); closeTaskDetailModal();" class="flex-1 bg-slate-200 dark:bg-slate-900 hover:bg-slate-300 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold py-2.5 rounded-xl transition-all">
+            <button onclick="openLogModal('${task.id}', '${(task.title || '').replace(/'/g, "\\'")}'); ${closeFnName}();" class="flex-1 bg-slate-200 dark:bg-slate-900 hover:bg-slate-300 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold py-2.5 rounded-xl transition-all">
               <i class="fa-solid fa-pen me-1"></i> Not / İlerleme Ekle
             </button>
             ${task.status !== 'COMPLETED' ? `
-              <button onclick="completeTask(${task.id}); closeTaskDetailModal();" class="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all">
+              <button onclick="completeTask(${task.id}); ${closeFnName}();" class="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all">
                 <i class="fa-solid fa-check me-1"></i> Görevi Tamamla
               </button>
             ` : ''}
@@ -9462,9 +9556,7 @@
         `;
       }
 
-      document.getElementById('taskDetailTitle').innerText = task.title || '';
-      document.getElementById('taskDetailStatus').innerHTML = statusBadge;
-      document.getElementById('taskDetailBody').innerHTML = `
+      return `
         <div class="text-sm text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-900/80 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
           <b>Açıklama:</b> ${task.description || 'Açıklama belirtilmemiş.'}
         </div>
@@ -9490,21 +9582,58 @@
           </div>
         </div>
 
-        <div id="taskAttachmentsSection"></div>
+        <div id="${attachmentsContainerId}"></div>
 
         ${renderIsPlaniSection(task)}
 
         ${internButtons}
         ${managerReviewButtons}
       `;
+    }
+
+    // Görev detayını büyük modalde gösterir
+    function openTaskDetailModal(taskId, isManager) {
+      const task = (tasksList || []).find(t => t.id == taskId);
+      if (!task) return;
+
+      // Yönetim yetkisi verilmediyse rolden yeniden hesapla (güvenli varsayılan)
+      if (typeof isManager === 'undefined') {
+        isManager = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && task.assigned_to != currentUser.id;
+      }
+
+      document.getElementById('taskDetailTitle').innerText = task.title || '';
+      document.getElementById('taskDetailStatus').innerHTML = getTaskStatusBadgeHtml(task);
+      document.getElementById('taskDetailBody').innerHTML = buildTaskDetailBodyHtml(task, isManager, 'closeTaskDetailModal', 'taskAttachmentsSection');
 
       document.getElementById('taskDetailModal').classList.remove('hidden');
-      renderTaskAttachments(task.id);
+      renderTaskAttachments(task.id, 'taskAttachmentsSection');
     }
 
     function closeTaskDetailModal() {
       const m = document.getElementById('taskDetailModal');
       if (m) m.classList.add('hidden');
+    }
+
+    // Kişi Detayı sayfasından: görev detayını ayrı bir pencere yerine, üstteki kişi kimlik kartı
+    // sabit kalacak şekilde aynı sayfa içinde (pdSubView) "sayfa gibi" açar.
+    function openPersonTaskInline(taskId, isManager) {
+      const task = (tasksList || []).find(t => t.id == taskId);
+      if (!task) return;
+      if (typeof isManager === 'undefined') {
+        isManager = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && task.assigned_to != currentUser.id;
+      }
+
+      document.getElementById('pdTaskTitle').innerText = task.title || '';
+      document.getElementById('pdTaskStatus').innerHTML = getTaskStatusBadgeHtml(task);
+      document.getElementById('pdTaskBody').innerHTML = buildTaskDetailBodyHtml(task, isManager, 'closePersonSubView', 'pdTaskAttachmentsSection');
+
+      document.getElementById('pdGrid').classList.add('hidden');
+      document.getElementById('pdSubProjectView').classList.add('hidden');
+      document.getElementById('pdSubTaskView').classList.remove('hidden');
+      document.getElementById('pdSubView').classList.remove('hidden');
+      scrollMainTo(0, true);
+
+      renderTaskAttachments(task.id, 'pdTaskAttachmentsSection');
     }
 
     // ============================================================
