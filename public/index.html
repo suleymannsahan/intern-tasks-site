@@ -5488,11 +5488,11 @@
     }
 
     // Aşama checklist'ini yönetebilecek roller: proje ilerleme kaydı eklemeye izinli olanlardan
-    // (Admin/İK + sahip) farklı olarak Müdür/Ekip Lideri de dahildir (server'daki
+    // (Admin/İK + sahip) farklı olarak Müdür/Ekip Lideri/Mühendis de dahildir (server'daki
     // canManageProjectStages ile birebir aynı kural).
     function canManageProjectStagesClient() {
       if (!currentUser) return false;
-      if (['ADMIN', 'HR', 'MANAGER', 'LEADER'].includes(currentUser.role)) return true;
+      if (['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role)) return true;
       return !!(personProjectOwnerId && currentUser.id == personProjectOwnerId);
     }
 
@@ -5520,6 +5520,42 @@
         container.innerHTML = '';
         return { stages: [], percentage: 0 };
       }
+    }
+
+    // Tamamlanmamış bir aşama satırı: opsiyonel not girilebilen bir metin kutusu + "Onayla" butonu
+    // (Admin/İK/Müdür/Ekip Lideri/Mühendis/proje sorumlusu için) — anlık checkbox yerine, notu
+    // yazıp bilerek onaylamak daha rahat. Tamamlanmışsa notu salt-okunur gösterir, "Geri Al" ile
+    // tekrar aktif hale getirilebilir.
+    function renderStageLeafHtml(projectId, item, canManage, isMainLeaf) {
+      const textCls = isMainLeaf ? 'font-semibold text-slate-800 dark:text-slate-200' : 'text-slate-700 dark:text-slate-300';
+      if (item.isDone) {
+        return `
+          <div class="flex items-start gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs">
+            <i class="fa-solid fa-circle-check text-emerald-500 mt-0.5 shrink-0"></i>
+            <div class="flex-1 min-w-0">
+              <div class="${textCls} line-through opacity-60">${escapeHtmlProj(item.title)}</div>
+              ${item.note ? `<div class="mt-0.5 text-slate-500 dark:text-slate-400 no-underline">${escapeHtmlProj(item.note)}</div>` : ''}
+            </div>
+            ${canManage ? `<button type="button" onclick="handleToggleStage(${projectId}, ${item.id}, false)" title="Geri al" class="text-amber-500 hover:text-amber-600 shrink-0"><i class="fa-solid fa-rotate-left text-[11px]"></i></button>` : ''}
+            ${canManage ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${item.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
+          </div>
+        `;
+      }
+      const inputId = `stageNoteInput_${item.id}`;
+      return `
+        <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs space-y-1.5">
+          <div class="flex items-center gap-2">
+            <span class="flex-1 ${textCls}">${escapeHtmlProj(item.title)}</span>
+            ${canManage ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${item.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
+          </div>
+          ${canManage ? `
+            <div class="flex items-center gap-1.5">
+              <input type="text" id="${inputId}" placeholder="Not (opsiyonel)" class="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+              <button type="button" onclick="handleConfirmStage(${projectId}, ${item.id}, '${inputId}')" class="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all"><i class="fa-solid fa-check me-1"></i>Onayla</button>
+            </div>
+          ` : ''}
+        </div>
+      `;
     }
 
     async function renderProjectStagesSection(idp, projectId, data) {
@@ -5559,29 +5595,17 @@
 
       const stagesHtml = stages.map(main => {
         if (main.subItems.length === 0) {
-          return `
-            <label class="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs cursor-pointer">
-              <input type="checkbox" ${main.isDone ? 'checked' : ''} ${canManage ? '' : 'disabled'} onchange="handleToggleStage(${projectId}, ${main.id}, this.checked)" class="w-4 h-4 accent-cyan-600 shrink-0">
-              <span class="flex-1 font-semibold text-slate-800 dark:text-slate-200 ${main.isDone ? 'line-through opacity-60' : ''}">${escapeHtmlProj(main.title)}</span>
-              ${canManage ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${main.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
-            </label>
-          `;
+          return renderStageLeafHtml(projectId, main, canManage, true);
         }
         const doneCount = main.subItems.filter(s => s.isDone).length;
-        const subsHtml = main.subItems.map(s => `
-          <label class="flex items-center gap-2 pl-4 py-1 text-xs cursor-pointer">
-            <input type="checkbox" ${s.isDone ? 'checked' : ''} ${canManage ? '' : 'disabled'} onchange="handleToggleStage(${projectId}, ${s.id}, this.checked)" class="w-3.5 h-3.5 accent-cyan-600 shrink-0">
-            <span class="flex-1 text-slate-700 dark:text-slate-300 ${s.isDone ? 'line-through opacity-60' : ''}">${escapeHtmlProj(s.title)}</span>
-            ${canManage ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${s.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
-          </label>
-        `).join('');
+        const subsHtml = main.subItems.map(s => renderStageLeafHtml(projectId, s, canManage, false)).join('');
         return `
           <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <div class="flex items-center justify-between gap-2 px-3 py-2">
               <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${escapeHtmlProj(main.title)}</span>
               <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${doneCount === main.subItems.length ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'}">${doneCount}/${main.subItems.length}</span>
             </div>
-            <div class="px-3 pb-2 space-y-0.5">${subsHtml}</div>
+            <div class="px-3 pb-2 space-y-1.5">${subsHtml}</div>
             ${canManage ? `
               <div class="px-3 pb-2">
                 <button type="button" onclick="handleAddSubStage(${projectId}, ${main.id})" class="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Alt Aşama Ekle</button>
@@ -5619,6 +5643,21 @@
         });
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); }
+        await refreshPersonProjectView();
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    // Bir aşamayı, girilen (opsiyonel) notla birlikte tamamlanmış olarak onaylar.
+    async function handleConfirmStage(projectId, stageId, inputId) {
+      const noteEl = document.getElementById(inputId);
+      const note = noteEl ? noteEl.value.trim() : '';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages/${stageId}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isDone: true, note, userRole: currentUser.role, userId: currentUser.id, userName: currentUser.name })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Onaylanamadı.', 'error'); return; }
         await refreshPersonProjectView();
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }

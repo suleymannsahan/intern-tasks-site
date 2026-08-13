@@ -369,10 +369,13 @@ async function initDb() {
         is_done INTEGER DEFAULT 0,
         completed_at TEXT,
         completed_by TEXT,
+        note TEXT,
         FOREIGN KEY(project_id) REFERENCES projects(id),
         FOREIGN KEY(parent_id) REFERENCES project_stages(id)
       )
     `);
+    // Tablo daha önce (note sütunu olmadan) oluşturulmuş olabilir — güvenli ekleme
+    try { await db.execute(`ALTER TABLE project_stages ADD COLUMN note TEXT`); } catch (e) {}
 
     await seedAselsanStageTemplate();
 
@@ -1385,9 +1388,9 @@ const isAdmin = (role) => role === 'ADMIN' || role === 'HR';
 const isDeptLockedRole = (role) => role === 'MANAGER' || role === 'LEADER';
 
 // Proje aşama checklist'ini (şablon uygulama, aşama işaretleme/ekleme/silme) kimin yönetebileceği:
-// Admin/İK ve Müdür/Ekip Lideri her zaman; bunların dışında sadece o projenin sorumlusu (owner).
+// Admin/İK, Müdür/Ekip Lideri ve Mühendis her zaman; bunların dışında sadece o projenin sorumlusu (owner).
 function canManageProjectStages(userRole, userId, project) {
-  if (isAdmin(userRole) || isDeptLockedRole(userRole)) return true;
+  if (isAdmin(userRole) || isDeptLockedRole(userRole) || userRole === 'ENGINEER') return true;
   return !!(userId && project && project.owner_id != null && Number(project.owner_id) === Number(userId));
 }
 
@@ -3697,15 +3700,15 @@ app.delete('/api/stage-templates/:id', async (req, res) => {
 app.get('/api/projects/:id/stages', async (req, res) => {
   try {
     const rowsRes = await db.execute({
-      sql: `SELECT id, parent_id, title, sort_order, is_done, completed_at, completed_by FROM project_stages WHERE project_id = ? ORDER BY sort_order ASC`,
+      sql: `SELECT id, parent_id, title, sort_order, is_done, completed_at, completed_by, note FROM project_stages WHERE project_id = ? ORDER BY sort_order ASC`,
       args: [req.params.id]
     });
     const rows = rowsRes.rows;
     const mains = rows.filter(r => r.parent_id == null).map(m => ({
-      id: m.id, title: m.title, isDone: !!m.is_done, completedAt: m.completed_at, completedBy: m.completed_by,
+      id: m.id, title: m.title, isDone: !!m.is_done, completedAt: m.completed_at, completedBy: m.completed_by, note: m.note,
       subItems: rows
         .filter(s => s.parent_id === m.id)
-        .map(s => ({ id: s.id, title: s.title, isDone: !!s.is_done, completedAt: s.completed_at, completedBy: s.completed_by }))
+        .map(s => ({ id: s.id, title: s.title, isDone: !!s.is_done, completedAt: s.completed_at, completedBy: s.completed_by, note: s.note }))
     }));
     res.json({ stages: mains, percentage: computeStagePercentage(rows) });
   } catch (e) {
@@ -3769,7 +3772,7 @@ app.post('/api/projects/:id/stages', async (req, res) => {
 // yeni bir "Gerçekleşen %" kaydı (entry) eklenir — mevcut Planlanan/Gerçekleşen grafiğini besler.
 app.put('/api/projects/:id/stages/:stageId', async (req, res) => {
   try {
-    const { title, isDone, userRole, userId, userName } = req.body;
+    const { title, isDone, note, userRole, userId, userName } = req.body;
     const pid = req.params.id;
     const stageId = req.params.stageId;
 
@@ -3792,6 +3795,7 @@ app.put('/api/projects/:id/stages/:stageId', async (req, res) => {
     const updates = [];
     const args = [];
     if (title !== undefined && title.trim()) { updates.push('title = ?'); args.push(title.trim()); }
+    if (note !== undefined) { updates.push('note = ?'); args.push(note ? note.trim() || null : null); }
     if (isDone !== undefined) {
       updates.push('is_done = ?'); args.push(isDone ? 1 : 0);
       updates.push('completed_at = ?'); args.push(isDone ? new Date().toISOString() : null);
@@ -3806,7 +3810,7 @@ app.put('/api/projects/:id/stages/:stageId', async (req, res) => {
       const percentage = computeStagePercentage(allRowsRes.rows);
       const today = todayISO();
       const planned = computePlannedPctServer(today, project.start_date, project.end_date) ?? 0;
-      const noteText = `${stage.title} ${isDone ? 'tamamlandı' : 'geri alındı'}`;
+      const noteText = `${stage.title} ${isDone ? 'tamamlandı' : 'geri alındı'}${isDone && note && note.trim() ? ' — ' + note.trim() : ''}`;
       await db.execute({
         sql: `INSERT INTO project_progress (project_id, log_date, planned, actual, note, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
         args: [pid, today, planned, Math.round(percentage), noteText, new Date().toISOString()]
