@@ -61,6 +61,12 @@ const TOPLANTI_HEDEF_ROLLERI = {
 // Birim seçmek zorunda olan (başka birime de toplantı açabilen) roller
 const TOPLANTI_CROSS_DEPT_ROLLERI = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'];
 
+// ---- GÖREV: server.js ile birebir aynı yetki kuralları ----
+// Yeni görev oluşturabilen roller (server.js POST /api/tasks ile aynı)
+const GOREV_OLUSTURMA_ROLLERI = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER', 'INTERN'];
+// Görevi inceleyebilen (onay/revize) roller (server.js PUT /tasks/:id/review ile aynı)
+const GOREV_INCELEME_ROLLERI = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'];
+
 const DURUM_TR = {
   IN_PROGRESS: 'Devam ediyor',
   COMPLETED: 'Tamamlandı (onay bekliyor)',
@@ -118,7 +124,10 @@ GENEL KURALLAR:
 - Araçları YALNIZCA kullanıcı gerçekten görev listeleme, atama, tarih/durum değiştirme, risk, atama önerisi, özet, geçmiş görev araması veya TOPLANTI oluşturma istediğinde çağır.
 - Bir işlem yapman istendiğinde uygun aracı çağır; veriyi UYDURMA.
 - Bir görevi güncellemeden/atamadan önce doğru görevi bulduğundan emin ol; şüphedeysen kullanıcıya sor.
-- TOPLANTI: Kullanıcı "toplantı oluştur / X ile toplantı ayarla / şunları toplantıya çağır" derse toplanti_olustur aracını kullan. Belirli bir kişiyi (ör. "Ayberk") çağırman istenirse ÖNCE is_yuku_ozeti aracını çağırıp o ismin kullaniciId değerini bul, sonra toplanti_olustur'u hedefKullaniciIds ile çağır. Konu belirtilmemişse kullanıcıya kısaca konuyu sor. Kişinin ismi listede yoksa uydurma; bulunamadığını söyle. Toplantı oluşturma bir onay kartıyla kullanıcıya doğrulatılır, sen sadece aracı çağır.`;
+- TOPLANTI: Kullanıcı "toplantı oluştur / X ile toplantı ayarla / şunları toplantıya çağır" derse toplanti_olustur aracını kullan. Belirli bir kişiyi (ör. "Ayberk") çağırman istenirse ÖNCE is_yuku_ozeti aracını çağırıp o ismin kullaniciId değerini bul, sonra toplanti_olustur'u hedefKullaniciIds ile çağır. Konu belirtilmemişse kullanıcıya kısaca konuyu sor. Kişinin ismi listede yoksa uydurma; bulunamadığını söyle. Toplantı oluşturma bir onay kartıyla kullanıcıya doğrulatılır, sen sadece aracı çağır.
+- GÖREV OLUŞTURMA: "yeni görev aç / X kişisine görev ver" denince gorev_olustur aracını kullan. Kişi ID'sini bilmiyorsan önce is_yuku_ozeti ile bul. İsim listede yoksa uydurma.
+- GÖREV TAMAMLAMA: "şu görevi tamamladım/bitirdim" denince gorev_tamamla aracını kullan. Hangi görev olduğu belirsizse önce gorevleri_listele ile doğru görevi bul.
+- GÖREV İNCELEME: "şu görevi onayla" ya da "revize iste/geri gönder" denince gorev_incele aracını (islem: ONAYLA veya REVIZE) kullan. Revize isteniyorsa mutlaka bir açıklama iste; açıklama yoksa kullanıcıya sor.`;
 
   if (role === 'ENGINEER' || role === 'TECHNICIAN') {
     return `${ortak}
@@ -336,6 +345,68 @@ const ARAC_TANIMLARI = {
             }
           },
           required: ['konu']
+        }
+      }
+    }
+  },
+  gorev_olustur: {
+    yazma: true,
+    yetki: GOREV_OLUSTURMA_ROLLERI,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'gorev_olustur',
+        description: 'Sıfırdan yeni bir görev oluşturur ve bir kişiye atar. Kullanıcı "yeni görev aç", "X kişisine görev ver", "şu işi ata" dediğinde kullan. Kime atanacağını bilmiyorsan önce is_yuku_ozeti aracıyla kişilerin kullaniciId değerlerini öğren. Stajyer (INTERN) yalnızca kendine görev ekleyebilir.',
+        parameters: {
+          type: 'object',
+          properties: {
+            baslik: { type: 'string', description: 'Görev başlığı (zorunlu).' },
+            atananKullaniciId: { type: 'integer', description: 'Görevin atanacağı kullanıcının kimliği (zorunlu).' },
+            aciklama: { type: 'string', description: 'Görev açıklaması (isteğe bağlı).' },
+            kategori: { type: 'string', description: 'Görev kategorisi (isteğe bağlı).' },
+            bitisTarihi: { type: 'string', description: 'YYYY-MM-DD biçiminde son teslim tarihi (isteğe bağlı).' },
+            calismaGunu: { type: 'integer', description: 'Tahmini iş günü sayısı (isteğe bağlı).' }
+          },
+          required: ['baslik', 'atananKullaniciId']
+        }
+      }
+    }
+  },
+  gorev_tamamla: {
+    yazma: true,
+    // Görevi tamamlandı işaretlemek: server.js /complete ucunda ayrı bir rol listesi yok;
+    // pratikte görevi olan herkes kendi görevini tamamlar. Yazma aracı olarak yetkiyi
+    // görev sahipliğiyle (execute içinde) sınırlıyoruz; burada geniş tutup execute'ta daraltıyoruz.
+    yetki: ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER', 'TECHNICIAN', 'INTERN'],
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'gorev_tamamla',
+        description: 'Bir görevi "tamamlandı (onay bekliyor)" olarak işaretler. Kullanıcı "şu görevi tamamladım", "bitirdim" dediğinde kullan. Sadece kendi görevini tamamlayabilir (yönetici olmayanlar için).',
+        parameters: {
+          type: 'object',
+          properties: { gorevId: { type: 'integer', description: 'Tamamlanacak görevin kimliği.' } },
+          required: ['gorevId']
+        }
+      }
+    }
+  },
+  gorev_incele: {
+    yazma: true,
+    yetki: GOREV_INCELEME_ROLLERI,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'gorev_incele',
+        description: 'Tamamlanmış bir görevi onaylar veya revize ister. Kullanıcı "şu görevi onayla" ya da "revize iste / geri gönder" dediğinde kullan. Revize istemek için mutlaka bir not (aciklama) iste.',
+        parameters: {
+          type: 'object',
+          properties: {
+            gorevId: { type: 'integer', description: 'İncelenecek görevin kimliği.' },
+            islem: { type: 'string', enum: ['ONAYLA', 'REVIZE'], description: 'ONAYLA = onayla, REVIZE = revize iste.' },
+            aciklama: { type: 'string', description: 'Revize istenirken zorunlu olan açıklama/not.' }
+          },
+          required: ['gorevId', 'islem']
         }
       }
     }
@@ -567,6 +638,27 @@ function createAgentRouter(db, { isAdmin }) {
       if (roller.length) parcalar.push(`çağrılacak roller: ${roller.join(', ')}`);
       return parcalar.join('; ') + '. Çağrılan kişilere bildirim gidecek. Onaylıyor musunuz?';
     }
+    if (name === 'gorev_olustur') {
+      const u = await db.execute({ sql: `SELECT name FROM users WHERE id = ?`, args: [args.atananKullaniciId] });
+      const kisi = u.rows[0] ? u.rows[0].name : ('#' + args.atananKullaniciId);
+      const parca = [`"${args.baslik || '(başlık yok)'}" başlıklı yeni görev ${kisi} kişisine atanacak`];
+      if (args.bitisTarihi) parca.push(`son teslim: ${args.bitisTarihi}`);
+      if (args.kategori) parca.push(`kategori: ${args.kategori}`);
+      return parca.join('; ') + '. Onaylıyor musunuz?';
+    }
+    if (name === 'gorev_tamamla') {
+      const t = await db.execute({ sql: `SELECT title FROM tasks WHERE id = ?`, args: [args.gorevId] });
+      const baslik = t.rows[0] ? t.rows[0].title : ('#' + args.gorevId);
+      return `"${baslik}" görevi "tamamlandı (onay bekliyor)" olarak işaretlenecek. Onaylıyor musunuz?`;
+    }
+    if (name === 'gorev_incele') {
+      const t = await db.execute({ sql: `SELECT title FROM tasks WHERE id = ?`, args: [args.gorevId] });
+      const baslik = t.rows[0] ? t.rows[0].title : ('#' + args.gorevId);
+      if (args.islem === 'REVIZE') {
+        return `"${baslik}" görevi için revize istenecek. Not: ${args.aciklama || '(not girilmedi)'}. Onaylıyor musunuz?`;
+      }
+      return `"${baslik}" görevi ONAYLANACAK. Onaylıyor musunuz?`;
+    }
     return 'Bu işlem uygulanacak.';
   }
 
@@ -738,6 +830,115 @@ function createAgentRouter(db, { isAdmin }) {
         }
 
         return res.json({ reply: `"${String(args.konu).trim()}" konulu toplantı talebi oluşturuldu ve ilgili kişilere iletildi.` });
+      }
+
+      // --- gorev_olustur ------------------------------------------------------
+      // gorevId yok; kendi doğrulamasını yapıp erken döner. Kurallar server.js POST /api/tasks ile aynı.
+      if (action.name === 'gorev_olustur') {
+        if (!args.baslik || !String(args.baslik).trim()) {
+          return res.status(400).json({ error: 'Görev başlığı zorunludur.' });
+        }
+        if (!Number.isInteger(Number(args.atananKullaniciId))) {
+          return res.status(400).json({ error: 'Geçerli bir atanan kişi seçilmedi.' });
+        }
+        // Stajyer yalnızca kendine görev ekleyebilir
+        if (role === 'INTERN' && Number(args.atananKullaniciId) !== Number(userId)) {
+          return res.status(403).json({ error: 'Sadece kendinize görev ekleyebilirsiniz.' });
+        }
+        if (args.bitisTarihi && !/^\d{4}-\d{2}-\d{2}$/.test(String(args.bitisTarihi))) {
+          return res.status(400).json({ error: 'Bitiş tarihi YYYY-AA-GG biçiminde olmalı.' });
+        }
+        // Atanan kişi: görev alabilecek rolde ve onaylı olmalı (server.js ASSIGNABLE_ROLES)
+        const ac = await db.execute({ sql: `SELECT role, status, name, department FROM users WHERE id = ?`, args: [args.atananKullaniciId] });
+        const hedef = ac.rows[0];
+        if (!hedef || !ATANABILIR_ROLLER.includes(hedef.role) || hedef.status !== 'APPROVED') {
+          return res.status(400).json({ error: 'Geçersiz görev atama hedefi.' });
+        }
+        // Birim güvenliği: yönetici olmayan yalnızca kendi biriminden birine atayabilir
+        if (!isAdmin(role) && role !== 'INTERN' && department && hedef.department && hedef.department !== department) {
+          return res.status(403).json({ error: 'Bu kişi sizin biriminizde değil.' });
+        }
+        const ins = await db.execute({
+          sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS')`,
+          args: [String(args.baslik).trim(), args.aciklama || '', args.atananKullaniciId, args.kategori || null,
+                 args.bitisTarihi || null, Number.isInteger(Number(args.calismaGunu)) ? Number(args.calismaGunu) : null, name || 'Asistan']
+        });
+        const yeniGorevId = Number(ins.lastInsertRowid);
+        // Atanan kişiye bildirim
+        try {
+          await agentNotifyUsers([args.atananKullaniciId], 'TASK_ASSIGNED', 'TASKS', 'Yeni Görev Atandı',
+            `${name || 'Bir yetkili'} size "${String(args.baslik).trim()}" görevini atadı.`, yeniGorevId);
+        } catch (e) { console.error('Ajan görev bildirimi hatası:', e.message); }
+        return res.json({ reply: `"${String(args.baslik).trim()}" görevi ${hedef.name} kişisine atandı.` });
+      }
+
+      // --- gorev_tamamla ------------------------------------------------------
+      // Görevi "COMPLETED" yapar. Yönetici olmayan YALNIZCA kendi görevini tamamlayabilir.
+      if (action.name === 'gorev_tamamla') {
+        const gr = await db.execute({
+          sql: `SELECT tasks.*, u.department AS assignee_dep FROM tasks tasks
+                LEFT JOIN users u ON u.id = tasks.assigned_to WHERE tasks.id = ?`,
+          args: [args.gorevId]
+        });
+        const g = gr.rows[0];
+        if (!g) return res.status(404).json({ error: 'Görev bulunamadı.' });
+        const yonetici = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(role);
+        const sahibiMi = Number(g.assigned_to) === Number(userId);
+        // Yönetici değilse ve görev kendisinin değilse: yasak. Yönetici ise kendi birimiyle sınırlı.
+        if (!yonetici && !sahibiMi) {
+          return res.status(403).json({ error: 'Yalnızca kendi görevinizi tamamlandı olarak işaretleyebilirsiniz.' });
+        }
+        if (yonetici && !isAdmin(role) && department && g.assignee_dep && g.assignee_dep !== department && !sahibiMi) {
+          return res.status(403).json({ error: 'Bu görev sizin biriminizde değil.' });
+        }
+        await db.execute({ sql: `UPDATE tasks SET status = 'COMPLETED' WHERE id = ?`, args: [args.gorevId] });
+        return res.json({ reply: `"${g.title}" görevi tamamlandı olarak işaretlendi, onay bekliyor.` });
+      }
+
+      // --- gorev_incele (onayla / revize iste) --------------------------------
+      if (action.name === 'gorev_incele') {
+        if (!['ONAYLA', 'REVIZE'].includes(args.islem)) {
+          return res.status(400).json({ error: 'Geçersiz işlem (ONAYLA veya REVIZE olmalı).' });
+        }
+        const revize = args.islem === 'REVIZE';
+        if (revize && (!args.aciklama || !String(args.aciklama).trim())) {
+          return res.status(400).json({ error: 'Revize istemek için bir açıklama/not gerekli.' });
+        }
+        const gr = await db.execute({
+          sql: `SELECT tasks.*, u.department AS assignee_dep, u.name AS assignee_name
+                FROM tasks tasks LEFT JOIN users u ON u.id = tasks.assigned_to WHERE tasks.id = ?`,
+          args: [args.gorevId]
+        });
+        const g = gr.rows[0];
+        if (!g) return res.status(404).json({ error: 'Görev bulunamadı.' });
+        // Birim güvenliği: yönetici olmayan (ör. Mühendis) yalnızca kendi birimindeki görevi inceler
+        if (!isAdmin(role) && department && g.assignee_dep && g.assignee_dep !== department) {
+          return res.status(403).json({ error: 'Bu görev sizin biriminizde değil.' });
+        }
+        const yeniDurum = revize ? 'REVISION_REQUESTED' : 'APPROVED';
+        if (revize) {
+          const now = agentNowTurkeyLocal();
+          await db.execute({
+            sql: `INSERT INTO task_revisions (task_id, revised_by, comment, created_at) VALUES (?, ?, ?, ?)`,
+            args: [args.gorevId, name || 'Yetkili', String(args.aciklama).trim(), now]
+          });
+        }
+        await db.execute({
+          sql: `UPDATE tasks SET status = ?, review_comment = ? WHERE id = ?`,
+          args: [yeniDurum, revize ? String(args.aciklama).trim() : '', args.gorevId]
+        });
+        // Görev sahibine sonucu bildir
+        try {
+          if (revize) {
+            await agentNotifyUsers([g.assigned_to], 'TASK_REVISION', 'TASKS', 'Revize İstendi',
+              `"${g.title}" göreviniz için revize istendi: ${String(args.aciklama).trim()}`, Number(args.gorevId));
+          } else {
+            await agentNotifyUsers([g.assigned_to], 'TASK_APPROVED', 'TASKS', 'Görev Onaylandı',
+              `"${g.title}" göreviniz onaylandı.`, Number(args.gorevId));
+          }
+        } catch (e) { console.error('Ajan inceleme bildirimi hatası:', e.message); }
+        return res.json({ reply: revize ? `"${g.title}" görevi için revize istendi.` : `"${g.title}" görevi onaylandı.` });
       }
 
       // Hedef görevi al + birim bazlı güvenlik: yönetici olmayan yalnızca kendi birimine dokunur
