@@ -5522,6 +5522,18 @@
       }
     }
 
+    // Alt aşamalı ana aşamalar açılır/kapanır menü olarak gösterilir, varsayılan kapalı — hangi ana
+    // aşama id'lerinin açık olduğu burada tutulur. Son render (aç/kapa yapınca ağa gitmeden anında
+    // yeniden çizebilmek için) burada önbelleklenir.
+    let expandedStageMains = new Set();
+    let stagesLastRender = null;
+
+    function toggleStageGroup(mainId) {
+      if (expandedStageMains.has(mainId)) expandedStageMains.delete(mainId);
+      else expandedStageMains.add(mainId);
+      if (stagesLastRender) renderProjectStagesSection(stagesLastRender.idp, stagesLastRender.projectId, stagesLastRender.data);
+    }
+
     // Tamamlanmamış bir aşama satırı: opsiyonel not girilebilen bir metin kutusu + "Onayla" butonu
     // (Admin/İK/Müdür/Ekip Lideri/Mühendis/proje sorumlusu için) — anlık checkbox yerine, notu
     // yazıp bilerek onaylamak daha rahat. Tamamlanmışsa notu salt-okunur gösterir, "Geri Al" ile
@@ -5561,6 +5573,7 @@
     async function renderProjectStagesSection(idp, projectId, data) {
       const container = document.getElementById(idp + 'Stages');
       if (!container) return;
+      stagesLastRender = { idp, projectId, data };
       const stages = data.stages || [];
       const percentage = data.percentage || 0;
       const canManage = canManageProjectStagesClient();
@@ -5598,18 +5611,24 @@
           return renderStageLeafHtml(projectId, main, canManage, true);
         }
         const doneCount = main.subItems.filter(s => s.isDone).length;
+        const isExpanded = expandedStageMains.has(main.id);
         const subsHtml = main.subItems.map(s => renderStageLeafHtml(projectId, s, canManage, false)).join('');
         return `
           <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            <div class="flex items-center justify-between gap-2 px-3 py-2">
-              <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${escapeHtmlProj(main.title)}</span>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${doneCount === main.subItems.length ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'}">${doneCount}/${main.subItems.length}</span>
-            </div>
-            <div class="px-3 pb-2 space-y-1.5">${subsHtml}</div>
-            ${canManage ? `
-              <div class="px-3 pb-2">
-                <button type="button" onclick="handleAddSubStage(${projectId}, ${main.id})" class="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Alt Aşama Ekle</button>
-              </div>
+            <button type="button" onclick="toggleStageGroup(${main.id})" class="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
+              <span class="flex items-center gap-2 min-w-0">
+                <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}"></i>
+                <span class="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">${escapeHtmlProj(main.title)}</span>
+              </span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${doneCount === main.subItems.length ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'}">${doneCount}/${main.subItems.length}</span>
+            </button>
+            ${isExpanded ? `
+              <div class="px-3 pb-2 space-y-1.5">${subsHtml}</div>
+              ${canManage ? `
+                <div class="px-3 pb-2">
+                  <button type="button" onclick="handleAddSubStage(${projectId}, ${main.id})" class="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Alt Aşama Ekle</button>
+                </div>
+              ` : ''}
             ` : ''}
           </div>
         `;
