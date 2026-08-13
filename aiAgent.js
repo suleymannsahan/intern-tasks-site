@@ -67,6 +67,12 @@ const GOREV_OLUSTURMA_ROLLERI = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER',
 // Görevi inceleyebilen (onay/revize) roller (server.js PUT /tasks/:id/review ile aynı)
 const GOREV_INCELEME_ROLLERI = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'];
 
+// ---- TOPLANTI ONAYI + GÜNLÜK NOT: server.js ile aynı kurallar ----
+// Toplantı talebini onaylayabilen/reddedebilen roller (server.js PUT /meetings/:id/review)
+const TOPLANTI_INCELEME_ROLLERI = ['MANAGER', 'LEADER', 'ADMIN', 'HR'];
+// Rol hiyerarşisi (server.js ROLE_HIERARCHY ile aynı; ADMIN/HR bu listenin DIŞINDA, hiyerarşi üstü)
+const ROL_HIYERARSISI = ['MANAGER', 'LEADER', 'ENGINEER', 'TECHNICIAN', 'INTERN'];
+
 const DURUM_TR = {
   IN_PROGRESS: 'Devam ediyor',
   COMPLETED: 'Tamamlandı (onay bekliyor)',
@@ -127,7 +133,9 @@ GENEL KURALLAR:
 - TOPLANTI: Kullanıcı "toplantı oluştur / X ile toplantı ayarla / şunları toplantıya çağır" derse toplanti_olustur aracını kullan. Belirli bir kişiyi (ör. "Ayberk") çağırman istenirse ÖNCE is_yuku_ozeti aracını çağırıp o ismin kullaniciId değerini bul, sonra toplanti_olustur'u hedefKullaniciIds ile çağır. Konu belirtilmemişse kullanıcıya kısaca konuyu sor. Kişinin ismi listede yoksa uydurma; bulunamadığını söyle. Toplantı oluşturma bir onay kartıyla kullanıcıya doğrulatılır, sen sadece aracı çağır.
 - GÖREV OLUŞTURMA: "yeni görev aç / X kişisine görev ver" denince gorev_olustur aracını kullan. Kişi ID'sini bilmiyorsan önce is_yuku_ozeti ile bul. İsim listede yoksa uydurma.
 - GÖREV TAMAMLAMA: "şu görevi tamamladım/bitirdim" denince gorev_tamamla aracını kullan. Hangi görev olduğu belirsizse önce gorevleri_listele ile doğru görevi bul.
-- GÖREV İNCELEME: "şu görevi onayla" ya da "revize iste/geri gönder" denince gorev_incele aracını (islem: ONAYLA veya REVIZE) kullan. Revize isteniyorsa mutlaka bir açıklama iste; açıklama yoksa kullanıcıya sor.`;
+- GÖREV İNCELEME: "şu görevi onayla" ya da "revize iste/geri gönder" denince gorev_incele aracını (islem: ONAYLA veya REVIZE) kullan. Revize isteniyorsa mutlaka bir açıklama iste; açıklama yoksa kullanıcıya sor.
+- TOPLANTI ONAYI: "şu toplantı talebini onayla/reddet" denince toplanti_incele aracını (islem: ONAYLA veya REDDET) kullan. Hangi talep olduğu belirsizse önce toplantilari_listele ile bekleyen talepleri göster ve doğru toplantiId'yi bul.
+- GÜNLÜK NOT: "bugün şunu yaptım", "şu göreve günlük not ekle" denince gunluk_not_ekle aracını kullan. Hangi göreve ekleneceği belirsizse önce gorevleri_listele ile kullanıcının görevlerini göster.`;
 
   if (role === 'ENGINEER' || role === 'TECHNICIAN') {
     return `${ortak}
@@ -410,6 +418,64 @@ const ARAC_TANIMLARI = {
         }
       }
     }
+  },
+  toplanti_incele: {
+    yazma: true,
+    yetki: TOPLANTI_INCELEME_ROLLERI,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'toplanti_incele',
+        description: 'Bekleyen bir toplantı talebini onaylar veya reddeder. Kullanıcı "şu toplantı talebini onayla / reddet" dediğinde kullan. Hangi talep olduğu belirsizse önce toplantilari_listele ile bekleyen talepleri göster.',
+        parameters: {
+          type: 'object',
+          properties: {
+            toplantiId: { type: 'integer', description: 'İncelenecek toplantı talebinin kimliği.' },
+            islem: { type: 'string', enum: ['ONAYLA', 'REDDET'], description: 'ONAYLA = onayla, REDDET = reddet.' },
+            aciklama: { type: 'string', description: 'İsteğe bağlı inceleme notu.' }
+          },
+          required: ['toplantiId', 'islem']
+        }
+      }
+    }
+  },
+  toplantilari_listele: {
+    yazma: false,
+    yetki: TOPLANTI_INCELEME_ROLLERI,
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'toplantilari_listele',
+        description: 'İncelenebilecek (özellikle bekleyen) toplantı taleplerini listeler. Kullanıcı toplantı onaylamak/reddetmek istediğinde doğru talebi bulmak için kullan.',
+        parameters: {
+          type: 'object',
+          properties: {
+            durum: { type: 'string', enum: ['PENDING', 'APPROVED', 'REJECTED'], description: 'İsteğe bağlı durum filtresi; varsayılan bekleyenler (PENDING).' }
+          }
+        }
+      }
+    }
+  },
+  gunluk_not_ekle: {
+    yazma: true,
+    // Günlük not: görevi olan herkes kendi görevine not düşebilir. Yetkiyi execute'ta
+    // görev sahipliği/birim ile daraltıyoruz; burada geniş tutuyoruz.
+    yetki: ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER', 'TECHNICIAN', 'INTERN'],
+    tanim: {
+      type: 'function',
+      function: {
+        name: 'gunluk_not_ekle',
+        description: 'Bir göreve bugünkü günlük bilgilendirme/çalışma notunu ekler. Kullanıcı "bugün şunu yaptım", "şu göreve not düş", "günlük notumu gir" dediğinde kullan. Hangi göreve ekleneceği belirsizse önce gorevleri_listele ile kullanıcının görevlerini göster.',
+        parameters: {
+          type: 'object',
+          properties: {
+            gorevId: { type: 'integer', description: 'Notun ekleneceği görevin kimliği.' },
+            not: { type: 'string', description: 'Not metni (zorunlu).' }
+          },
+          required: ['gorevId', 'not']
+        }
+      }
+    }
   }
 };
 
@@ -600,6 +666,28 @@ function createAgentRouter(db, { isAdmin }) {
         return sonuc;
       } catch (e) { return { hata: 'Atama önerisi üretilemedi: ' + e.message }; }
     }
+    if (name === 'toplantilari_listele') {
+      try {
+        const durum = ['PENDING', 'APPROVED', 'REJECTED'].includes(args.durum) ? args.durum : 'PENDING';
+        let sql = `SELECT meeting_requests.id, meeting_requests.subject, meeting_requests.department,
+                          meeting_requests.preferred_date, meeting_requests.status,
+                          u.name AS requester_name, u.role AS requester_role
+                   FROM meeting_requests LEFT JOIN users u ON u.id = meeting_requests.requested_by`;
+        const conditions = [`meeting_requests.status = ?`];
+        const sqlArgs = [durum];
+        // Müdür/Ekip Lideri yalnızca kendi biriminin taleplerini; Admin/İK hepsini görür
+        if (!isAdmin(user.role) && user.department) {
+          conditions.push(`meeting_requests.department = ?`);
+          sqlArgs.push(user.department);
+        }
+        sql += ` WHERE ` + conditions.join(' AND ') + ` ORDER BY meeting_requests.id DESC LIMIT 40`;
+        const r = await db.execute({ sql, args: sqlArgs });
+        return r.rows.map(m => ({
+          toplantiId: m.id, konu: m.subject, birim: m.department, tarih: m.preferred_date,
+          durum: m.status, talepEden: m.requester_name || '?', talepEdenRol: m.requester_role
+        }));
+      } catch (e) { return { hata: 'Toplantılar listelenemedi: ' + e.message }; }
+    }
     return { hata: 'Bilinmeyen araç.' };
   }
 
@@ -658,6 +746,19 @@ function createAgentRouter(db, { isAdmin }) {
         return `"${baslik}" görevi için revize istenecek. Not: ${args.aciklama || '(not girilmedi)'}. Onaylıyor musunuz?`;
       }
       return `"${baslik}" görevi ONAYLANACAK. Onaylıyor musunuz?`;
+    }
+    if (name === 'toplanti_incele') {
+      const m = await db.execute({ sql: `SELECT subject FROM meeting_requests WHERE id = ?`, args: [args.toplantiId] });
+      const konu = m.rows[0] ? m.rows[0].subject : ('#' + args.toplantiId);
+      const fiil = args.islem === 'REDDET' ? 'REDDEDİLECEK' : 'ONAYLANACAK';
+      const notk = args.aciklama ? ` Not: ${args.aciklama}.` : '';
+      return `"${konu}" toplantı talebi ${fiil}.${notk} Talep edene bildirim gidecek. Onaylıyor musunuz?`;
+    }
+    if (name === 'gunluk_not_ekle') {
+      const t = await db.execute({ sql: `SELECT title FROM tasks WHERE id = ?`, args: [args.gorevId] });
+      const baslik = t.rows[0] ? t.rows[0].title : ('#' + args.gorevId);
+      const kisa = String(args.not || '').slice(0, 80);
+      return `"${baslik}" görevine bugünkü not eklenecek: "${kisa}${String(args.not||'').length > 80 ? '…' : ''}". Onaylıyor musunuz?`;
     }
     return 'Bu işlem uygulanacak.';
   }
@@ -939,6 +1040,83 @@ function createAgentRouter(db, { isAdmin }) {
           }
         } catch (e) { console.error('Ajan inceleme bildirimi hatası:', e.message); }
         return res.json({ reply: revize ? `"${g.title}" görevi için revize istendi.` : `"${g.title}" görevi onaylandı.` });
+      }
+
+      // --- toplanti_incele (toplantı talebini onayla/reddet) ------------------
+      // Kurallar server.js PUT /api/meetings/:id/review ile aynı: rol seviyesi + birim.
+      if (action.name === 'toplanti_incele') {
+        if (!['ONAYLA', 'REDDET'].includes(args.islem)) {
+          return res.status(400).json({ error: 'Geçersiz işlem (ONAYLA veya REDDET olmalı).' });
+        }
+        const yeniDurum = args.islem === 'REDDET' ? 'REJECTED' : 'APPROVED';
+
+        // Talebi + talep edenin rolünü al
+        const mr = await db.execute({
+          sql: `SELECT meeting_requests.*, u.role AS requester_role
+                FROM meeting_requests
+                LEFT JOIN users u ON u.id = meeting_requests.requested_by
+                WHERE meeting_requests.id = ?`,
+          args: [args.toplantiId]
+        });
+        const m = mr.rows[0];
+        if (!m) return res.status(404).json({ error: 'Toplantı talebi bulunamadı.' });
+
+        // Rol seviyesi: inceleyen, talep edenden DAHA DÜŞÜK rolde olamaz (ADMIN/HR hiyerarşi üstü)
+        if (!isAdmin(role)) {
+          const reqIdx = ROL_HIYERARSISI.indexOf(m.requester_role);
+          const myIdx = ROL_HIYERARSISI.indexOf(role);
+          if (reqIdx === -1 || myIdx === -1 || myIdx > reqIdx) {
+            return res.status(403).json({ error: 'Bu talebi onaylama/reddetme yetkiniz yok.' });
+          }
+          // Birim kısıtı: yönetici olmayan yalnızca kendi biriminin talebini inceler
+          if (department && m.department && m.department !== department) {
+            return res.status(403).json({ error: 'Bu talep sizin biriminizde değil.' });
+          }
+        }
+
+        await db.execute({
+          sql: `UPDATE meeting_requests SET status = ?, reviewed_by = ?, review_comment = ? WHERE id = ?`,
+          args: [yeniDurum, name || null, args.aciklama || null, args.toplantiId]
+        });
+
+        // Talep edene sonucu bildir
+        try {
+          const onaylandi = yeniDurum === 'APPROVED';
+          await agentNotifyUsers([m.requested_by], 'MEETING_REVIEWED', 'MEETINGS',
+            onaylandi ? 'Toplantı Talebiniz Onaylandı' : 'Toplantı Talebiniz Reddedildi', m.subject, Number(args.toplantiId));
+        } catch (e) { console.error('Ajan toplantı inceleme bildirimi hatası:', e.message); }
+
+        return res.json({ reply: yeniDurum === 'APPROVED' ? `"${m.subject}" toplantı talebi onaylandı.` : `"${m.subject}" toplantı talebi reddedildi.` });
+      }
+
+      // --- gunluk_not_ekle ----------------------------------------------------
+      // Görevi olan kişi kendi görevine not düşer; yönetici kendi birimindeki göreve.
+      if (action.name === 'gunluk_not_ekle') {
+        if (!args.not || !String(args.not).trim()) {
+          return res.status(400).json({ error: 'Not metni boş olamaz.' });
+        }
+        const gr = await db.execute({
+          sql: `SELECT tasks.*, u.department AS assignee_dep FROM tasks tasks
+                LEFT JOIN users u ON u.id = tasks.assigned_to WHERE tasks.id = ?`,
+          args: [args.gorevId]
+        });
+        const g = gr.rows[0];
+        if (!g) return res.status(404).json({ error: 'Görev bulunamadı.' });
+        const yonetici = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(role);
+        const sahibiMi = Number(g.assigned_to) === Number(userId);
+        if (!sahibiMi && !yonetici) {
+          return res.status(403).json({ error: 'Yalnızca kendi görevinize not ekleyebilirsiniz.' });
+        }
+        if (yonetici && !isAdmin(role) && !sahibiMi && department && g.assignee_dep && g.assignee_dep !== department) {
+          return res.status(403).json({ error: 'Bu görev sizin biriminizde değil.' });
+        }
+        // Not, işlemi yapan kişinin adına ve bugünün tarihiyle eklenir
+        const bugun = new Date().toISOString().split('T')[0];
+        await db.execute({
+          sql: `INSERT INTO daily_logs (task_id, intern_id, log_date, note) VALUES (?, ?, ?, ?)`,
+          args: [args.gorevId, userId, bugun, String(args.not).trim()]
+        });
+        return res.json({ reply: `"${g.title}" görevine bugünkü not eklendi.` });
       }
 
       // Hedef görevi al + birim bazlı güvenlik: yönetici olmayan yalnızca kendi birimine dokunur
