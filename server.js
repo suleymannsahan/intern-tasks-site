@@ -104,10 +104,24 @@ async function initDbMigration() {
 // Sunucu kalkarken veya DB başlatılırken çağırın
 initDbMigration();
 
-// Var olan tüm ilerleme kayıtlarının "planned" (Planlanan %) değerini, projenin başlangıç/bitiş
-// tarihine göre doğrusal olarak yeniden hesaplar — istemcideki computePlannedPct ile birebir aynı
-// formül (client artık bu sütunu manuel değil, otomatik dolduruyor). Sunucu her açılışta çalışır;
-// böylece bir projenin tarihleri sonradan değişse bile eski kayıtlar da güncel kalır.
+// "Planlanan %"yi projenin başlangıç/bitiş tarihine göre doğrusal olarak hesaplar — istemcideki
+// computePlannedPct (index.html) ile birebir aynı formül. Hem açılıştaki backfill hem de aşama
+// tamamlama sonrası otomatik ilerleme kaydı ekleme akışı bu fonksiyonu kullanır.
+// Geçersiz/eksik tarihlerde null döner (0 ile karıştırılmasın diye — çağıran taraf bu durumda
+// kaydı atlamayı ya da 0'a düşmeyi kendi bağlamına göre seçer).
+function computePlannedPctServer(logDate, startDate, endDate) {
+  if (!logDate || !startDate || !endDate) return null;
+  const start = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  const cur = new Date(logDate + 'T00:00:00');
+  if (isNaN(start) || isNaN(end) || isNaN(cur)) return null;
+  const totalMs = end - start;
+  if (totalMs <= 0) return 100;
+  return Math.max(0, Math.min(100, Math.round(((cur - start) / totalMs) * 100)));
+}
+
+// Var olan tüm ilerleme kayıtlarının "planned" (Planlanan %) değerini yeniden hesaplar. Sunucu her
+// açılışta çalışır; böylece bir projenin tarihleri sonradan değişse bile eski kayıtlar güncel kalır.
 async function backfillPlannedPercentages() {
   try {
     const rows = await db.execute(`
@@ -118,13 +132,8 @@ async function backfillPlannedPercentages() {
     `);
     let updated = 0;
     for (const row of rows.rows) {
-      if (!row.log_date || !row.start_date || !row.end_date) continue;
-      const start = new Date(row.start_date + 'T00:00:00');
-      const end = new Date(row.end_date + 'T00:00:00');
-      const cur = new Date(row.log_date + 'T00:00:00');
-      if (isNaN(start) || isNaN(end) || isNaN(cur)) continue;
-      const totalMs = end - start;
-      const pct = totalMs <= 0 ? 100 : Math.max(0, Math.min(100, Math.round(((cur - start) / totalMs) * 100)));
+      const pct = computePlannedPctServer(row.log_date, row.start_date, row.end_date);
+      if (pct === null) continue;
       if (Number(row.planned) !== pct) {
         await db.execute({ sql: `UPDATE project_progress SET planned = ? WHERE id = ?`, args: [pct, row.id] });
         updated++;
@@ -133,6 +142,51 @@ async function backfillPlannedPercentages() {
     if (updated > 0) console.log(`✅ ${updated} ilerleme kaydının Planlanan % değeri proje süresine göre yeniden hesaplandı.`);
   } catch (err) {
     console.error('Planlanan % yeniden hesaplama hatası:', err.message);
+  }
+}
+
+// ASELSAN firması için varsayılan aşama şablonu: 18 ana aşama, bir kısmının alt aşamaları var.
+// Bu liste sadece ilk seed için kullanılır — kaydedildikten sonra normal bir şablon gibi
+// (stage_templates/stage_template_items) düzenlenebilir/silinebilir.
+const ASELSAN_STAGE_TEMPLATE = [
+  { title: 'Tasarım Başlatma (Dosya Tamamlama)', subItems:['Kart Schematic', 'Golden Schematic (Golden varsa)', 'Kart TBDK', 'Golden TBDK', 'Kart DGD', 'Kart Odb + Dosya alındı mı?', 'Kart Temini', 'Golden Temini'] },
+  { title: 'Konnektörlerin Belirlenmesi - Sipariş Edilmesi', subItems:['Kart Konnektör Sayısı', 'SMD Konnektör Sayısı', 'Normal Konnektör Sayısı', 'Konnektör Siparişi'] },
+  { title: 'Mekanik Tasarım Başlatma', subItems:[] },
+  { title: 'Kart Test Tasarımı', subItems:['Kartı Test Tasarımı Öncesi Excel Oluşturma', 'Güç Hatlarının Çıkarılması', 'Açık/Kısa Devre Testleri Yazılımı', 'Konnektör Pinout Yazılımı', 'Besleme Gerilim Testleri', 'Gerilim Testleri', 'Haberleşme Testleri', 'Hat Testleri', 'Kart Test Noktalarını Belirlenmesi'] },
+  { title: 'VPC Sipariş', subItems:['%95 kesinlikte VPC Sipariş Geçilmesi'] },
+  { title: 'Ate Test Birim Seçimi', subItems:[] },
+  { title: 'KTTD', subItems:['(Tasarım exceli sonrası) KTTD Rev 1', "KTTD'ye göre PLD Toplantısı", 'KTTD Rev 2 Olarak Aselsan Gönderilmesi'] },
+  { title: 'VISIO', subItems:['TE Dökümanı Hazırlama (Visio)', 'Gerekli TE ve Seri Numaraların Temini'] },
+  { title: 'BDK Tasarım - Sipariş (Varsa)', subItems:['SMD Konnektör İçin Pcb Tasarımı adet', 'Pcb için gerekli malzemelerin siparişi', 'Kart için Tutucu Pcb tasarımı'] },
+  { title: 'Mekanik Üretim Başlatma', subItems:['Mekanik Kutu Tasarımı Kontrol', 'Mekanik Kutu Üretimi'] },
+  { title: 'NI Teststand', subItems:['NI Teststand Yazılım Hazırlama', 'Teknik Ekibe Mekanik Kutu Teslimi', 'Teknik Ekibe TE Döküman Teslimi'] },
+  { title: 'Gömülü Yazılım (Varsa)', subItems:['Beyes Gömülü Yazılım'] },
+  { title: 'Kablaj', subItems:['Kablaj Kontrolü (paralel)'] },
+  { title: 'XJTAG', subItems:['Jtag Test Hazırlama (entegrasyon ile birlikte)'] },
+  { title: 'Entegrasyon', subItems:['Aselsan Entegrasyon'] },
+  { title: 'Ön Doğrulama + Doğrulama > Üretim Teslim', subItems:['Kart Doğrulama Çalışması'] },
+  { title: 'Dosya Teslimi', subItems:[] },
+  { title: 'Yedek Teslimi', subItems:[] }
+];
+
+async function seedAselsanStageTemplate() {
+  try {
+    const existing = await db.execute({
+      sql: `SELECT id FROM stage_templates WHERE name = ?`,
+      args: ['ASELSAN Standart Şablon']
+    });
+    if (existing.rows.length > 0) return;
+
+    const now = new Date().toISOString();
+    const tRes = await db.execute({
+      sql: `INSERT INTO stage_templates (name, auto_apply_company_name, created_by, created_at) VALUES (?, ?, ?, ?)`,
+      args: ['ASELSAN Standart Şablon', 'ASELSAN', 'Sistem', now]
+    });
+    const templateId = Number(tRes.lastInsertRowid);
+    await writeStageTemplateItems(templateId, ASELSAN_STAGE_TEMPLATE);
+    console.log('✅ "ASELSAN Standart Şablon" aşama şablonu oluşturuldu (18 ana aşama).');
+  } catch (err) {
+    console.error('ASELSAN şablon seed hatası:', err.message);
   }
 }
 
@@ -274,6 +328,53 @@ async function initDb() {
     try { await db.execute(`ALTER TABLE projects ADD COLUMN status TEXT DEFAULT 'ACTIVE'`); } catch (e) {}
 
     await backfillPlannedPercentages();
+
+    // ============================================================
+    // AŞAMA ŞABLONLARI: bir projeye uygulanabilen, tekrar kullanılabilir "ana aşama + alt aşama"
+    // checklist tanımları. Firma adı belirli bir şablona bağlıysa (auto_apply_company_name), o
+    // firmaya yeni proje oluşturulunca otomatik uygulanır (bkz. POST /api/projects).
+    // ============================================================
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS stage_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        auto_apply_company_name TEXT,
+        created_by TEXT,
+        created_at TEXT NOT NULL
+      )
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS stage_template_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        template_id INTEGER NOT NULL,
+        parent_item_id INTEGER,
+        title TEXT NOT NULL,
+        sort_order INTEGER NOT NULL,
+        FOREIGN KEY(template_id) REFERENCES stage_templates(id),
+        FOREIGN KEY(parent_item_id) REFERENCES stage_template_items(id)
+      )
+    `);
+
+    // Bir projeye bir şablon uygulandığında, şablonun o anki maddeleri buraya kopyalanır — proje
+    // bazında bağımsız tamamlanma durumu tutulur, sonradan projeye özel alt aşama da eklenebilir
+    // (şablonun kendisi bundan etkilenmez).
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS project_stages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        parent_id INTEGER,
+        title TEXT NOT NULL,
+        sort_order INTEGER NOT NULL,
+        is_done INTEGER DEFAULT 0,
+        completed_at TEXT,
+        completed_by TEXT,
+        FOREIGN KEY(project_id) REFERENCES projects(id),
+        FOREIGN KEY(parent_id) REFERENCES project_stages(id)
+      )
+    `);
+
+    await seedAselsanStageTemplate();
 
     // Proje birimleri (elektronik, yazılım, mekanik ... + admin ekleyebilir)
     await db.execute(`
@@ -1282,6 +1383,89 @@ app.post('/api/tasks', async (req, res) => {
 const isAdmin = (role) => role === 'ADMIN' || role === 'HR';
 // Firma/Proje yönetiminde kendi biriminle sınırlı erişimi olan roller (Müdür, Ekip Lideri)
 const isDeptLockedRole = (role) => role === 'MANAGER' || role === 'LEADER';
+
+// Proje aşama checklist'ini (şablon uygulama, aşama işaretleme/ekleme/silme) kimin yönetebileceği:
+// Admin/İK ve Müdür/Ekip Lideri her zaman; bunların dışında sadece o projenin sorumlusu (owner).
+function canManageProjectStages(userRole, userId, project) {
+  if (isAdmin(userRole) || isDeptLockedRole(userRole)) return true;
+  return !!(userId && project && project.owner_id != null && Number(project.owner_id) === Number(userId));
+}
+
+// Aşama checklist'inden genel ilerleme yüzdesini hesaplar: ana aşamalar eşit ağırlıklıdır (100/N);
+// bir ana aşamanın alt aşamaları varsa o ağırlığı kendi aralarında eşit bölüşür, yoksa ana aşamanın
+// kendisi (is_done) o ağırlığı tek başına taşır. Ağırlıklar hep anlık hesaplanır, DB'de saklanmaz —
+// sonradan alt aşama eklenirse otomatik yeniden dağılır.
+function computeStagePercentage(stageRows) {
+  const mains = stageRows.filter(s => s.parent_id == null);
+  if (mains.length === 0) return 0;
+  const mainWeight = 100 / mains.length;
+  let total = 0;
+  for (const main of mains) {
+    const children = stageRows.filter(s => s.parent_id === main.id);
+    if (children.length === 0) {
+      if (main.is_done) total += mainWeight;
+    } else {
+      const childWeight = mainWeight / children.length;
+      total += children.filter(c => c.is_done).length * childWeight;
+    }
+  }
+  return Math.round(total * 100) / 100;
+}
+
+// Bir şablon (oluşturma/düzenleme) isteğindeki {title, subItems:[...]} dizisini stage_template_items
+// satırlarına yazar. PUT'ta önce eski satırlar silinip bu yeniden çağrılır (basit "diff'siz" yaklaşım).
+async function writeStageTemplateItems(templateId, items) {
+  let sortOrder = 0;
+  for (const main of items) {
+    if (!main || !main.title || !main.title.trim()) continue;
+    const mRes = await db.execute({
+      sql: `INSERT INTO stage_template_items (template_id, parent_item_id, title, sort_order) VALUES (?, NULL, ?, ?)`,
+      args: [templateId, main.title.trim(), sortOrder++]
+    });
+    const mainItemId = Number(mRes.lastInsertRowid);
+    let subOrder = 0;
+    for (const sub of (main.subItems || [])) {
+      const subTitle = typeof sub === 'string' ? sub : (sub && sub.title);
+      if (!subTitle || !subTitle.trim()) continue;
+      await db.execute({
+        sql: `INSERT INTO stage_template_items (template_id, parent_item_id, title, sort_order) VALUES (?, ?, ?, ?)`,
+        args: [templateId, mainItemId, subTitle.trim(), subOrder++]
+      });
+    }
+  }
+}
+
+// Bir şablonun maddelerini (ana + alt aşama) bir projenin checklist'ine kopyalar. Projede zaten
+// bir checklist varsa önce temizlenir (şablon değiştirme/yeniden uygulama da bunu kullanır) —
+// şablonun kendisi bu işlemden etkilenmez, sadece projeye kopya oluşturulur.
+async function applyStageTemplateToProject(templateId, projectId) {
+  await db.execute({ sql: `DELETE FROM project_stages WHERE project_id = ?`, args: [projectId] });
+
+  const itemsRes = await db.execute({
+    sql: `SELECT id, parent_item_id, title, sort_order FROM stage_template_items WHERE template_id = ? ORDER BY sort_order ASC`,
+    args: [templateId]
+  });
+  const items = itemsRes.rows;
+  const idMap = {};
+  const mains = items.filter(i => i.parent_item_id == null);
+  const subs = items.filter(i => i.parent_item_id != null);
+
+  for (const m of mains) {
+    const r = await db.execute({
+      sql: `INSERT INTO project_stages (project_id, parent_id, title, sort_order, is_done) VALUES (?, NULL, ?, ?, 0)`,
+      args: [projectId, m.title, m.sort_order]
+    });
+    idMap[m.id] = Number(r.lastInsertRowid);
+  }
+  for (const s of subs) {
+    const parentNewId = idMap[s.parent_item_id];
+    if (parentNewId == null) continue;
+    await db.execute({
+      sql: `INSERT INTO project_stages (project_id, parent_id, title, sort_order, is_done) VALUES (?, ?, ?, ?, 0)`,
+      args: [projectId, parentNewId, s.title, s.sort_order]
+    });
+  }
+}
 
 // Sol taraftaki "Ekip Rehberi" panelinden yapılan kullanıcı silme/düzenleme işlemleri için ortak
 // yetki kontrolü: Admin/İK her yerde tam yetkili. Stajyer hiçbir zaman kimseyi silemez/düzenleyemez.
@@ -3236,6 +3420,23 @@ app.post('/api/projects', async (req, res) => {
     });
     const newProjectId = Number(r.lastInsertRowid);
 
+    // Firma bir aşama şablonuna bağlıysa (örn. ASELSAN), checklist'i otomatik oluştur
+    let stagesApplied = null;
+    try {
+      const companyRes = await db.execute({ sql: `SELECT name FROM companies WHERE id = ?`, args: [company_id] });
+      const companyName = companyRes.rows[0] ? String(companyRes.rows[0].name || '').trim() : '';
+      if (companyName) {
+        const tmplRes = await db.execute({
+          sql: `SELECT id, name FROM stage_templates WHERE LOWER(TRIM(auto_apply_company_name)) = LOWER(?) LIMIT 1`,
+          args: [companyName]
+        });
+        if (tmplRes.rows.length > 0) {
+          await applyStageTemplateToProject(tmplRes.rows[0].id, newProjectId);
+          stagesApplied = tmplRes.rows[0].name;
+        }
+      }
+    } catch (e) { console.error('Otomatik aşama şablonu uygulama hatası:', e.message); }
+
     // Sorumlu kişi atandıysa bildirim + mail gönder
     if (owner_id) {
       try {
@@ -3265,7 +3466,7 @@ app.post('/api/projects', async (req, res) => {
       } catch (e) { console.error('Proje sahibi bilgisi alınamadı:', e.message); }
     }
 
-    res.json({ message: 'Proje oluşturuldu.', id: newProjectId });
+    res.json({ message: 'Proje oluşturuldu.', id: newProjectId, stagesApplied });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -3318,6 +3519,7 @@ app.delete('/api/projects/:id', async (req, res) => {
     }
 
     await db.execute({ sql: `DELETE FROM project_progress WHERE project_id = ?`, args: [pid] });
+    await db.execute({ sql: `DELETE FROM project_stages WHERE project_id = ?`, args: [pid] });
     await db.execute({ sql: `DELETE FROM projects WHERE id = ?`, args: [pid] });
     res.json({ message: 'Proje silindi.' });
   } catch (e) {
@@ -3388,6 +3590,247 @@ app.delete('/api/progress/:id', async (req, res) => {
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
     await db.execute({ sql: `DELETE FROM project_progress WHERE id = ?`, args: [req.params.id] });
     res.json({ message: 'Kayıt silindi.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- AŞAMA ŞABLONLARI (tekrar kullanılabilir ana+alt aşama checklist tanımları) ---
+// Oluşturma/düzenleme/silme: Admin/İK + Müdür/Ekip Lideri.
+
+app.get('/api/stage-templates', async (req, res) => {
+  try {
+    const templatesRes = await db.execute(`SELECT id, name, auto_apply_company_name, created_by, created_at FROM stage_templates ORDER BY name ASC`);
+    const templates = templatesRes.rows;
+    if (templates.length === 0) return res.json([]);
+    const placeholders = templates.map(() => '?').join(',');
+    const itemsRes = await db.execute({
+      sql: `SELECT template_id, id FROM stage_template_items WHERE template_id IN (${placeholders})`,
+      args: templates.map(t => t.id)
+    });
+    const counts = {};
+    for (const it of itemsRes.rows) counts[it.template_id] = (counts[it.template_id] || 0) + 1;
+    res.json(templates.map(t => ({ ...t, itemCount: counts[t.id] || 0 })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/stage-templates/:id', async (req, res) => {
+  try {
+    const tRes = await db.execute({ sql: `SELECT id, name, auto_apply_company_name FROM stage_templates WHERE id = ?`, args: [req.params.id] });
+    if (tRes.rows.length === 0) return res.status(404).json({ error: 'Şablon bulunamadı.' });
+    const itemsRes = await db.execute({
+      sql: `SELECT id, parent_item_id, title, sort_order FROM stage_template_items WHERE template_id = ? ORDER BY sort_order ASC`,
+      args: [req.params.id]
+    });
+    const items = itemsRes.rows;
+    const mains = items.filter(i => i.parent_item_id == null).map(m => ({
+      id: m.id,
+      title: m.title,
+      subItems: items.filter(s => s.parent_item_id === m.id).map(s => ({ id: s.id, title: s.title }))
+    }));
+    res.json({ ...tRes.rows[0], items: mains });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/stage-templates', async (req, res) => {
+  try {
+    const { name, autoApplyCompanyName, items, userRole, userName } = req.body;
+    if (!isAdmin(userRole) && !isDeptLockedRole(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Şablon adı zorunludur.' });
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'En az bir ana aşama ekleyin.' });
+
+    const now = new Date().toISOString();
+    const tRes = await db.execute({
+      sql: `INSERT INTO stage_templates (name, auto_apply_company_name, created_by, created_at) VALUES (?, ?, ?, ?)`,
+      args: [name.trim(), (autoApplyCompanyName || '').trim() || null, userName || null, now]
+    });
+    const templateId = Number(tRes.lastInsertRowid);
+    await writeStageTemplateItems(templateId, items);
+
+    res.json({ message: 'Şablon oluşturuldu.', id: templateId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/stage-templates/:id', async (req, res) => {
+  try {
+    const { name, autoApplyCompanyName, items, userRole } = req.body;
+    if (!isAdmin(userRole) && !isDeptLockedRole(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    const templateId = req.params.id;
+    const tRes = await db.execute({ sql: `SELECT id FROM stage_templates WHERE id = ?`, args: [templateId] });
+    if (tRes.rows.length === 0) return res.status(404).json({ error: 'Şablon bulunamadı.' });
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Şablon adı zorunludur.' });
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'En az bir ana aşama ekleyin.' });
+
+    await db.execute({
+      sql: `UPDATE stage_templates SET name = ?, auto_apply_company_name = ? WHERE id = ?`,
+      args: [name.trim(), (autoApplyCompanyName || '').trim() || null, templateId]
+    });
+    await db.execute({ sql: `DELETE FROM stage_template_items WHERE template_id = ?`, args: [templateId] });
+    await writeStageTemplateItems(templateId, items);
+
+    res.json({ message: 'Şablon güncellendi.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/stage-templates/:id', async (req, res) => {
+  try {
+    const { userRole } = req.body;
+    if (!isAdmin(userRole) && !isDeptLockedRole(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    await db.execute({ sql: `DELETE FROM stage_template_items WHERE template_id = ?`, args: [req.params.id] });
+    await db.execute({ sql: `DELETE FROM stage_templates WHERE id = ?`, args: [req.params.id] });
+    res.json({ message: 'Şablon silindi.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- PROJE AŞAMA CHECKLIST'İ (bir şablondan projeye kopyalanan, projeye özel tamamlanma durumu) ---
+
+app.get('/api/projects/:id/stages', async (req, res) => {
+  try {
+    const rowsRes = await db.execute({
+      sql: `SELECT id, parent_id, title, sort_order, is_done, completed_at, completed_by FROM project_stages WHERE project_id = ? ORDER BY sort_order ASC`,
+      args: [req.params.id]
+    });
+    const rows = rowsRes.rows;
+    const mains = rows.filter(r => r.parent_id == null).map(m => ({
+      id: m.id, title: m.title, isDone: !!m.is_done, completedAt: m.completed_at, completedBy: m.completed_by,
+      subItems: rows
+        .filter(s => s.parent_id === m.id)
+        .map(s => ({ id: s.id, title: s.title, isDone: !!s.is_done, completedAt: s.completed_at, completedBy: s.completed_by }))
+    }));
+    res.json({ stages: mains, percentage: computeStagePercentage(rows) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/projects/:id/stages/apply-template', async (req, res) => {
+  try {
+    const { templateId, userRole, userId } = req.body;
+    const pid = req.params.id;
+    const pRes = await db.execute({ sql: `SELECT owner_id FROM projects WHERE id = ?`, args: [pid] });
+    if (pRes.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
+    if (!canManageProjectStages(userRole, userId, pRes.rows[0])) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (!templateId) return res.status(400).json({ error: 'Şablon seçiniz.' });
+    const tRes = await db.execute({ sql: `SELECT id, name FROM stage_templates WHERE id = ?`, args: [templateId] });
+    if (tRes.rows.length === 0) return res.status(404).json({ error: 'Şablon bulunamadı.' });
+
+    await applyStageTemplateToProject(templateId, pid);
+    res.json({ message: `"${tRes.rows[0].name}" şablonu uygulandı.` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/projects/:id/stages', async (req, res) => {
+  try {
+    const { parentId, title, userRole, userId } = req.body;
+    const pid = req.params.id;
+    const pRes = await db.execute({ sql: `SELECT owner_id FROM projects WHERE id = ?`, args: [pid] });
+    if (pRes.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
+    if (!canManageProjectStages(userRole, userId, pRes.rows[0])) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (!title || !title.trim()) return res.status(400).json({ error: 'Başlık gerekli.' });
+
+    let parentIdVal = null;
+    if (parentId) {
+      const parentRes = await db.execute({ sql: `SELECT id FROM project_stages WHERE id = ? AND project_id = ?`, args: [parentId, pid] });
+      if (parentRes.rows.length === 0) return res.status(404).json({ error: 'Üst aşama bulunamadı.' });
+      parentIdVal = parentId;
+    }
+    const orderRes = await db.execute({
+      sql: parentIdVal
+        ? `SELECT COALESCE(MAX(sort_order), -1) AS maxOrder FROM project_stages WHERE project_id = ? AND parent_id = ?`
+        : `SELECT COALESCE(MAX(sort_order), -1) AS maxOrder FROM project_stages WHERE project_id = ? AND parent_id IS NULL`,
+      args: parentIdVal ? [pid, parentIdVal] : [pid]
+    });
+    const nextOrder = Number(orderRes.rows[0].maxOrder) + 1;
+
+    const r = await db.execute({
+      sql: `INSERT INTO project_stages (project_id, parent_id, title, sort_order, is_done) VALUES (?, ?, ?, ?, 0)`,
+      args: [pid, parentIdVal, title.trim(), nextOrder]
+    });
+    res.json({ message: 'Aşama eklendi.', id: Number(r.lastInsertRowid) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Aşama/alt aşama yeniden adlandırma ve/veya tamamlanma durumu değiştirme. isDone değişirse:
+// completed_at/completed_by güncellenir, genel % yeniden hesaplanır ve project_progress'e otomatik
+// yeni bir "Gerçekleşen %" kaydı (entry) eklenir — mevcut Planlanan/Gerçekleşen grafiğini besler.
+app.put('/api/projects/:id/stages/:stageId', async (req, res) => {
+  try {
+    const { title, isDone, userRole, userId, userName } = req.body;
+    const pid = req.params.id;
+    const stageId = req.params.stageId;
+
+    const pRes = await db.execute({ sql: `SELECT * FROM projects WHERE id = ?`, args: [pid] });
+    if (pRes.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
+    const project = pRes.rows[0];
+    if (!canManageProjectStages(userRole, userId, project)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+
+    const stageRes = await db.execute({ sql: `SELECT * FROM project_stages WHERE id = ? AND project_id = ?`, args: [stageId, pid] });
+    if (stageRes.rows.length === 0) return res.status(404).json({ error: 'Aşama bulunamadı.' });
+    const stage = stageRes.rows[0];
+
+    if (isDone !== undefined && stage.parent_id == null) {
+      const childCountRes = await db.execute({ sql: `SELECT COUNT(*) AS c FROM project_stages WHERE parent_id = ?`, args: [stageId] });
+      if (Number(childCountRes.rows[0].c) > 0) {
+        return res.status(400).json({ error: 'Bu ana aşamanın alt aşamaları var; tamamlanma durumu alt aşamalardan hesaplanır.' });
+      }
+    }
+
+    const updates = [];
+    const args = [];
+    if (title !== undefined && title.trim()) { updates.push('title = ?'); args.push(title.trim()); }
+    if (isDone !== undefined) {
+      updates.push('is_done = ?'); args.push(isDone ? 1 : 0);
+      updates.push('completed_at = ?'); args.push(isDone ? new Date().toISOString() : null);
+      updates.push('completed_by = ?'); args.push(isDone ? (userName || null) : null);
+    }
+    if (updates.length === 0) return res.status(400).json({ error: 'Güncellenecek alan yok.' });
+    args.push(stageId);
+    await db.execute({ sql: `UPDATE project_stages SET ${updates.join(', ')} WHERE id = ?`, args });
+
+    if (isDone !== undefined) {
+      const allRowsRes = await db.execute({ sql: `SELECT id, parent_id, is_done FROM project_stages WHERE project_id = ?`, args: [pid] });
+      const percentage = computeStagePercentage(allRowsRes.rows);
+      const today = todayISO();
+      const planned = computePlannedPctServer(today, project.start_date, project.end_date) ?? 0;
+      const noteText = `${stage.title} ${isDone ? 'tamamlandı' : 'geri alındı'}`;
+      await db.execute({
+        sql: `INSERT INTO project_progress (project_id, log_date, planned, actual, note, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [pid, today, planned, Math.round(percentage), noteText, new Date().toISOString()]
+      });
+    }
+
+    res.json({ message: 'Aşama güncellendi.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/projects/:id/stages/:stageId', async (req, res) => {
+  try {
+    const { userRole, userId } = req.body;
+    const pid = req.params.id;
+    const stageId = req.params.stageId;
+    const pRes = await db.execute({ sql: `SELECT owner_id FROM projects WHERE id = ?`, args: [pid] });
+    if (pRes.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
+    if (!canManageProjectStages(userRole, userId, pRes.rows[0])) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+
+    await db.execute({ sql: `DELETE FROM project_stages WHERE parent_id = ? AND project_id = ?`, args: [stageId, pid] });
+    await db.execute({ sql: `DELETE FROM project_stages WHERE id = ? AND project_id = ?`, args: [stageId, pid] });
+    res.json({ message: 'Aşama silindi.' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

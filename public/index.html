@@ -1362,8 +1362,11 @@
             </div>
 
             <div id="projeGidisatiBody" class="space-y-4">
-              <!-- Panel açıkken görünür: Firma/Proje Yönet -->
-              <div class="flex justify-end">
+              <!-- Panel açıkken görünür: Firma/Proje Yönet + Aşama Şablonları -->
+              <div class="flex justify-end gap-2">
+                <button id="stageTemplateBtn" onclick="openStageTemplateModal()" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all">
+                  <i class="fa-solid fa-layer-group"></i> Aşama Şablonları
+                </button>
                 <button id="projManageBtn" onclick="openProjectManageModal()" class="text-xs font-semibold text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all">
                   <i class="fa-solid fa-plus"></i> Firma / Proje Yönet
                 </button>
@@ -1611,6 +1614,7 @@
                 <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">İlerleme Notları</h4>
                 <div id="pdProjLogs" class="space-y-2 max-h-64 overflow-y-auto"></div>
               </div>
+              <div id="pdProjStages"></div>
               <div id="pdProjAddForm" class="hidden pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
                 <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Yeni İlerleme Ekle</h4>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1657,6 +1661,7 @@
               <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">İlerleme Notları</h4>
               <div id="projDetLogs" class="space-y-2 max-h-64 overflow-y-auto"></div>
             </div>
+            <div id="projDetStages"></div>
             <div id="projDetAddForm" class="hidden pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
               <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Yeni İlerleme Ekle</h4>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2187,6 +2192,53 @@
           </div>
           <div class="flex justify-end mt-3">
             <button onclick="handleAddProject()" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-5 py-2 rounded-xl text-sm transition-all shadow-lg shadow-cyan-500/20">Proje Oluştur</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AŞAMA ŞABLONLARI MODALI: tekrar kullanılabilir ana+alt aşama checklist şablonları
+       (liste görünümü + oluşturma/düzenleme "builder" görünümü, ikisi karşılıklı dışlar) -->
+  <div id="stageTemplateModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[60]" onclick="if(event.target===this) closeStageTemplateModal();">
+    <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div class="flex justify-between items-center gap-3 p-6 pb-3 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
+        <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-layer-group text-indigo-500"></i> Aşama Şablonları
+        </h3>
+        <button onclick="closeStageTemplateModal()" class="text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="p-6 space-y-4">
+        <!-- LİSTE GÖRÜNÜMÜ -->
+        <div id="stageTemplateListView" class="space-y-4">
+          <button onclick="openStageTemplateBuilder()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+            <i class="fa-solid fa-plus"></i> Yeni Şablon Oluştur
+          </button>
+          <div id="stageTemplateListContainer" class="space-y-2"></div>
+        </div>
+
+        <!-- BUILDER GÖRÜNÜMÜ (oluşturma / düzenleme) -->
+        <div id="stageTemplateBuilderView" class="hidden space-y-4">
+          <h4 id="stageTemplateBuilderTitle" class="font-bold text-sm text-slate-800 dark:text-slate-200"></h4>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Şablon Adı</label>
+            <input type="text" id="stageTemplateName" placeholder="örn: ASELSAN Standart Şablon" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Otomatik Uygulanacak Firma (ops.)</label>
+            <input type="text" id="stageTemplateAutoCompany" placeholder="örn: ASELSAN — bu firmaya yeni proje açılınca otomatik uygulanır" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Ana Aşamalar</label>
+              <button type="button" onclick="addStageBuilderMainBlock('', [])" class="text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Yeni Ana Aşama Ekle</button>
+            </div>
+            <div id="stageTemplateBuilderStages" class="space-y-3"></div>
+          </div>
+          <div class="flex gap-2 pt-2">
+            <button onclick="saveStageTemplate()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2.5 rounded-xl text-sm transition-all">Kaydet</button>
+            <button onclick="cancelStageTemplateBuilder()" class="flex-1 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold py-2.5 rounded-xl text-sm transition-all">Vazgeç</button>
           </div>
         </div>
       </div>
@@ -4218,6 +4270,147 @@
       } catch (e) {}
     }
 
+    // ---- Aşama Şablonları Modalı: liste + builder (oluşturma/düzenleme) görünümleri ----
+    let editingStageTemplateId = null;
+
+    function openStageTemplateModal() {
+      editingStageTemplateId = null;
+      document.getElementById('stageTemplateModal').classList.remove('hidden');
+      showStageTemplateListView();
+    }
+    function closeStageTemplateModal() {
+      document.getElementById('stageTemplateModal').classList.add('hidden');
+    }
+    function showStageTemplateListView() {
+      document.getElementById('stageTemplateListView').classList.remove('hidden');
+      document.getElementById('stageTemplateBuilderView').classList.add('hidden');
+      renderStageTemplateList();
+    }
+
+    async function renderStageTemplateList() {
+      const container = document.getElementById('stageTemplateListContainer');
+      container.innerHTML = `<p class="text-xs text-slate-400">Yükleniyor...</p>`;
+      const templates = await loadStageTemplatesCache(true);
+      if (!templates || templates.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Henüz şablon yok.</p>`;
+        return;
+      }
+      container.innerHTML = templates.map(t => `
+        <div class="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+          <div class="min-w-0">
+            <div class="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">${escapeHtmlProj(t.name)}</div>
+            <div class="text-[11px] text-slate-400">${t.itemCount} madde${t.auto_apply_company_name ? ` · Otomatik: ${escapeHtmlProj(t.auto_apply_company_name)}` : ''}</div>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="openStageTemplateBuilder(${t.id})" title="Düzenle" class="text-amber-500 p-1.5"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="handleDeleteStageTemplate(${t.id})" title="Sil" class="text-rose-500 p-1.5"><i class="fa-solid fa-trash-can"></i></button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function stageBuilderSubRowHtml(subTitle) {
+      return `
+        <div class="stageBuilderSubRow flex items-center gap-2">
+          <input type="text" class="stageBuilderSubTitle flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-cyan-500" placeholder="Alt aşama başlığı" value="${escapeHtmlProj(subTitle || '')}">
+          <button type="button" onclick="this.closest('.stageBuilderSubRow').remove()" class="text-rose-400 hover:text-rose-500 shrink-0" title="Alt aşamayı sil"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      `;
+    }
+
+    function stageBuilderMainBlockHtml(mainTitle, subTitles) {
+      return `
+        <div class="stageBuilderMain bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <input type="text" class="stageBuilderMainTitle flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-sm font-semibold focus:outline-none focus:border-cyan-500" placeholder="Ana aşama başlığı" value="${escapeHtmlProj(mainTitle || '')}">
+            <button type="button" onclick="this.closest('.stageBuilderMain').remove()" class="text-rose-400 hover:text-rose-500 shrink-0" title="Ana aşamayı sil"><i class="fa-solid fa-trash-can"></i></button>
+          </div>
+          <div class="stageBuilderSubList space-y-1.5 pl-4">
+            ${(subTitles || []).map(s => stageBuilderSubRowHtml(s)).join('')}
+          </div>
+          <button type="button" onclick="addStageBuilderSubRow(this)" class="pl-4 text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Alt Aşama Ekle</button>
+        </div>
+      `;
+    }
+
+    // Bu iki fonksiyon saf DOM ekleme kullanır (bütün builder'ı yeniden çizmez) — aksi halde her
+    // ekleme/silmede tüm input'lar yeniden oluşturulur ve o an yazılan alanın odağı kaybolurdu.
+    function addStageBuilderMainBlock(mainTitle, subTitles) {
+      document.getElementById('stageTemplateBuilderStages').insertAdjacentHTML('beforeend', stageBuilderMainBlockHtml(mainTitle, subTitles));
+    }
+    function addStageBuilderSubRow(btn) {
+      btn.previousElementSibling.insertAdjacentHTML('beforeend', stageBuilderSubRowHtml(''));
+    }
+
+    async function openStageTemplateBuilder(templateId) {
+      editingStageTemplateId = templateId || null;
+      document.getElementById('stageTemplateListView').classList.add('hidden');
+      document.getElementById('stageTemplateBuilderView').classList.remove('hidden');
+      document.getElementById('stageTemplateBuilderTitle').innerText = templateId ? 'Şablonu Düzenle' : 'Yeni Şablon Oluştur';
+      document.getElementById('stageTemplateName').value = '';
+      document.getElementById('stageTemplateAutoCompany').value = '';
+      document.getElementById('stageTemplateBuilderStages').innerHTML = '';
+
+      if (templateId) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/stage-templates/${templateId}`);
+          const data = await safeJson(res);
+          if (!res.ok) { showToast(data.error || 'Şablon yüklenemedi.', 'error'); return; }
+          document.getElementById('stageTemplateName').value = data.name || '';
+          document.getElementById('stageTemplateAutoCompany').value = data.auto_apply_company_name || '';
+          (data.items || []).forEach(main => addStageBuilderMainBlock(main.title, (main.subItems || []).map(s => s.title)));
+        } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+      } else {
+        addStageBuilderMainBlock('', []);
+      }
+    }
+
+    function cancelStageTemplateBuilder() {
+      showStageTemplateListView();
+    }
+
+    async function saveStageTemplate() {
+      const name = document.getElementById('stageTemplateName').value.trim();
+      const autoApplyCompanyName = document.getElementById('stageTemplateAutoCompany').value.trim();
+      if (!name) { showToast('Şablon adı gerekli.', 'error'); return; }
+
+      const items = Array.from(document.querySelectorAll('#stageTemplateBuilderStages .stageBuilderMain')).map(mainEl => {
+        const title = mainEl.querySelector('.stageBuilderMainTitle').value.trim();
+        const subItems = Array.from(mainEl.querySelectorAll('.stageBuilderSubTitle')).map(el => el.value.trim()).filter(Boolean);
+        return { title, subItems };
+      }).filter(m => m.title);
+
+      if (items.length === 0) { showToast('En az bir ana aşama ekleyin.', 'error'); return; }
+
+      try {
+        const url = editingStageTemplateId ? `${API_BASE_URL}/api/stage-templates/${editingStageTemplateId}` : `${API_BASE_URL}/api/stage-templates`;
+        const method = editingStageTemplateId ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+          method, headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, autoApplyCompanyName, items, userRole: currentUser.role, userName: currentUser.name })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Kaydedilemedi.', 'error'); return; }
+        showToast('Şablon kaydedildi.', 'success');
+        await loadStageTemplatesCache(true);
+        showStageTemplateListView();
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    async function handleDeleteStageTemplate(templateId) {
+      if (!confirm('Bu şablonu silmek istediğinize emin misiniz? (Bunu zaten kullanan projelerin checklist\'leri etkilenmez.)')) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/stage-templates/${templateId}`, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userRole: currentUser.role })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Silinemedi.', 'error'); return; }
+        await loadStageTemplatesCache(true);
+        renderStageTemplateList();
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
     // ---- Firma / Proje Yönetim Modalı ----
     function openProjectManageModal() {
       document.getElementById('projectManageModal').classList.remove('hidden');
@@ -4442,7 +4635,7 @@
         if (!res.ok) { showToast(out.error || 'Oluşturulamadı.', 'error'); return; }
         document.getElementById('newProjectName').value = '';
         document.getElementById('newProjectNote').value = '';
-        showToast('Proje oluşturuldu.', 'success');
+        showToast(out.stagesApplied ? `Proje oluşturuldu. "${out.stagesApplied}" şablonu otomatik uygulandı.` : 'Proje oluşturuldu.', 'success');
         await refreshProjectManageModal();
         await refreshDashboardSummary();
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
@@ -5191,7 +5384,7 @@
       return Math.max(0, Math.min(100, Math.round(pct)));
     }
 
-    function renderPersonProjectModal(data) {
+    async function renderPersonProjectModal(data) {
       const idp = ppIdPrefix;
       const project = data.project;
       const progress = data.progress || [];
@@ -5280,12 +5473,208 @@
         }).join('');
       }
 
-      // İlerleme ekleme formu: sadece projenin sahibi veya Admin görür (server de aynı kuralı uygular)
+      // Proje Aşamaları checklist'i (varsa şablon uygulanmış): yüklenip render edilir.
+      const stagesData = await loadAndRenderProjectStages(idp, project.id);
+      const hasStages = !!(stagesData && stagesData.stages && stagesData.stages.length > 0);
+
+      // İlerleme ekleme formu: sadece projenin sahibi veya Admin görür (server de aynı kuralı uygular).
+      // Bir aşama checklist'i varsa "Gerçekleşen %" artık checklist'ten otomatik geldiği için
+      // manuel giriş formu gizlenir (ikisi çakışmasın diye).
       const addForm = document.getElementById(idp + 'AddForm');
       const canAdd = currentUser.role === 'ADMIN' || currentUser.role === 'HR' || (personProjectOwnerId && currentUser.id == personProjectOwnerId);
-      addForm.classList.toggle('hidden', !canAdd);
+      addForm.classList.toggle('hidden', !canAdd || hasStages);
       const dEl = document.getElementById(idp + 'Date');
       if (dEl) dEl.value = today;
+    }
+
+    // Aşama checklist'ini yönetebilecek roller: proje ilerleme kaydı eklemeye izinli olanlardan
+    // (Admin/İK + sahip) farklı olarak Müdür/Ekip Lideri de dahildir (server'daki
+    // canManageProjectStages ile birebir aynı kural).
+    function canManageProjectStagesClient() {
+      if (!currentUser) return false;
+      if (['ADMIN', 'HR', 'MANAGER', 'LEADER'].includes(currentUser.role)) return true;
+      return !!(personProjectOwnerId && currentUser.id == personProjectOwnerId);
+    }
+
+    let stageTemplatesCache = null;
+    async function loadStageTemplatesCache(force) {
+      if (stageTemplatesCache && !force) return stageTemplatesCache;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/stage-templates`);
+        stageTemplatesCache = await safeJson(res);
+      } catch (e) { stageTemplatesCache = []; }
+      return stageTemplatesCache;
+    }
+
+    // Bir projenin aşama checklist'ini çekip ilgili container'a (${idp}Stages) render eder.
+    async function loadAndRenderProjectStages(idp, projectId) {
+      const container = document.getElementById(idp + 'Stages');
+      if (!container) return { stages: [], percentage: 0 };
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages`);
+        const data = await safeJson(res);
+        if (!res.ok) { container.innerHTML = ''; return { stages: [], percentage: 0 }; }
+        await renderProjectStagesSection(idp, projectId, data);
+        return data;
+      } catch (e) {
+        container.innerHTML = '';
+        return { stages: [], percentage: 0 };
+      }
+    }
+
+    async function renderProjectStagesSection(idp, projectId, data) {
+      const container = document.getElementById(idp + 'Stages');
+      if (!container) return;
+      const stages = data.stages || [];
+      const percentage = data.percentage || 0;
+      const canManage = canManageProjectStagesClient();
+
+      let applyBtnHtml = '';
+      if (canManage) {
+        const templates = await loadStageTemplatesCache();
+        const options = (templates || []).map(t => `<option value="${t.id}">${escapeHtmlProj(t.name)} (${t.itemCount} madde)</option>`).join('');
+        applyBtnHtml = `
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <select id="${idp}TemplatePicker" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+              <option value="">-- Şablon Seçin --</option>
+              ${options}
+            </select>
+            <button type="button" onclick="handleApplyStageTemplate('${idp}', ${projectId}, ${stages.length > 0})" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg transition-all">
+              <i class="fa-solid fa-layer-group me-1"></i> ${stages.length > 0 ? 'Şablonu Değiştir' : 'Şablon Uygula'}
+            </button>
+          </div>
+        `;
+      }
+
+      if (stages.length === 0) {
+        container.innerHTML = `
+          <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Proje Aşamaları</h4>
+            <p class="text-xs text-slate-400">Bu proje için henüz aşama checklist'i yok.</p>
+            ${applyBtnHtml}
+          </div>
+        `;
+        return;
+      }
+
+      const stagesHtml = stages.map(main => {
+        if (main.subItems.length === 0) {
+          return `
+            <label class="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs cursor-pointer">
+              <input type="checkbox" ${main.isDone ? 'checked' : ''} ${canManage ? '' : 'disabled'} onchange="handleToggleStage(${projectId}, ${main.id}, this.checked)" class="w-4 h-4 accent-cyan-600 shrink-0">
+              <span class="flex-1 font-semibold text-slate-800 dark:text-slate-200 ${main.isDone ? 'line-through opacity-60' : ''}">${escapeHtmlProj(main.title)}</span>
+              ${canManage ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${main.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
+            </label>
+          `;
+        }
+        const doneCount = main.subItems.filter(s => s.isDone).length;
+        const subsHtml = main.subItems.map(s => `
+          <label class="flex items-center gap-2 pl-4 py-1 text-xs cursor-pointer">
+            <input type="checkbox" ${s.isDone ? 'checked' : ''} ${canManage ? '' : 'disabled'} onchange="handleToggleStage(${projectId}, ${s.id}, this.checked)" class="w-3.5 h-3.5 accent-cyan-600 shrink-0">
+            <span class="flex-1 text-slate-700 dark:text-slate-300 ${s.isDone ? 'line-through opacity-60' : ''}">${escapeHtmlProj(s.title)}</span>
+            ${canManage ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${s.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
+          </label>
+        `).join('');
+        return `
+          <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            <div class="flex items-center justify-between gap-2 px-3 py-2">
+              <span class="font-semibold text-xs text-slate-800 dark:text-slate-200">${escapeHtmlProj(main.title)}</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${doneCount === main.subItems.length ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'}">${doneCount}/${main.subItems.length}</span>
+            </div>
+            <div class="px-3 pb-2 space-y-0.5">${subsHtml}</div>
+            ${canManage ? `
+              <div class="px-3 pb-2">
+                <button type="button" onclick="handleAddSubStage(${projectId}, ${main.id})" class="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Alt Aşama Ekle</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Proje Aşamaları <span class="text-cyan-600 dark:text-cyan-400">(%${percentage})</span></h4>
+          </div>
+          <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+            <div class="h-full bg-cyan-500 rounded-full" style="width:${Math.min(100, Math.max(0, percentage))}%"></div>
+          </div>
+          <div class="space-y-2 max-h-80 overflow-y-auto pr-1">${stagesHtml}</div>
+          ${canManage ? `
+            <button type="button" onclick="handleAddMainStage(${projectId})" class="text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Yeni Ana Aşama Ekle</button>
+          ` : ''}
+          ${applyBtnHtml}
+        </div>
+      `;
+    }
+
+    // Bir aşama işaretlenip/kaldırıldığında sunucu hem checklist durumunu hem de otomatik yeni bir
+    // "Gerçekleşen %" ilerleme kaydı oluşturur — bu yüzden checklist'i değil, tüm proje görünümünü
+    // (grafik dahil) yeniden çekmek yeterli ve doğru olan.
+    async function handleToggleStage(projectId, stageId, isDone) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages/${stageId}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isDone, userRole: currentUser.role, userId: currentUser.id, userName: currentUser.name })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); }
+        await refreshPersonProjectView();
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    async function handleDeleteStage(projectId, stageId) {
+      if (!confirm('Bu aşamayı silmek istediğinize emin misiniz?')) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages/${stageId}`, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userRole: currentUser.role, userId: currentUser.id })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Silinemedi.', 'error'); return; }
+        await refreshPersonProjectView();
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    async function handleAddMainStage(projectId) {
+      const title = prompt('Yeni ana aşama başlığı:');
+      if (!title || !title.trim()) return;
+      await addProjectStage(projectId, null, title.trim());
+    }
+
+    async function handleAddSubStage(projectId, parentId) {
+      const title = prompt('Yeni alt aşama başlığı:');
+      if (!title || !title.trim()) return;
+      await addProjectStage(projectId, parentId, title.trim());
+    }
+
+    async function addProjectStage(projectId, parentId, title) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentId, title, userRole: currentUser.role, userId: currentUser.id })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Eklenemedi.', 'error'); return; }
+        await refreshPersonProjectView();
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    async function handleApplyStageTemplate(idp, projectId, alreadyHasStages) {
+      const select = document.getElementById(idp + 'TemplatePicker');
+      const templateId = select ? select.value : '';
+      if (!templateId) { showToast('Lütfen bir şablon seçin.', 'error'); return; }
+      if (alreadyHasStages && !confirm('Bu projede zaten bir aşama checklist\'i var. Yeni şablonu uygularsanız mevcut checklist (işaretlemeler dahil) silinip yeniden oluşturulacak. Devam edilsin mi?')) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages/apply-template`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ templateId, userRole: currentUser.role, userId: currentUser.id })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Şablon uygulanamadı.', 'error'); return; }
+        showToast(out.message || 'Şablon uygulandı.', 'success');
+        await refreshPersonProjectView();
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
     async function submitPersonProjectProgress() {
