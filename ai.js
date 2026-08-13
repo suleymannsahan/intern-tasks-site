@@ -447,6 +447,38 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
           });
         } catch (e) { console.error('Geçmiş kaydı hatası:', e.message); }
 
+        // Gerçek tarihleri görünen zaman çizelgesine de yaz (tamamlanan aşama).
+        const isoToTR2 = (iso) => { const [y, a2, g] = String(iso).split('-'); return `${g}.${a2}.${y}`; };
+        asama.baslangic = isoToTR2(asama.gercekBaslangic);
+        asama.bitis = isoToTR2(asama.gercekBitis);
+        asama.gun = gercekGun;
+
+        // Sonraki TAMAMLANMAMIŞ aşamaları, bu aşamanın gerçek bitişinden itibaren süreleri (gün)
+        // korunarak kaydır — proje bitişi gerçeğe göre güncellenir. 'bitti' aşamalara dokunma.
+        const fmtTR2 = (d) => { const g = String(d.getDate()).padStart(2, '0'); const a2 = String(d.getMonth() + 1).padStart(2, '0'); return `${g}.${a2}.${d.getFullYear()}`; };
+        let imlec = new Date(asama.gercekBitis);
+        for (let j = Number(asamaIndex) + 1; j < plan.adimlar.length; j++) {
+          const s = plan.adimlar[j];
+          if (s.durum === 'bitti') { if (s.gercekBitis) imlec = new Date(s.gercekBitis); continue; }
+          const sure = Math.max(1, Number(s.gun) || 1);
+          const yBas = new Date(imlec);
+          const yBit = new Date(imlec); yBit.setDate(yBit.getDate() + sure);
+          s.baslangic = fmtTR2(yBas);
+          s.bitis = fmtTR2(yBit);
+          imlec = new Date(yBit);
+        }
+
+        // Proje bitişini / toplam günü ve görevin son teslim tarihini güncelle
+        const parseTR2 = (str) => { const [g, a2, y] = str.split('.').map(Number); return new Date(y, a2 - 1, g); };
+        const planBas2 = parseTR2(plan.adimlar[0].baslangic);
+        const planSon2 = parseTR2(plan.adimlar[plan.adimlar.length - 1].bitis);
+        plan.bitis = fmtTR2(planSon2);
+        plan.toplamGun = Math.max(1, Math.round((planSon2 - planBas2) / (1000 * 60 * 60 * 24)));
+        try {
+          const sonIso = `${planSon2.getFullYear()}-${String(planSon2.getMonth() + 1).padStart(2, '0')}-${String(planSon2.getDate()).padStart(2, '0')}`;
+          await db.execute({ sql: `UPDATE tasks SET end_date = ? WHERE id = ?`, args: [sonIso, taskId] });
+        } catch (e) { console.error('end_date güncelleme hatası:', e.message); }
+
       } else if (islem === 'reddet') {
         if (!onaylayabilir) return res.status(403).json({ error: 'Bu işlemi yalnızca görevi veren kişi yapabilir.' });
         if (asama.durum !== 'onay_bekliyor') return res.status(400).json({ error: 'Bu aşama onay beklemiyor.' });

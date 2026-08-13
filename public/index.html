@@ -11307,11 +11307,8 @@
       if (gcalConnected) {
         disconnectGoogleCalendar();
       } else {
-        // Google izin ekranına git (backend userId'yi state olarak taşır). window.open (yeni sekme/
-        // pencere isteği) kullanılıyor — Electron (.exe) içinde bu, ana pencereyi Google'a
-        // yönlendirmek yerine sistem tarayıcısında açılır (main.js'teki setWindowOpenHandler);
-        // Google, gömülü/Electron tarayıcılardan gelen OAuth isteklerini genelde reddediyor.
-        window.open(`${API_BASE_URL}/api/google/auth?userId=${currentUser.id}`, '_blank');
+        // Google izin ekranına git (backend userId'yi state olarak taşır)
+        window.location.href = `${API_BASE_URL}/api/google/auth?userId=${currentUser.id}`;
       }
     }
 
