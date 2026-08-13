@@ -104,6 +104,38 @@ async function initDbMigration() {
 // Sunucu kalkarken veya DB başlatılırken çağırın
 initDbMigration();
 
+// Var olan tüm ilerleme kayıtlarının "planned" (Planlanan %) değerini, projenin başlangıç/bitiş
+// tarihine göre doğrusal olarak yeniden hesaplar — istemcideki computePlannedPct ile birebir aynı
+// formül (client artık bu sütunu manuel değil, otomatik dolduruyor). Sunucu her açılışta çalışır;
+// böylece bir projenin tarihleri sonradan değişse bile eski kayıtlar da güncel kalır.
+async function backfillPlannedPercentages() {
+  try {
+    const rows = await db.execute(`
+      SELECT project_progress.id AS id, project_progress.log_date AS log_date, project_progress.planned AS planned,
+             projects.start_date AS start_date, projects.end_date AS end_date
+      FROM project_progress
+      JOIN projects ON project_progress.project_id = projects.id
+    `);
+    let updated = 0;
+    for (const row of rows.rows) {
+      if (!row.log_date || !row.start_date || !row.end_date) continue;
+      const start = new Date(row.start_date + 'T00:00:00');
+      const end = new Date(row.end_date + 'T00:00:00');
+      const cur = new Date(row.log_date + 'T00:00:00');
+      if (isNaN(start) || isNaN(end) || isNaN(cur)) continue;
+      const totalMs = end - start;
+      const pct = totalMs <= 0 ? 100 : Math.max(0, Math.min(100, Math.round(((cur - start) / totalMs) * 100)));
+      if (Number(row.planned) !== pct) {
+        await db.execute({ sql: `UPDATE project_progress SET planned = ? WHERE id = ?`, args: [pct, row.id] });
+        updated++;
+      }
+    }
+    if (updated > 0) console.log(`✅ ${updated} ilerleme kaydının Planlanan % değeri proje süresine göre yeniden hesaplandı.`);
+  } catch (err) {
+    console.error('Planlanan % yeniden hesaplama hatası:', err.message);
+  }
+}
+
 // Veritabanı Tablolarını Oluşturma
 async function initDb() {
   try {
@@ -240,6 +272,8 @@ async function initDb() {
     try { await db.execute(`ALTER TABLE projects ADD COLUMN note TEXT`); } catch (e) {}
     try { await db.execute(`ALTER TABLE projects ADD COLUMN priority TEXT DEFAULT 'NORMAL'`); } catch (e) {}
     try { await db.execute(`ALTER TABLE projects ADD COLUMN status TEXT DEFAULT 'ACTIVE'`); } catch (e) {}
+
+    await backfillPlannedPercentages();
 
     // Proje birimleri (elektronik, yazılım, mekanik ... + admin ekleyebilir)
     await db.execute(`
