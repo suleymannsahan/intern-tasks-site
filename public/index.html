@@ -1549,6 +1549,7 @@
               </div>
               <div id="pdCounters" class="flex gap-2 shrink-0"></div>
             </div>
+            <div id="pdPdfButtonWrap" class="hidden mt-4 pt-4 border-t border-slate-200 dark:border-slate-700"></div>
           </div>
 
           <div id="pdGrid" class="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -2370,36 +2371,6 @@
   </div>
 
   <!-- STAJYER DETAY MODALI -->
-  <div id="internProfileModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 w-full max-w-3xl rounded-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-      <button onclick="closeInternProfileModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-900 dark:hover:text-white">
-        <i class="fa-solid fa-xmark text-xl"></i>
-      </button>
-
-      <div id="internModalHeader" class="flex justify-between items-center mb-6 border-b border-slate-200 dark:border-slate-800 pb-4"></div>
-
-      <div id="internProfileStatsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div class="bg-slate-100 dark:bg-slate-950/60 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-          <h5 class="text-xs font-bold text-center text-slate-500 dark:text-slate-400 mb-2">Görev Tamamlama Oranı</h5>
-          <canvas id="taskStatusChart" class="max-h-48"></canvas>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-950/60 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col justify-center items-center text-center">
-          <div class="text-3xl font-extrabold text-cyan-500 mb-1" id="logFrequencyText">0</div>
-          <div class="text-xs text-slate-500 dark:text-slate-400 font-semibold mb-3">Toplam Girilen Günlük Log Sayısı</div>
-          <div class="text-xs text-emerald-500 font-bold bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-lg" id="onTimeRateText">
-            Zamanında Bitiş: %100
-          </div>
-        </div>
-      </div>
-
-      <div id="internModalContent"></div>
-
-      <!-- Görev Geçmişi'nde bir göreve tıklanınca aynı modal içinde (aynı boyutta) açılan
-           tam detay "sayfası" — Geri butonuyla stajyer paneline (yukarıdaki içeriğe) dönülür. -->
-      <div id="internTaskDetailView" class="hidden"></div>
-    </div>
-  </div>
-
   <!-- ŞİFRE SIFIRLAMA MODALI -->
   <div id="resetModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
     <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
@@ -2729,7 +2700,6 @@
     // Ayarlar panelinden belirlenen resmi tatil günleri (YYYY-MM-DD listesi); iş günü hesabında
     // hafta sonuna ek olarak hariç tutulur. window.onload'da /api/settings/public'ten doldurulur.
     let HOLIDAYS_CACHE = [];
-    let taskChartInstance = null;
     // Bir alt sayfaya (Görevler, Projeler, Toplantı vb.) girmeden hemen önceki scroll konumu:
     // "geri" ile ana ekrana dönüldüğünde sitenin en başına değil, kaldığımız yere döneriz.
     let preNavScrollY = 0;
@@ -3207,7 +3177,7 @@
       // arkadaki baloncuğu da kapatmasın diye burada hariç tutuyoruz.
       const childModalIds = [
         'taskDetailModal', 'editTaskModal', 'revisionModal', 'logModal',
-        'personProgressModal', 'internProfileModal', 'manageUserModal', 'addUserModal'
+        'personProgressModal', 'manageUserModal', 'addUserModal'
       ];
       const clickedInsideChildModal = childModalIds.some(id => {
         const modal = document.getElementById(id);
@@ -4837,6 +4807,16 @@
     // (varsayılan: Ekip Gidişatı, ama Admin/İK ana ekranındaki rol kutucuklarından da açılabilir).
     let personDetailReturnTo = 'teamProgressSection';
 
+    // Ekip Rehberi (sol panel) gibi hemen hemen her sayfanın üzerinde açık kalabilen yerlerden bir
+    // isme tıklanınca, kişi detayından "Geri Dön" ile doğru sayfaya (o an gerçekten görünen ana
+    // bölüme) dönebilmek için — sabit bir returnTo değeri yerine o anki görünen bölümü bulur.
+    function getCurrentVisibleMainSection() {
+      const main = document.getElementById('mainScrollArea');
+      if (!main) return null;
+      const visible = Array.from(main.children).find(el => el.tagName === 'SECTION' && el.id && !el.classList.contains('hidden'));
+      return visible ? visible.id : null;
+    }
+
     async function openPersonDetailPage(userId, returnTo) {
       personDetailReturnTo = returnTo || 'teamProgressSection';
       const returnSec = document.getElementById(personDetailReturnTo);
@@ -4920,6 +4900,24 @@
           <div class="text-[10px] text-slate-500 dark:text-slate-400">proje</div>
         </div>
       `;
+
+      // Staj Sonu PDF Raporu: sadece Stajyer profilinde, yetkili roller ya da kişinin kendisi görür
+      // (exportInternPDF zaten aynı kontrolü kendi içinde de yapıyor, burada sadece buton gizleniyor)
+      const pdfWrap = document.getElementById('pdPdfButtonWrap');
+      const isPdfAuthorized = ['ENGINEER', 'ADMIN', 'HR', 'MANAGER', 'LEADER'].includes(currentUser.role) || currentUser.id == u.id;
+      if (pdfWrap) {
+        if (u.role === 'INTERN' && isPdfAuthorized) {
+          pdfWrap.innerHTML = `
+            <button onclick="exportInternPDF('${u.id}')" class="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2">
+              <i class="fa-solid fa-file-pdf text-sm"></i> Staj Sonu PDF Raporu İndir
+            </button>
+          `;
+          pdfWrap.classList.remove('hidden');
+        } else {
+          pdfWrap.innerHTML = '';
+          pdfWrap.classList.add('hidden');
+        }
+      }
 
       // Kişisel bilgiler
       const infoRow = (icon, label, value) => `
@@ -5027,11 +5025,15 @@
         `).join('');
       }
 
-      // Mühendis, Teknisyen ve Stajyer viewer: her zaman sadece Kişisel Bilgiler kartı görünür.
+      // Mühendis, Teknisyen ve Stajyer viewer: normalde sadece Kişisel Bilgiler kartı görünür.
       // Ekip Lideri viewer: sadece Müdür'ün kartında kişisel bilgilerle sınırlı kalır, diğer tüm
       // rollerde tam erişim görür. Kısıtlıyken sayaçlar, atanmış stajyerler, günlük notlar,
-      // projeler ve görevler kartları gizlenir.
-      const restrictedView = ['ENGINEER', 'TECHNICIAN', 'INTERN'].includes(currentUser.role) || (currentUser.role === 'LEADER' && u.role === 'MANAGER');
+      // projeler ve görevler kartları gizlenir. İSTİSNA: kendi profilinizi ya da bir Stajyer'in
+      // profilini görüntülüyorsanız (isimlerin tıklanabilir olduğu her yerden buraya gelinebildiği
+      // için — ör. Mühendis'in kendi stajyerinin görev geçmişini görmesi) kısıtlama uygulanmaz.
+      const isSelfView = currentUser.id == u.id;
+      const restrictedView = !isSelfView && u.role !== 'INTERN' &&
+        (['ENGINEER', 'TECHNICIAN', 'INTERN'].includes(currentUser.role) || (currentUser.role === 'LEADER' && u.role === 'MANAGER'));
       const pdCountersEl = document.getElementById('pdCounters');
       const pdLogsCardEl = document.getElementById('pdLogsCard');
       const pdProjectsCardEl = document.getElementById('pdProjectsCard');
@@ -7810,11 +7812,10 @@
       };
 
       const renderUserItem = (u) => {
-        const isInternRole = u.role === 'INTERN';
         return `
           <div class="bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/70 flex justify-between items-center gap-2 hover:border-slate-400 dark:hover:border-slate-600 transition-all shadow-sm">
-            <div class="${isInternRole ? 'cursor-pointer flex-1' : 'flex-1'}" ${isInternRole ? `onclick="openInternProfileModal('${u.id}')"` : ''}>
-              <div class="font-semibold text-slate-900 dark:text-slate-100 ${isInternRole ? 'hover:text-cyan-500 hover:underline' : ''}">${u.name}</div>
+            <div class="cursor-pointer flex-1" onclick="openPersonDetailPage('${u.id}', getCurrentVisibleMainSection())">
+              <div class="font-semibold text-slate-900 dark:text-slate-100 hover:text-cyan-500 hover:underline">${u.name}</div>
               <div class="text-[10px] text-slate-500 dark:text-slate-400">${u.email}</div>
             </div>
             ${canManageInSidebar(u) ? `
@@ -9068,14 +9069,11 @@
           remainingDaysText = remDays !== null ? `<div class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5"><i class="fa-solid fa-clock me-1"></i>Kalan Staj: <b>${remDays} iş günü</b></div>` : '';
         }
 
-        // Stajyerler için detay modalı açılabilir
-        const clickable = person.role === 'INTERN';
-
         const card = document.createElement('div');
         card.className = `p-3.5 rounded-xl border flex items-center justify-between shadow-sm transition-all hover:scale-[1.01] ${cardStyle}`;
         card.innerHTML = `
-          <div class="flex-1 ${clickable ? 'cursor-pointer' : ''}" ${clickable ? `onclick="openInternProfileModal(${person.id})"` : ''}>
-            <div class="font-bold text-sm text-slate-900 dark:text-slate-100 ${clickable ? 'hover:underline' : ''} flex items-center gap-1.5">
+          <div class="flex-1 cursor-pointer" onclick="openPersonDetailPage(${person.id}, getCurrentVisibleMainSection())">
+            <div class="font-bold text-sm text-slate-900 dark:text-slate-100 hover:underline flex items-center gap-1.5">
               ${person.name}
               <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold ${badgeStyle}">${activeCount} Görev</span>
             </div>
@@ -10203,174 +10201,6 @@
         console.error("Kayıt silme hatası:", err);
         showToast('Hata: ' + err.message, 'error');
       }
-    }
-
-    function openInternProfileModal(internId) {
-      const intern = usersList.find(u => u.id == internId);
-      if (!intern) return;
-
-      const isAuthorized = 
-        ['ENGINEER', 'TEAM_LEAD', 'ADMIN', 'HR', 'MANAGER', 'LEADER'].includes(currentUser.role) || 
-        (currentUser.role === 'INTERN' && currentUser.id == intern.id);
-
-      const pdfButtonHTML = isAuthorized ? `
-        <button onclick="exportInternPDF('${intern.id}')" 
-                class="mr-6 sm:mr-8 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2">
-          <i class="fa-solid fa-file-pdf text-sm"></i> Staj Sonu PDF Raporu İndir
-        </button>
-      ` : '';
-
-      document.getElementById('internModalHeader').innerHTML = `
-        <div class="flex items-center gap-3">
-          <div class="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-500 flex items-center justify-center text-xl font-bold border border-cyan-500/30">
-            ${intern.name.charAt(0)}
-          </div>
-          <div>
-            <h3 class="text-xl font-bold text-slate-900 dark:text-slate-100">${intern.name}</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">${intern.email} • <span class="text-cyan-500 font-semibold">Stajyer Paneli</span></p>
-          </div>
-        </div>
-        ${pdfButtonHTML}
-      `;
-
-      const internTasks = tasksList.filter(t => t.assigned_to == intern.id);
-      const internLogs = dailyLogsList.filter(l => l.intern_id == intern.id);
-
-      const completedCount = internTasks.filter(t => t.status === 'APPROVED' || t.status === 'COMPLETED').length;
-      const inProgressCount = internTasks.filter(t => t.status === 'IN_PROGRESS' || t.status === 'REVISION_REQUESTED').length;
-
-      document.getElementById('logFrequencyText').innerText = internLogs.length;
-
-      const ctx = document.getElementById('taskStatusChart').getContext('2d');
-      if (taskChartInstance) taskChartInstance.destroy();
-
-      taskChartInstance = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: ['Tamamlanan / Onaylanan', 'Devam Eden / Revize'],
-          datasets: [{
-            data: [completedCount, inProgressCount],
-            backgroundColor: ['#10b981', '#f59e0b'],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } }
-        }
-      });
-
-      let html = `<h4 class="text-sm font-semibold text-slate-900 dark:text-slate-200 mb-3"><i class="fa-solid fa-list-check text-cyan-500 me-2"></i>Görev Geçmişi</h4><div class="space-y-2">`;
-      if (internTasks.length === 0) {
-        html += `<div class="text-xs text-slate-500 italic">Görev yok.</div>`;
-      } else {
-        internTasks.forEach(task => {
-          html += `
-            <div onclick="openInternTaskDetail(${task.id}, ${intern.id})" class="p-3 bg-slate-100 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl flex justify-between items-center text-xs cursor-pointer hover:border-cyan-500/50 hover:bg-slate-200/60 dark:hover:bg-slate-900/60 transition-colors">
-              <div class="min-w-0">
-                <div class="font-bold text-slate-800 dark:text-slate-200 truncate">${task.title}</div>
-                <div class="text-slate-500 text-[11px]">${task.category} - Veren: ${task.created_by || 'Sistem'} - Son Teslim: ${task.end_date}</div>
-              </div>
-              <span class="shrink-0 ms-2 px-2 py-1 rounded-md text-[10px] font-bold ${task.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}">${TASK_STATUS_LABELS_TR[task.status] || task.status}</span>
-            </div>
-          `;
-        });
-      }
-      html += `</div>`;
-
-      document.getElementById('internModalContent').innerHTML = html;
-      document.getElementById('internProfileModal').classList.remove('hidden');
-    }
-
-    function closeInternProfileModal() {
-      document.getElementById('internProfileModal').classList.add('hidden');
-      // Bir dahaki açılışta Görev Geçmişi'nden başlansın, kalan görev detayı görünümünde kalmasın
-      closeInternTaskDetail();
-    }
-
-    // Stajyer Paneli'ndeki "Görev Geçmişi" listesinden bir göreve tıklanınca, aynı modal
-    // içinde (aynı boyutta) tüm detayların göründüğü bir "sayfaya" geçiş yapar. Geri butonu
-    // modalı kapatmaz, sadece bu görünümü gizleyip Stajyer Paneli içeriğini tekrar gösterir.
-    function openInternTaskDetail(taskId, internId) {
-      const task = (tasksList || []).find(t => t.id == taskId);
-      if (!task) return;
-
-      const statusLabel = TASK_STATUS_LABELS_TR[task.status] || task.status;
-      const statusCls = task.status === 'APPROVED'
-        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-        : task.status === 'REVISION_REQUESTED'
-          ? 'bg-rose-500/10 text-rose-500 border-rose-500/30'
-          : 'bg-amber-500/10 text-amber-500 border-amber-500/30';
-
-      const taskLogs = (dailyLogsList || []).filter(l => l.task_id === task.id);
-
-      const revisionsHtml = (task.revisions && task.revisions.length > 0) ? task.revisions.map(r => `
-        <div class="bg-rose-50 dark:bg-rose-950/30 p-3 rounded-xl text-xs border border-rose-200 dark:border-rose-900/50">
-          <div class="flex justify-between items-center text-[10px] text-rose-600 dark:text-rose-400 font-bold mb-1">
-            <span><i class="fa-solid fa-user-pen me-1"></i>Revize Eden: ${r.revised_by}</span>
-            <span><i class="fa-regular fa-clock me-1"></i>${r.created_at}</span>
-          </div>
-          <div class="text-slate-700 dark:text-slate-300">${r.comment || 'Revizyon notu belirtilmedi.'}</div>
-        </div>
-      `).join('') : '';
-
-      const logsHtml = taskLogs.map(l => `
-        <div class="bg-slate-100 dark:bg-slate-900/90 p-3 rounded-xl text-xs border border-slate-200 dark:border-slate-800">
-          <div class="text-slate-400 font-semibold mb-0.5">${l.log_date}</div>
-          <div class="text-slate-800 dark:text-slate-200">${l.note}</div>
-        </div>
-      `).join('');
-
-      const view = document.getElementById('internTaskDetailView');
-      view.innerHTML = `
-        <button onclick="closeInternTaskDetail()" class="flex items-center gap-1.5 text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:underline mb-4">
-          <i class="fa-solid fa-arrow-left"></i> Geri
-        </button>
-
-        <div class="flex items-start justify-between gap-3 mb-4">
-          <h3 class="font-bold text-xl text-slate-900 dark:text-slate-100 break-words">${task.title}</h3>
-          <span class="shrink-0 px-2.5 py-1 text-xs rounded-md font-bold border ${statusCls}">${statusLabel}</span>
-        </div>
-
-        <div class="text-sm text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-900/80 p-4 rounded-xl border border-slate-200 dark:border-slate-800 mb-4">
-          <b>Açıklama:</b> ${task.description || 'Açıklama belirtilmemiş.'}
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-500 dark:text-slate-400 mb-4">
-          <div><i class="fa-solid fa-user-check text-cyan-500 me-1"></i> Görevi Veren: <b class="text-slate-800 dark:text-slate-200">${task.created_by || 'Sistem'}</b></div>
-          <div><i class="fa-solid fa-tag me-1"></i> Kategori: <b class="text-slate-800 dark:text-slate-200">${task.category || '-'}</b></div>
-          <div><i class="fa-regular fa-calendar me-1"></i> Son Teslim: <b class="text-slate-800 dark:text-slate-200">${task.end_date || '-'}</b></div>
-          <div><i class="fa-solid fa-hourglass-half me-1"></i> Çalışma Günü: <b class="text-slate-800 dark:text-slate-200">${task.work_days || '-'}</b></div>
-        </div>
-
-        ${revisionsHtml ? `
-          <div class="mb-4">
-            <span class="text-xs font-bold text-rose-500"><i class="fa-solid fa-rotate-left me-1"></i>Revizyon Geçmişi:</span>
-            <div class="mt-2 space-y-2">${revisionsHtml}</div>
-          </div>
-        ` : ''}
-
-        <div class="mb-2">
-          <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Günlük İlerleme Notları (${taskLogs.length}):</span>
-          <div class="mt-2 space-y-2">
-            ${logsHtml || '<div class="text-xs text-slate-400 italic">Not girilmedi.</div>'}
-          </div>
-        </div>
-
-        <div id="internTaskAttachmentsSection"></div>
-      `;
-
-      document.getElementById('internProfileStatsGrid').classList.add('hidden');
-      document.getElementById('internModalContent').classList.add('hidden');
-      view.classList.remove('hidden');
-
-      renderTaskAttachments(task.id, 'internTaskAttachmentsSection');
-    }
-
-    function closeInternTaskDetail() {
-      document.getElementById('internTaskDetailView').classList.add('hidden');
-      document.getElementById('internProfileStatsGrid').classList.remove('hidden');
-      document.getElementById('internModalContent').classList.remove('hidden');
     }
 
     function fixTurkishChars(text) {
