@@ -9844,6 +9844,24 @@
       bitti: { label: 'Tamamlandı', cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' }
     };
 
+    // Manuel iş planı için aşama adları (ai.js IS_ADIMLARI ile AYNI sıra).
+    const IS_PLANI_ADIMLAR = ['Şematik İnceleme', 'KTTD', 'BDK', 'Visio', 'Sequence', 'Entegrasyon'];
+
+    // Plan oluşturma formunda başlangıç tarihlerini zincirler:
+    // 1. aşama başlangıcı = plan başlangıcı; sonraki aşama başlangıcı = önceki aşamanın bitişi.
+    function ipZincirle() {
+      const basEl = document.getElementById('isPlaniDokumanTarihi');
+      if (!basEl) return;
+      let onceki = basEl.value || '';
+      for (let i = 0; i < IS_PLANI_ADIMLAR.length; i++) {
+        const b = document.getElementById('ipBas_' + i);
+        const e = document.getElementById('ipBit_' + i);
+        if (b) b.value = onceki;
+        if (e) e.min = onceki || '';
+        onceki = (e && e.value) ? e.value : '';
+      }
+    }
+
     // Akıllı İş Planı — aşamaları tarih aralıklarına göre renkli Gantt çubuklarıyla çizer.
     // Not: renkler orijinalinden biraz koyulaştırıldı (700 tonu) — barların üzerindeki beyaz
     // yazı, daha açık tonlarda (ör. amber-300) WCAG kontrast eşiğinin altında kalıyordu.
@@ -9890,16 +9908,29 @@
         return `
           <div class="bg-violet-500/5 border border-violet-300 dark:border-violet-900/40 rounded-xl p-4">
             <div class="text-xs font-bold text-violet-600 dark:text-violet-300 mb-2"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Akıllı İş Planı</div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">Bu görev için yapay zekâ destekli 6 aşamalı bir iş planı oluşturabilirsiniz (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon).</p>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-              <select id="isPlaniKategori" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
-                <option value="1">Küçük (3 ay)</option>
-                <option value="2">Orta (4 ay)</option>
-                <option value="3">Büyük (5 ay)</option>
-                <option value="4">Çok Büyük (6 ay)</option>
-              </select>
-              <input type="date" id="isPlaniDokumanTarihi" value="${bugun}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
-              <input type="date" id="isPlaniBitisTarihi" value="${bitisVarsayilan}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">6 aşamalı iş planı. Her aşamanın yalnızca <b>bitiş tarihini</b> girin; ilk aşamanın başlangıcı plan başlangıç tarihidir, sonraki her aşamanın başlangıcı bir önceki aşamanın bitişidir.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+              <label class="flex flex-col gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">Kategori
+                <select id="isPlaniKategori" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+                  <option value="1">Küçük (3 ay)</option>
+                  <option value="2">Orta (4 ay)</option>
+                  <option value="3">Büyük (5 ay)</option>
+                  <option value="4">Çok Büyük (6 ay)</option>
+                </select>
+              </label>
+              <label class="flex flex-col gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">Plan başlangıcı
+                <input type="date" id="isPlaniDokumanTarihi" value="${bugun}" oninput="ipZincirle()" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              </label>
+            </div>
+            <div class="space-y-1.5 mb-3">
+              ${IS_PLANI_ADIMLAR.map((ad, i) => `
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 w-24 shrink-0">${i + 1}. ${ad}</span>
+                  <input type="date" id="ipBas_${i}" value="${i === 0 ? bugun : ''}" disabled title="Başlangıç (otomatik)" class="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-500" />
+                  <span class="text-slate-400 text-[11px] shrink-0">→</span>
+                  <input type="date" id="ipBit_${i}" oninput="ipZincirle()" title="Bitiş — siz girin" class="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px]" />
+                </div>
+              `).join('')}
             </div>
             <button onclick="handleGenerateIsPlani(${task.id})" class="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
               <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Plan Oluştur
@@ -9972,14 +10003,30 @@
       if (!task) return;
       const kategori = document.getElementById('isPlaniKategori').value;
       const dokumanTarihi = document.getElementById('isPlaniDokumanTarihi').value;
-      const bitisTarihi = document.getElementById('isPlaniBitisTarihi').value;
-      if (!dokumanTarihi || !bitisTarihi) { alert('Döküman ve bitiş tarihini seçiniz.'); return; }
+      if (!dokumanTarihi) { alert('Plan başlangıç tarihini seçiniz.'); return; }
+
+      // Her aşamanın bitişini topla (başlangıçlar otomatik zincirlenir)
+      const asamaBitisleri = [];
+      for (let i = 0; i < IS_PLANI_ADIMLAR.length; i++) {
+        const v = (document.getElementById('ipBit_' + i) || {}).value;
+        if (!v) { alert(`${i + 1}. aşamanın (${IS_PLANI_ADIMLAR[i]}) bitiş tarihini giriniz.`); return; }
+        asamaBitisleri.push(v);
+      }
+      // Sıralı ve artan olmalı (ISO tarih string karşılaştırması yeterli)
+      let onceki = dokumanTarihi;
+      for (let i = 0; i < asamaBitisleri.length; i++) {
+        if (asamaBitisleri[i] <= onceki) {
+          alert(`${i + 1}. aşamanın (${IS_PLANI_ADIMLAR[i]}) bitişi, başlangıcından (${onceki}) sonra olmalı.`);
+          return;
+        }
+        onceki = asamaBitisleri[i];
+      }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/is-plani`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ kartIsmi: task.title, kategori, dokumanTarihi, bitisTarihi, userRole: currentUser.role })
+          body: JSON.stringify({ kartIsmi: task.title, kategori, dokumanTarihi, asamaBitisleri, userRole: currentUser.role })
         });
         const plan = await res.json();
         if (!res.ok) { alert('Hata: ' + (plan.error || 'Plan oluşturulamadı.')); return; }
