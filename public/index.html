@@ -9325,7 +9325,7 @@
       });
 
       if (res.ok) {
-        alert("Görev atandı!");
+        showToast('Görev atandı!', 'success');
         document.getElementById('taskTitle').value = '';
         document.getElementById('taskDescription').value = '';
         await loadTasks();
@@ -9333,7 +9333,7 @@
         if (typeof renderEngineerInternStatusList === 'function') renderEngineerInternStatusList();
       } else {
         const data = await res.json();
-        alert('Hata: ' + (data.error || 'Görev atanamadı.'));
+        showToast('Hata: ' + (data.error || 'Görev atanamadı.'), 'error');
       }
     }
 
