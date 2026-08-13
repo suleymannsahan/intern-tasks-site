@@ -1633,6 +1633,43 @@
           </div>
         </section>
 
+        <!-- PROJE DETAY SAYFASI (tam ekran; "Projeler" kutucuğu olan herkes için — Mevcut
+             Projeler / Sorumlu Olunan Projeler listesinden bir projeye tıklanınca açılır) -->
+        <section id="projectDetailSection" class="hidden space-y-5">
+          <button onclick="closeProjectDetailPage()" class="text-sm text-cyan-600 dark:text-cyan-400 font-semibold flex items-center gap-1.5 hover:underline">
+            <i class="fa-solid fa-arrow-left"></i> Geri Dön
+          </button>
+
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div class="min-w-0">
+                <h2 id="projDetTitle" class="text-xl font-bold text-slate-900 dark:text-slate-100 break-words"></h2>
+                <div id="projDetMeta" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 flex flex-wrap gap-x-4 gap-y-1"></div>
+              </div>
+              <div id="projDetBadges" class="flex flex-wrap gap-1.5 shrink-0"></div>
+            </div>
+            <div id="projDetNoteRow" class="hidden mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300"></div>
+          </div>
+
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm space-y-4">
+            <canvas id="projDetChart" height="90"></canvas>
+            <div>
+              <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">İlerleme Notları</h4>
+              <div id="projDetLogs" class="space-y-2 max-h-64 overflow-y-auto"></div>
+            </div>
+            <div id="projDetAddForm" class="hidden pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Yeni İlerleme Ekle</h4>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input type="date" id="projDetDate" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                <input type="number" id="projDetPlanned" min="0" max="100" placeholder="Planlanan %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                <input type="number" id="projDetActual" min="0" max="100" placeholder="Gerçekleşen %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+              </div>
+              <input type="text" id="projDetNote" placeholder="Not (opsiyonel)" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+              <button onclick="submitPersonProjectProgress()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold py-2 rounded-lg transition-all">Kaydet</button>
+            </div>
+          </div>
+        </section>
+
         <!-- MÜHENDİS ANA EKRANI: Lider/Müdür/Admin ile aynı düzende, sadece başlıklı kutucuklar -->
         <section id="engineerHomeSection" class="hidden space-y-6">
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
@@ -2168,36 +2205,6 @@
         <button onclick="closeTaskDetailModal()" class="shrink-0 text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
       <div id="taskDetailBody" class="p-6 pt-4 space-y-4"></div>
-    </div>
-  </div>
-
-  <!-- KİŞİ DETAY SAYFASI: SORUMLU PROJE İLERLEME/TAKİP MODALI -->
-  <div id="personProjectModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[65]" onclick="if(event.target===this) closePersonProjectModal();">
-    <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-      <div class="flex justify-between items-start gap-3 p-6 pb-3 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
-        <div class="min-w-0">
-          <h3 id="ppTitle" class="font-bold text-lg text-indigo-600 dark:text-indigo-400 break-words"></h3>
-          <div id="ppBadges" class="flex flex-wrap gap-1.5 mt-1.5"></div>
-        </div>
-        <button onclick="closePersonProjectModal()" class="shrink-0 text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-xmark text-lg"></i></button>
-      </div>
-      <div class="p-6 space-y-4">
-        <canvas id="ppChart" height="90"></canvas>
-        <div>
-          <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">İlerleme Notları</h4>
-          <div id="ppLogs" class="space-y-2 max-h-40 overflow-y-auto"></div>
-        </div>
-        <div id="ppAddForm" class="hidden pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
-          <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Yeni İlerleme Ekle</h4>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <input type="date" id="ppDate" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-            <input type="number" id="ppPlanned" min="0" max="100" placeholder="Planlanan %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-            <input type="number" id="ppActual" min="0" max="100" placeholder="Gerçekleşen %" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-          </div>
-          <input type="text" id="ppNote" placeholder="Not (opsiyonel)" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-          <button onclick="submitPersonProjectProgress()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold py-2 rounded-lg transition-all">Kaydet</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -4148,7 +4155,7 @@
       listEl.innerHTML = engineerOwnedProjects.map(p => {
         const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
         const daysCls = p.days_left < 0 ? 'text-rose-500' : p.days_left <= 3 ? 'text-amber-500' : 'text-emerald-500';
-        return `<button type="button" onclick="openPersonProjectModal(${p.id}, ${currentUser.id})" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-3 transition-all">
+        return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-3 transition-all">
           <div class="flex items-center justify-between gap-2">
             <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
             <span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>
@@ -4172,7 +4179,7 @@
         else if (p.urgency >= 40) { barCls = 'bg-amber-500'; lvl = 'Orta'; }
         const width = Math.min(100, Math.max(6, p.urgency));
         const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
-        return `<button type="button" onclick="openPersonProjectModal(${p.id}, ${currentUser.id})" class="w-full text-left flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 hover:border-cyan-500 transition-all">
+        return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 hover:border-cyan-500 transition-all">
           <div class="w-6 h-6 shrink-0 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-600 dark:text-slate-300">${i + 1}</div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between gap-2">
@@ -4202,7 +4209,7 @@
       const overdue = engineerOwnedProjects.filter(p => p.days_left < 0).sort((a, b) => a.days_left - b.days_left);
       const upcoming = engineerOwnedProjects.filter(p => p.days_left >= 0 && p.days_left <= 3).sort((a, b) => a.days_left - b.days_left);
 
-      const cardHtml = (p, text) => `<button type="button" onclick="openPersonProjectModal(${p.id}, ${currentUser.id})" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
+      const cardHtml = (p, text) => `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
           <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
           <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-end mt-0.5">
             <span class="text-rose-500 font-bold">${text}</span>
@@ -4343,12 +4350,12 @@
         const projects = await safeJson(res);
         if (!projects.length) { el.innerHTML = `<p class="text-xs text-slate-400">Henüz proje yok.</p>`; return; }
         el.innerHTML = projects.map(p => `
-          <div class="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5">
+          <div onclick="openProjectDetailPage(${p.id}, 'adminPanelSection')" class="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-2.5 cursor-pointer transition-all">
             <div class="min-w-0">
               <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
               <div class="text-[10px] text-slate-400">${DEPARTMENT_LABELS[p.department] || p.department} · ${p.owner_name || 'Sorumlu yok'} · Bitiş: ${p.end_date} · Öncelik: ${p.priority || 'NORMAL'}</div>
             </div>
-            <button onclick="handleDeleteProject(${p.id})" class="text-rose-500 hover:text-rose-600 p-1 shrink-0"><i class="fa-solid fa-trash-can"></i></button>
+            <button onclick="event.stopPropagation(); handleDeleteProject(${p.id})" class="text-rose-500 hover:text-rose-600 p-1 shrink-0"><i class="fa-solid fa-trash-can"></i></button>
           </div>
         `).join('');
       } catch (e) { el.innerHTML = `<p class="text-xs text-rose-400">Projeler yüklenemedi.</p>`; }
@@ -5040,36 +5047,18 @@
       if (assignedWrap && restrictedView) assignedWrap.classList.add('hidden');
     }
 
-    // Kişi detay sayfasındaki "Sorumlu Olduğu Projeler" kartına tıklayınca açılan
-    // ilerleme grafiği + takip modalı. Sahibi veya Admin ise yeni ilerleme ekleyebilir.
+    // Proje ilerleme grafiği + takip mantığı: hem Kişi Detayı'nın satır-altı görünümünde
+    // (pdSubView) hem de genel Proje Detay Sayfası'nda (projectDetailSection) kullanılır.
+    // Sahibi veya Admin/İK ise yeni ilerleme ekleyebilir.
     let personProjectChartInstance = null;
     let personProjectCurrentId = null;
     let personProjectOwnerId = null;
     let personProjectData = null; // son çekilen {project, progress} — yeniden fetch etmeden yeniden çizmek için
     let ppEditingId = null;       // şu an satır-içi düzenlenen ilerleme notunun id'si (Admin)
-    // Hangi görünüme yazılacağını belirler: 'pp' = personProjectModal (bağımsız pencere),
-    // 'pdProj' = Kişi Detayı sayfası içindeki satır-altı (pdSubView) görünüm. Aynı render/CRUD
-    // fonksiyonları her iki bağlamda da bu önek üzerinden doğru DOM elemanlarını hedefler.
-    let ppIdPrefix = 'pp';
-
-    async function openPersonProjectModal(projectId, ownerId) {
-      ppIdPrefix = 'pp';
-      personProjectCurrentId = projectId;
-      personProjectOwnerId = ownerId;
-      ppEditingId = null;
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}`);
-        const data = await safeJson(res);
-        if (!res.ok) { showToast(data.error || 'Proje yüklenemedi.', 'error'); return; }
-        personProjectData = data;
-        renderPersonProjectModal(data);
-        document.getElementById('personProjectModal').classList.remove('hidden');
-      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
-    }
-
-    function closePersonProjectModal() {
-      document.getElementById('personProjectModal').classList.add('hidden');
-    }
+    // Hangi görünüme yazılacağını belirler: 'pdProj' = Kişi Detayı sayfası içindeki satır-altı
+    // (pdSubView) görünüm, 'projDet' = genel Proje Detay Sayfası. Aynı render/CRUD fonksiyonları
+    // her iki bağlamda da bu önek üzerinden doğru DOM elemanlarını hedefler.
+    let ppIdPrefix = 'pdProj';
 
     // Kişi Detayı sayfasındaki satır-altı görünümü (proje ya da görev) kapatıp pdGrid'e (kişi
     // kimlik kartının altındaki normal içerik) geri döner — sayfa değişmez, sadece içerik geri gelir.
@@ -5104,11 +5093,88 @@
     // Aktif görünüme (bağımsız pencere ya da Kişi Detayı içindeki satır-altı görünüm) göre
     // güncel projeyi yeniden çeker ve yeniden çizer — ekleme/düzenleme/silme sonrası ortak yenileme.
     async function refreshPersonProjectView() {
-      if (ppIdPrefix === 'pdProj') {
-        await openPersonProjectInline(personProjectCurrentId, personProjectOwnerId);
+      if (ppIdPrefix === 'projDet') {
+        await openProjectDetailPage(personProjectCurrentId, projectDetailReturnTo);
       } else {
-        await openPersonProjectModal(personProjectCurrentId, personProjectOwnerId);
+        await openPersonProjectInline(personProjectCurrentId, personProjectOwnerId);
       }
+    }
+
+    // ============================================================
+    // PROJE DETAY SAYFASI: "Projeler" kutucuğu olan herkes (Admin/İK, Müdür, Ekip Lideri,
+    // Mühendis, Teknisyen) için — Mevcut Projeler / Sorumlu Olunan Projeler listesindeki bir
+    // projeye tıklanınca tam sayfa açılır (aynı personDetailSection gibi, ayrı bir modal değil).
+    // Grafik + ilerleme notu ekleme/düzenleme/silme mantığını renderPersonProjectModal ve ilgili
+    // CRUD fonksiyonlarıyla (ppIdPrefix='projDet') paylaşır.
+    // ============================================================
+    let projectDetailReturnTo = null;
+
+    async function openProjectDetailPage(projectId, returnTo) {
+      projectDetailReturnTo = returnTo || 'adminPanelSection';
+      ppIdPrefix = 'projDet';
+      personProjectCurrentId = projectId;
+      ppEditingId = null;
+
+      const returnSec = document.getElementById(projectDetailReturnTo);
+      const detailSec = document.getElementById('projectDetailSection');
+      if (!detailSec) return;
+      if (returnSec) returnSec.classList.add('hidden');
+      detailSec.classList.remove('hidden');
+      scrollMainTo(0, true);
+
+      document.getElementById('projDetTitle').innerText = 'Yükleniyor...';
+      document.getElementById('projDetMeta').innerHTML = '';
+      document.getElementById('projDetBadges').innerHTML = '';
+      document.getElementById('projDetNoteRow').classList.add('hidden');
+      document.getElementById('projDetLogs').innerHTML = '';
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}`);
+        const data = await safeJson(res);
+        if (!res.ok) { showToast(data.error || 'Proje yüklenemedi.', 'error'); return; }
+        personProjectOwnerId = data.project.owner_id || null;
+        personProjectData = data;
+        renderProjectDetailPage(data);
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    function closeProjectDetailPage() {
+      document.getElementById('projectDetailSection').classList.add('hidden');
+      const returnSec = document.getElementById(projectDetailReturnTo);
+      if (returnSec) returnSec.classList.remove('hidden');
+      if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
+      scrollMainTo(0, true);
+    }
+
+    function renderProjectDetailPage(data) {
+      const project = data.project;
+      document.getElementById('projDetTitle').innerText = `${project.company_name || ''} — ${project.name}`;
+
+      document.getElementById('projDetMeta').innerHTML = `
+        <span><i class="fa-solid fa-building me-1 text-slate-400"></i>${DEPARTMENT_LABELS[project.department] || project.department || '—'}</span>
+        <span><i class="fa-regular fa-user me-1 text-slate-400"></i>${project.owner_name ? escapeHtmlProj(project.owner_name) : 'Sorumlu yok'}</span>
+        <span><i class="fa-regular fa-calendar me-1 text-slate-400"></i>${project.start_date || '?'} → ${project.end_date || '?'}</span>
+      `;
+
+      const priorityCls = project.priority === 'YÜKSEK' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+        : project.priority === 'DÜŞÜK' ? 'bg-slate-500/10 text-slate-500 border-slate-500/30'
+        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
+      const isCompleted = project.status === 'COMPLETED';
+      document.getElementById('projDetBadges').innerHTML = `
+        <span class="px-2.5 py-1 text-xs rounded-md font-bold border ${priorityCls}">Öncelik: ${project.priority || 'NORMAL'}</span>
+        <span class="px-2.5 py-1 text-xs rounded-md font-bold border ${isCompleted ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30'}">${isCompleted ? 'Tamamlandı' : 'Aktif'}</span>
+      `;
+
+      const noteRow = document.getElementById('projDetNoteRow');
+      if (project.note) {
+        noteRow.innerHTML = `<b>Not:</b> ${escapeHtmlProj(project.note)}`;
+        noteRow.classList.remove('hidden');
+      } else {
+        noteRow.classList.add('hidden');
+      }
+
+      // Grafik + ilerleme notları: aynı render mantığı (ppIdPrefix='projDet' hedefine yazar)
+      renderPersonProjectModal(data);
     }
 
     function renderPersonProjectModal(data) {
