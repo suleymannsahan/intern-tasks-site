@@ -2423,7 +2423,7 @@
   <!-- ONAY MODALI: native confirm() yerine — Electron'da (.exe) native dialog kapandıktan sonra
        pencere odağının DOM'a düzgün dönmemesi sorununu önler (bkz. alert()->showToast dönüşümü).
        Promise tabanlı showConfirm(mesaj) fonksiyonuyla kullanılır. -->
-  <div id="confirmDialogModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
+  <div id="confirmDialogModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]" onclick="if(event.target===this) resolveConfirmDialog(false);">
     <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
       <div class="flex items-start gap-3 mb-5">
         <div class="h-9 w-9 shrink-0 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center"><i class="fa-solid fa-triangle-exclamation"></i></div>
@@ -2438,7 +2438,7 @@
 
   <!-- METİN GİRİŞ MODALI: native prompt() yerine — aynı gerekçeyle. Promise tabanlı
        showPrompt(mesaj, varsayılanDeğer) fonksiyonuyla kullanılır. -->
-  <div id="promptDialogModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
+  <div id="promptDialogModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]" onclick="if(event.target===this) resolvePromptDialog(false);">
     <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
       <p id="promptDialogMessage" class="text-sm text-slate-700 dark:text-slate-200 mb-3"></p>
       <input type="text" id="promptDialogInput" onkeydown="if(event.key==='Enter'){event.preventDefault(); resolvePromptDialog(true);} else if(event.key==='Escape'){resolvePromptDialog(false);}" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 mb-4">
@@ -10125,7 +10125,7 @@
                 <i class="fa-solid fa-rotate-left"></i> Revize Et
               </button>
             ` : ''}
-            <button onclick="deleteTask(${task.id}); ${closeFnName}();" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 text-xs font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-1">
+            <button onclick="deleteTask(${task.id}, '${closeFnName}')" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 text-xs font-semibold px-4 py-2 rounded-xl transition-all flex items-center gap-1">
               <i class="fa-solid fa-trash-can"></i> Sil
             </button>
           </div>
@@ -10140,7 +10140,7 @@
               <i class="fa-solid fa-pen me-1"></i> Not / İlerleme Ekle
             </button>
             ${task.status !== 'COMPLETED' ? `
-              <button onclick="completeTask(${task.id}); ${closeFnName}();" class="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all">
+              <button onclick="completeTask(${task.id}, '${closeFnName}')" class="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all">
                 <i class="fa-solid fa-check me-1"></i> Görevi Tamamla
               </button>
             ` : ''}
@@ -10702,18 +10702,24 @@
       }
     }
 
-    async function completeTask(taskId) {
+    // closeFnName (opsiyonel): işlem başarıyla tamamlandıktan SONRA kapatılacak modal/görünümün
+    // fonksiyon adı. Onay diyaloğu artık asenkron (showConfirm) olduğu için, kapatma çağrısını
+    // onclick'te ayrı bir ifade olarak koymak (deleteTask(...); closeX();) kullanıcı henüz cevap
+    // vermeden modalın kapanmasına yol açıyordu — bu yüzden kapatma işlemi buraya, işlemin
+    // gerçekten başarılı olduğu ana taşındı.
+    async function completeTask(taskId, closeFnName) {
       if (!(await showConfirm('Görevi COMPLETED olarak işaretlemek istediğinize emin misiniz?'))) return;
       try {
         const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/complete`, { method: 'PUT' });
         if (response.ok) {
           showToast('Görev başarıyla tamamlandı olarak işaretlendi ve bildirim gönderildi!', 'success');
           await loadTasks();
+          if (closeFnName && typeof window[closeFnName] === 'function') window[closeFnName]();
         }
       } catch (err) { console.error('Hata:', err); }
     }
 
-    async function deleteTask(taskId) {
+    async function deleteTask(taskId, closeFnName) {
       if (!(await showConfirm('Bu görevi silmek istediğinize emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
@@ -10724,6 +10730,7 @@
           showToast('Görev silindi.', 'success');
           await loadTasks();
           renderInternStatusList();
+          if (closeFnName && typeof window[closeFnName] === 'function') window[closeFnName]();
         } else {
           const data = await res.json();
           showToast('Hata: ' + data.error, 'error');
