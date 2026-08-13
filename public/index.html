@@ -2420,6 +2420,35 @@
     </div>
   </div>
 
+  <!-- ONAY MODALI: native confirm() yerine — Electron'da (.exe) native dialog kapandıktan sonra
+       pencere odağının DOM'a düzgün dönmemesi sorununu önler (bkz. alert()->showToast dönüşümü).
+       Promise tabanlı showConfirm(mesaj) fonksiyonuyla kullanılır. -->
+  <div id="confirmDialogModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
+    <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+      <div class="flex items-start gap-3 mb-5">
+        <div class="h-9 w-9 shrink-0 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <p id="confirmDialogMessage" class="text-sm text-slate-700 dark:text-slate-200 pt-1.5"></p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="resolveConfirmDialog(false)" class="flex-1 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold py-2 rounded-xl text-sm transition-all">Vazgeç</button>
+        <button onclick="resolveConfirmDialog(true)" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded-xl text-sm transition-all">Onayla</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- METİN GİRİŞ MODALI: native prompt() yerine — aynı gerekçeyle. Promise tabanlı
+       showPrompt(mesaj, varsayılanDeğer) fonksiyonuyla kullanılır. -->
+  <div id="promptDialogModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
+    <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+      <p id="promptDialogMessage" class="text-sm text-slate-700 dark:text-slate-200 mb-3"></p>
+      <input type="text" id="promptDialogInput" onkeydown="if(event.key==='Enter'){event.preventDefault(); resolvePromptDialog(true);} else if(event.key==='Escape'){resolvePromptDialog(false);}" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 mb-4">
+      <div class="flex gap-2">
+        <button onclick="resolvePromptDialog(false)" class="flex-1 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold py-2 rounded-xl text-sm transition-all">İptal</button>
+        <button onclick="resolvePromptDialog(true)" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 rounded-xl text-sm transition-all">Tamam</button>
+      </div>
+    </div>
+  </div>
+
   <!-- STAJYER DETAY MODALI -->
   <!-- ŞİFRE SIFIRLAMA MODALI -->
   <div id="resetModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
@@ -3336,12 +3365,12 @@
         });
 
         if (res.ok) {
-          alert('Görev detayları güncellendi.');
+          showToast('Görev detayları güncellendi.', 'success');
           closeEditTaskModal();
           await loadTasks();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Görev güncelleme hatası:', err);
@@ -3379,7 +3408,7 @@
 
         const data = await res.json();
         if (res.ok) {
-          alert("Profil bilgileriniz başarıyla güncellendi!");
+          showToast('Profil bilgileriniz başarıyla güncellendi!', 'success');
           currentUser.name = name;
           currentUser.username = username;
           currentUser.email = email;
@@ -3398,7 +3427,7 @@
           await loadUsers();
           await showDashboard();
         } else {
-          alert("Hata: " + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Profil güncelleme hatası:", err);
@@ -3406,7 +3435,7 @@
     }
 
     async function handleDeleteOwnAccount() {
-      if (!confirm("Hesabınızı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!")) return;
+      if (!(await showConfirm("Hesabınızı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!"))) return;
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
@@ -3416,12 +3445,12 @@
         });
 
         if (res.ok) {
-          alert("Hesabınız başarıyla silindi.");
+          showToast('Hesabınız başarıyla silindi.', 'success');
           closeEditProfileModal();
           handleLogout();
         } else {
           const data = await res.json();
-          alert("Silme Hatası: " + data.error);
+          showToast('Silme Hatası: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Hesap silme hatası:", err);
@@ -3508,17 +3537,17 @@
       const subArea = department === 'ELEKTRONIK' ? document.getElementById('regSubArea').value : null;
 
       if (department === 'ELEKTRONIK' && !subArea) {
-        alert('Lütfen bir alt alan seçiniz.');
+        showToast('Lütfen bir alt alan seçiniz.', 'error');
         return;
       }
 
       // E-posta ve telefon zorunlu
       if (!email) {
-        alert('Lütfen e-posta adresinizi giriniz.');
+        showToast('Lütfen e-posta adresinizi giriniz.', 'error');
         return;
       }
       if (!phone) {
-        alert('Lütfen telefon numaranızı giriniz.');
+        showToast('Lütfen telefon numaranızı giriniz.', 'error');
         return;
       }
 
@@ -3526,7 +3555,7 @@
       const role = isHR ? 'HR' : document.getElementById('regRole').value;
 
       if (!isHR && !role) {
-        alert('Lütfen bir rol seçiniz.');
+        showToast('Lütfen bir rol seçiniz.', 'error');
         return;
       }
 
@@ -3539,7 +3568,7 @@
         startDate = document.getElementById('regStartDate').value;
         endDate = document.getElementById('regEndDate').value;
         if (!startDate || !endDate) {
-          alert('Stajyerler için başlangıç ve bitiş tarihleri zorunludur!');
+          showToast('Stajyerler için başlangıç ve bitiş tarihleri zorunludur!', 'error');
           return;
         }
       }
@@ -3567,19 +3596,19 @@
         if (res.ok) {
           // Sunucunun döndürdüğü statüye göre bilgi mesajı göster (Ekip Lideri, Müdür veya İnsan Kaynakları onay bekler)
           if (data.status === 'PENDING') {
-            alert("Hesabınız oluşturuldu! Bu rol/departman için hesabınız Admin onayından sonra aktifleşecektir.");
+            showToast('Hesabınız oluşturuldu! Bu rol/departman için hesabınız Admin onayından sonra aktifleşecektir.', 'success');
           } else {
-            alert("Hesabınız başarıyla oluşturuldu! Giriş yapabilirsiniz.");
+            showToast('Hesabınız başarıyla oluşturuldu! Giriş yapabilirsiniz.', 'success');
           }
           
           await loadUsers();
           switchAuthTab('login');
         } else {
-          alert(data.error || "Kayıt sırasında bir hata oluştu.");
+          showToast(data.error || 'Kayıt sırasında bir hata oluştu.', 'error');
         }
       } catch (err) {
         console.error("Kayıt hatası:", err);
-        alert("Sunucuya bağlanırken bir sorun oluştu.");
+        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
       }
     }
 
@@ -3743,7 +3772,7 @@
 
     // Yeni birim ekleme (basit prompt akışı)
     async function openAddDepartmentPrompt() {
-      const label = prompt('Yeni birim adı (örn: Ar-Ge, Kalite, Üretim):');
+      const label = await showPrompt('Yeni birim adı (örn: Ar-Ge, Kalite, Üretim):');
       if (label === null) return;
       const trimmed = label.trim();
       if (!trimmed) { showToast('Birim adı boş olamaz.', 'error'); return; }
@@ -3762,7 +3791,7 @@
 
     // Birim sil (bağlı proje varsa sunucu reddeder)
     async function handleDeleteDepartment(id, label) {
-      if (!confirm(`"${label}" birimini silmek istediğinize emin misiniz?`)) return;
+      if (!(await showConfirm(`"${label}" birimini silmek istediğinize emin misiniz?`))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/departments/${id}`, {
           method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -4398,7 +4427,7 @@
     }
 
     async function handleDeleteStageTemplate(templateId) {
-      if (!confirm('Bu şablonu silmek istediğinize emin misiniz? (Bunu zaten kullanan projelerin checklist\'leri etkilenmez.)')) return;
+      if (!(await showConfirm('Bu şablonu silmek istediğinize emin misiniz? (Bunu zaten kullanan projelerin checklist\'leri etkilenmez.)'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/stage-templates/${templateId}`, {
           method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -4541,7 +4570,7 @@
     }
 
     async function handleDeleteCompany(id) {
-      if (!confirm('Bu firmayı ve bağlı tüm projelerini silmek istediğinize emin misiniz?')) return;
+      if (!(await showConfirm('Bu firmayı ve bağlı tüm projelerini silmek istediğinize emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/companies/${id}`, {
           method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -4597,7 +4626,7 @@
     }
 
     async function handleDeleteSubarea(id) {
-      if (!confirm('Bu alt alanı silmek istediğinize emin misiniz?')) return;
+      if (!(await showConfirm('Bu alt alanı silmek istediğinize emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/subareas/${id}`, {
           method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -4642,7 +4671,7 @@
     }
 
     async function handleDeleteProject(id) {
-      if (!confirm('Bu projeyi silmek istediğinize emin misiniz?')) return;
+      if (!(await showConfirm('Bu projeyi silmek istediğinize emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects/${id}`, {
           method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -4680,6 +4709,41 @@
         t.classList.add('translate-x-4', 'opacity-0');
         setTimeout(() => t.remove(), 300);
       }, 3000);
+    }
+
+    // native confirm()/prompt() yerine: Electron (.exe) içinde native dialog kapandıktan sonra
+    // pencere odağı DOM'a düzgün dönmüyor, bir sonraki input/textarea'ya yazı yazılamıyordu
+    // (tarayıcıda sorun yoktu). Bunlar kendi overlay'lerini açıp Promise ile sonucu döndürür;
+    // her çağrı yeri "await showConfirm(...)" / "await showPrompt(...)" şeklinde kullanılmalı.
+    let confirmDialogResolver = null;
+    function showConfirm(message) {
+      return new Promise(resolve => {
+        confirmDialogResolver = resolve;
+        document.getElementById('confirmDialogMessage').innerText = message;
+        document.getElementById('confirmDialogModal').classList.remove('hidden');
+      });
+    }
+    function resolveConfirmDialog(result) {
+      document.getElementById('confirmDialogModal').classList.add('hidden');
+      if (confirmDialogResolver) { confirmDialogResolver(result); confirmDialogResolver = null; }
+    }
+
+    let promptDialogResolver = null;
+    function showPrompt(message, defaultValue) {
+      return new Promise(resolve => {
+        promptDialogResolver = resolve;
+        document.getElementById('promptDialogMessage').innerText = message;
+        const input = document.getElementById('promptDialogInput');
+        input.value = defaultValue || '';
+        document.getElementById('promptDialogModal').classList.remove('hidden');
+        setTimeout(() => input.focus(), 50);
+      });
+    }
+    function resolvePromptDialog(confirmed) {
+      const input = document.getElementById('promptDialogInput');
+      const value = confirmed ? input.value : null;
+      document.getElementById('promptDialogModal').classList.add('hidden');
+      if (promptDialogResolver) { promptDialogResolver(value); promptDialogResolver = null; }
     }
 
     // API yanıtını güvenle JSON'a çevirir. Sunucu HTML (404/hata sayfası) dönerse
@@ -5682,7 +5746,7 @@
     }
 
     async function handleDeleteStage(projectId, stageId) {
-      if (!confirm('Bu aşamayı silmek istediğinize emin misiniz?')) return;
+      if (!(await showConfirm('Bu aşamayı silmek istediğinize emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages/${stageId}`, {
           method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -5695,13 +5759,13 @@
     }
 
     async function handleAddMainStage(projectId) {
-      const title = prompt('Yeni ana aşama başlığı:');
+      const title = await showPrompt('Yeni ana aşama başlığı:');
       if (!title || !title.trim()) return;
       await addProjectStage(projectId, null, title.trim());
     }
 
     async function handleAddSubStage(projectId, parentId) {
-      const title = prompt('Yeni alt aşama başlığı:');
+      const title = await showPrompt('Yeni alt aşama başlığı:');
       if (!title || !title.trim()) return;
       await addProjectStage(projectId, parentId, title.trim());
     }
@@ -5722,7 +5786,7 @@
       const select = document.getElementById(idp + 'TemplatePicker');
       const templateId = select ? select.value : '';
       if (!templateId) { showToast('Lütfen bir şablon seçin.', 'error'); return; }
-      if (alreadyHasStages && !confirm('Bu projede zaten bir aşama checklist\'i var. Yeni şablonu uygularsanız mevcut checklist (işaretlemeler dahil) silinip yeniden oluşturulacak. Devam edilsin mi?')) return;
+      if (alreadyHasStages && !(await showConfirm('Bu projede zaten bir aşama checklist\'i var. Yeni şablonu uygularsanız mevcut checklist (işaretlemeler dahil) silinip yeniden oluşturulacak. Devam edilsin mi?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages/apply-template`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5794,7 +5858,7 @@
     }
 
     async function handleDeleteProgressNote(progressId) {
-      if (!confirm('Bu ilerleme notunu silmek istediğinize emin misiniz?')) return;
+      if (!(await showConfirm('Bu ilerleme notunu silmek istediğinize emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/progress/${progressId}`, {
           method: 'DELETE',
@@ -5835,13 +5899,13 @@
         const data = await res.json();
 
         if (!res.ok) {
-          alert(data.error || 'Veri alınamadı.');
+          showToast(data.error || 'Veri alınamadı.', 'error');
           return;
         }
 
         const person = data.people && data.people[0];
         if (!person) {
-          alert('Kullanıcı bulunamadı.');
+          showToast('Kullanıcı bulunamadı.', 'error');
           return;
         }
 
@@ -6166,7 +6230,7 @@
 
     // Reddedilen bir toplantı talebini kalıcı olarak siler (yalnızca Admin/İK)
     async function handleDeleteMeetingRequest(meetingId) {
-      if (!confirm('Bu reddedilen talebi kalıcı olarak silmek istediğinizden emin misiniz?')) return;
+      if (!(await showConfirm('Bu reddedilen talebi kalıcı olarak silmek istediğinizden emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/meetings/${meetingId}`, {
           method: 'DELETE',
@@ -6174,7 +6238,7 @@
           body: JSON.stringify({ userRole: currentUser.role })
         });
         const data = await safeJson(res);
-        if (!res.ok) { alert(data.error || 'Talep silinemedi.'); return; }
+        if (!res.ok) { showToast(data.error || 'Talep silinemedi.', 'error'); return; }
         await loadMeetings();
       } catch (err) {
         console.error('Toplantı talebi silme hatası:', err);
@@ -6259,11 +6323,11 @@
       });
 
       if (CROSS_DEPT_MEETING_ROLES.includes(currentUser.role) && !targetDepartment) {
-        alert('Lütfen bir birim seçiniz.');
+        showToast('Lütfen bir birim seçiniz.', 'error');
         return;
       }
       if (targetDepartment && meetingSubs.length > 0 && !meetingSubVal) {
-        alert('Lütfen bir alt alan seçiniz.');
+        showToast('Lütfen bir alt alan seçiniz.', 'error');
         return;
       }
 
@@ -6285,11 +6349,11 @@
 
         const data = await res.json();
         if (res.ok) {
-          alert('Toplantı talebiniz iletildi.');
+          showToast('Toplantı talebiniz iletildi.', 'success');
           e.target.reset();
           await loadMeetings();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Toplantı talebi gönderme hatası:", err);
@@ -6335,7 +6399,7 @@
           closeEditMeetingModal();
           await loadMeetings();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Toplantı talebi düzenleme hatası:', err);
@@ -6345,7 +6409,7 @@
     async function reviewMeetingRequest(meetingId, action) {
       let reviewComment = '';
       if (action === 'REJECTED') {
-        reviewComment = prompt('Red gerekçesi (opsiyonel):') || '';
+        reviewComment = (await showPrompt('Red gerekçesi (opsiyonel):')) || '';
       }
 
       try {
@@ -6365,7 +6429,7 @@
         if (res.ok) {
           await loadMeetings();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Toplantı talebi güncelleme hatası:", err);
@@ -7280,12 +7344,12 @@
 
         const data = await res.json();
         if (res.ok) {
-          alert('Kullanıcı başarıyla oluşturuldu.');
+          showToast('Kullanıcı başarıyla oluşturuldu.', 'success');
           closeAddUserModal();
           await fetchAdminUsers();
           await fetchAdminStats();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Kullanıcı oluşturma hatası:", err);
@@ -7425,7 +7489,7 @@
           await fetchAdminUsers();
           await fetchAdminStats();
         } else {
-          alert('Hata: ' + ((data && data.error) || 'Güncellenemedi.'));
+          showToast('Hata: ' + ((data && data.error) || 'Güncellenemedi.'), 'error');
         }
       } catch (err) {
         console.error('Kullanıcı güncelleme hatası:', err);
@@ -7433,7 +7497,7 @@
     }
 
     async function handleDeleteAdminUser(userId) {
-      if (!confirm('Bu kullanıcıyı silmek istediğinizden emin misiniz?')) return;
+      if (!(await showConfirm('Bu kullanıcıyı silmek istediğinizden emin misiniz?'))) return;
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
@@ -7447,7 +7511,7 @@
           await fetchAdminUsers();
           await fetchAdminStats();
         } else {
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Kullanıcı silme hatası:", err);
@@ -7469,7 +7533,7 @@
     async function sendLeaderVerificationCode() {
       const emailInput = document.getElementById('regEmail');
       if (!emailInput || !emailInput.value) {
-        alert("Geçerli bir e-posta girin.");
+        showToast('Geçerli bir e-posta girin.', 'error');
         return;
       }
 
@@ -7480,7 +7544,7 @@
           body: JSON.stringify({ email: emailInput.value })
         });
 
-        if (response.ok) alert('Doğrulama kodu e-postanıza gönderildi!');
+        if (response.ok) showToast('Doğrulama kodu e-postanıza gönderildi!', 'success');
       } catch (error) {
         console.error('Hata:', error);
       }
@@ -7620,13 +7684,13 @@
           body: JSON.stringify({ name, email, role, requesterId: currentUser.id })
         });
         if (res.ok) {
-          alert('Kullanıcı bilgileri güncellendi.');
+          showToast('Kullanıcı bilgileri güncellendi.', 'success');
           closeManageUserModal();
           await loadUsers();
           renderSidebarDirectory();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Kullanıcı güncelleme hatası:', err);
@@ -7634,7 +7698,7 @@
     }
 
     async function deleteAnyUser(userId, userName) {
-      if (!confirm(`${userName} isimli kullanıcıyı silmek istediğinize emin misiniz?`)) return;
+      if (!(await showConfirm(`${userName} isimli kullanıcıyı silmek istediğinize emin misiniz?`))) return;
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
@@ -7643,12 +7707,12 @@
           body: JSON.stringify({ requesterId: currentUser.id })
         });
         if (res.ok) {
-          alert('Kullanıcı silindi.');
+          showToast('Kullanıcı silindi.', 'success');
           await loadUsers();
           renderSidebarDirectory();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Kullanıcı silme hatası:', err);
@@ -7730,7 +7794,7 @@
           setInterval(() => loadNotifications(false), 60000);
 
         } else {
-          alert(data.error);
+          showToast(data.error, 'error');
         }
       } catch (err) {
         console.error("Giriş hatası:", err);
@@ -7817,14 +7881,14 @@
           body: JSON.stringify({ username, email })
         });
         const data = await safeJson(res);
-        if (!res.ok) { alert(data.error || 'Kod gönderilemedi.'); return; }
+        if (!res.ok) { showToast(data.error || 'Kod gönderilemedi.', 'error'); return; }
 
         const emailLabel = document.getElementById('resetStep2Email');
         if (emailLabel) emailLabel.innerText = email;
         resetToStep(2);
-        if (isResend) alert('Doğrulama kodu tekrar gönderildi.');
+        if (isResend) showToast('Doğrulama kodu tekrar gönderildi.', 'success');
       } catch (err) {
-        alert('Sunucuya bağlanırken bir sorun oluştu.');
+        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = 'Kod Gönder'; }
       }
@@ -7847,12 +7911,12 @@
           body: JSON.stringify({ username, email, code })
         });
         const data = await safeJson(res);
-        if (!res.ok) { alert(data.error || 'Kod doğrulanamadı.'); return; }
+        if (!res.ok) { showToast(data.error || 'Kod doğrulanamadı.', 'error'); return; }
 
         resetVerifiedToken = data.token;
         resetToStep(3);
       } catch (err) {
-        alert('Sunucuya bağlanırken bir sorun oluştu.');
+        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = 'Kodu Doğrula'; }
       }
@@ -7867,11 +7931,11 @@
       const newPasswordConfirm = document.getElementById('resetNewPassConfirm').value;
 
       if (newPassword !== newPasswordConfirm) {
-        alert('Girdiğiniz şifreler birbiriyle eşleşmiyor.');
+        showToast('Girdiğiniz şifreler birbiriyle eşleşmiyor.', 'error');
         return;
       }
       if (!resetVerifiedToken) {
-        alert('Doğrulama oturumu bulunamadı. Lütfen baştan başlayın.');
+        showToast('Doğrulama oturumu bulunamadı. Lütfen baştan başlayın.', 'error');
         resetToStep(1);
         return;
       }
@@ -7886,16 +7950,16 @@
           body: JSON.stringify({ username, email, token: resetVerifiedToken, newPassword })
         });
         const data = await safeJson(res);
-        if (!res.ok) { alert(data.error || 'Şifre güncellenemedi.'); return; }
+        if (!res.ok) { showToast(data.error || 'Şifre güncellenemedi.', 'error'); return; }
 
-        alert('Şifreniz başarıyla güncellendi! Yeni şifrenizle giriş yapabilirsiniz.');
+        showToast('Şifreniz başarıyla güncellendi! Yeni şifrenizle giriş yapabilirsiniz.', 'success');
         closeResetModal();
         document.getElementById('resetUsername').value = '';
         document.getElementById('resetEmail').value = '';
         document.getElementById('resetNewPass').value = '';
         document.getElementById('resetNewPassConfirm').value = '';
       } catch (err) {
-        alert('Sunucuya bağlanırken bir sorun oluştu.');
+        showToast('Sunucuya bağlanırken bir sorun oluştu.', 'error');
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = 'Şifreyi Güncelle'; }
       }
@@ -8944,7 +9008,7 @@
           await loadTasks();
         } else {
           const data = await res.json();
-          alert('Hata: ' + (data.error || 'Görev eklenemedi.'));
+          showToast('Hata: ' + (data.error || 'Görev eklenemedi.'), 'error');
         }
       } catch (err) { console.error('Kendime görev ekleme hatası:', err); }
     }
@@ -9343,7 +9407,7 @@
           await loadTasks();
         } else {
           const data = await res.json();
-          alert('Hata: ' + (data.error || 'Görev eklenemedi.'));
+          showToast('Hata: ' + (data.error || 'Görev eklenemedi.'), 'error');
         }
       } catch (err) { console.error('Kendime görev ekleme hatası:', err); }
     }
@@ -9772,7 +9836,7 @@
       });
 
       if (res.ok) {
-        alert("Görev atandı!");
+        showToast('Görev atandı!', 'success');
         document.getElementById('taskTitle').value = '';
         document.getElementById('taskDescription').value = '';
         await loadTasks();
@@ -9780,7 +9844,7 @@
         if (typeof renderEngineerInternStatusList === 'function') renderEngineerInternStatusList();
       } else {
         const data = await res.json();
-        alert('Hata: ' + (data.error || 'Görev atanamadı.'));
+        showToast('Hata: ' + (data.error || 'Görev atanamadı.'), 'error');
       }
     }
 
@@ -10233,8 +10297,8 @@
     function handleUploadAttachment(taskId) {
       const input = document.getElementById(`taskAttachmentInput_${taskId}`);
       const file = input && input.files && input.files[0];
-      if (!file) { alert('Lütfen bir dosya seçin.'); return; }
-      if (file.size > 10 * 1024 * 1024) { alert('Dosya boyutu 10MB sınırını aşıyor.'); return; }
+      if (!file) { showToast('Lütfen bir dosya seçin.', 'error'); return; }
+      if (file.size > 10 * 1024 * 1024) { showToast('Dosya boyutu 10MB sınırını aşıyor.', 'error'); return; }
 
       const reader = new FileReader();
       reader.onload = async () => {
@@ -10253,18 +10317,18 @@
             })
           });
           const data = await res.json();
-          if (!res.ok) { alert('Hata: ' + (data.error || 'Belge yüklenemedi.')); return; }
+          if (!res.ok) { showToast('Hata: ' + (data.error || 'Belge yüklenemedi.'), 'error'); return; }
           await renderTaskAttachments(taskId);
         } catch (err) {
           console.error('Belge yükleme hatası:', err);
-          alert('Belge yüklenirken bir hata oluştu.');
+          showToast('Belge yüklenirken bir hata oluştu.', 'error');
         }
       };
       reader.readAsDataURL(file);
     }
 
     async function handleDeleteAttachment(attachmentId, taskId) {
-      if (!confirm('Bu belgeyi silmek istediğinize emin misiniz?')) return;
+      if (!(await showConfirm('Bu belgeyi silmek istediğinize emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/attachments/${attachmentId}`, {
           method: 'DELETE',
@@ -10272,7 +10336,7 @@
           body: JSON.stringify({ userId: currentUser.id, userRole: currentUser.role })
         });
         const data = await res.json();
-        if (!res.ok) { alert('Hata: ' + (data.error || 'Belge silinemedi.')); return; }
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Belge silinemedi.'), 'error'); return; }
         await renderTaskAttachments(taskId);
       } catch (err) {
         console.error('Belge silme hatası:', err);
@@ -10408,13 +10472,13 @@
       const bitisler = [];
       for (let i = 0; i < adimlar.length; i++) {
         const v = (document.getElementById('ipBit_' + i) || {}).value;
-        if (!v) { alert(`${i + 1}. aşamanın (${adimlar[i].ad}) bitiş tarihini giriniz.`); return; }
+        if (!v) { showToast(`${i + 1}. aşamanın (${adimlar[i].ad}) bitiş tarihini giriniz.`, 'error'); return; }
         bitisler.push(v);
       }
       let onceki = planBasIso;
       for (let i = 0; i < bitisler.length; i++) {
         if (bitisler[i] <= onceki) {
-          alert(`${i + 1}. aşamanın (${adimlar[i].ad}) bitişi, başlangıcından (${ipIsoToTR(onceki)}) sonra olmalı.`);
+          showToast(`${i + 1}. aşamanın (${adimlar[i].ad}) bitişi, başlangıcından (${ipIsoToTR(onceki)}) sonra olmalı.`, 'error');
           return;
         }
         onceki = bitisler[i];
@@ -10448,13 +10512,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ plan: yeniPlan, userRole: currentUser.role })
         });
-        if (!saveRes.ok) { const d = await saveRes.json(); alert('Hata: ' + (d.error || 'Plan kaydedilemedi.')); return; }
+        if (!saveRes.ok) { const d = await saveRes.json(); showToast('Hata: ' + (d.error || 'Plan kaydedilemedi.'), 'error'); return; }
         ipDuzenleme = null;
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
         console.error('İş planı kaydetme hatası:', err);
-        alert('İş planı kaydedilirken bir hata oluştu.');
+        showToast('İş planı kaydedilirken bir hata oluştu.', 'error');
       }
     }
 
@@ -10564,7 +10628,7 @@
       const kategori = document.getElementById('isPlaniKategori').value;
       const dokumanTarihi = document.getElementById('isPlaniDokumanTarihi').value;
       const bitisTarihi = document.getElementById('isPlaniBitisTarihi').value;
-      if (!dokumanTarihi || !bitisTarihi) { alert('Döküman ve bitiş tarihini seçiniz.'); return; }
+      if (!dokumanTarihi || !bitisTarihi) { showToast('Döküman ve bitiş tarihini seçiniz.', 'error'); return; }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/is-plani`, {
@@ -10573,14 +10637,14 @@
           body: JSON.stringify({ kartIsmi: task.title, kategori, dokumanTarihi, bitisTarihi, userRole: currentUser.role })
         });
         const plan = await res.json();
-        if (!res.ok) { alert('Hata: ' + (plan.error || 'Plan oluşturulamadı.')); return; }
+        if (!res.ok) { showToast('Hata: ' + (plan.error || 'Plan oluşturulamadı.'), 'error'); return; }
 
         // AI planı hazır. Kaydetmeden ÖNCE: aşama bitişlerini tek tek onaylama/düzenleme adımına geç.
         ipDuzenleme = { taskId, plan };
         openTaskDetailModal(taskId);
       } catch (err) {
         console.error('İş planı oluşturma hatası:', err);
-        alert('İş planı oluşturulurken bir hata oluştu.');
+        showToast('İş planı oluşturulurken bir hata oluştu.', 'error');
       }
     }
 
@@ -10595,24 +10659,24 @@
           })
         });
         const data = await res.json();
-        if (!res.ok) { alert('Hata: ' + (data.error || 'İşlem yapılamadı.')); return; }
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'İşlem yapılamadı.'), 'error'); return; }
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
         console.error('Aşama durumu hatası:', err);
-        alert('Aşama durumu güncellenirken bir hata oluştu.');
+        showToast('Aşama durumu güncellenirken bir hata oluştu.', 'error');
       }
     }
 
     async function handleIsPlaniSifirla(taskId) {
-      if (!confirm('İş planını sıfırlamak istediğinize emin misiniz? (Geçmiş kayıtlara dokunulmaz)')) return;
+      if (!(await showConfirm('İş planını sıfırlamak istediğinize emin misiniz? (Geçmiş kayıtlara dokunulmaz)'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-sil`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userRole: currentUser.role })
         });
-        if (!res.ok) { const d = await res.json(); alert('Hata: ' + (d.error || 'Sıfırlanamadı.')); return; }
+        if (!res.ok) { const d = await res.json(); showToast('Hata: ' + (d.error || 'Sıfırlanamadı.'), 'error'); return; }
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
@@ -10621,7 +10685,7 @@
     }
 
     async function handleIsPlaniGuncelle(taskId) {
-      const yeniBitis = prompt('Yeni bitiş tarihini girin (YYYY-AA-GG):');
+      const yeniBitis = await showPrompt('Yeni bitiş tarihini girin (YYYY-AA-GG):');
       if (!yeniBitis) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-guncelle`, {
@@ -10630,7 +10694,7 @@
           body: JSON.stringify({ yeniBitis, userRole: currentUser.role })
         });
         const data = await res.json();
-        if (!res.ok) { alert('Hata: ' + (data.error || 'Güncellenemedi.')); return; }
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Güncellenemedi.'), 'error'); return; }
         await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
@@ -10639,30 +10703,30 @@
     }
 
     async function completeTask(taskId) {
-      if (!confirm('Görevi COMPLETED olarak işaretlemek istediğinize emin misiniz?')) return;
+      if (!(await showConfirm('Görevi COMPLETED olarak işaretlemek istediğinize emin misiniz?'))) return;
       try {
         const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/complete`, { method: 'PUT' });
         if (response.ok) {
-          alert('Görev başarıyla tamamlandı olarak işaretlendi ve bildirim gönderildi!');
+          showToast('Görev başarıyla tamamlandı olarak işaretlendi ve bildirim gönderildi!', 'success');
           await loadTasks();
         }
       } catch (err) { console.error('Hata:', err); }
     }
 
     async function deleteTask(taskId) {
-      if (!confirm('Bu görevi silmek istediğinize emin misiniz?')) return;
+      if (!(await showConfirm('Bu görevi silmek istediğinize emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
           method: 'DELETE',
           headers: { 'user-role': currentUser.role }
         });
         if (res.ok) {
-          alert('Görev silindi.');
+          showToast('Görev silindi.', 'success');
           await loadTasks();
           renderInternStatusList();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) { console.error('Hata:', err); }
     }
@@ -10692,11 +10756,11 @@
 
         const data = await res.json();
         if (res.ok) {
-          alert(data.message || 'Revize talebi iletildi.');
+          showToast(data.message || 'Revize talebi iletildi.', 'success');
           closeRevisionModal();
           await loadTasks();
         } else {
-          alert("Hata: " + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error("Revize gönderme hatası:", err);
@@ -10711,18 +10775,18 @@
           body: JSON.stringify({ action, comment, userRole: currentUser.role })
         });
         if (response.ok) {
-          alert(action === 'APPROVE' ? 'Görev onaylandı!' : 'Revize isteği iletildi.');
+          showToast(action === 'APPROVE' ? 'Görev onaylandı!' : 'Revize isteği iletildi.', 'success');
           await loadTasks();
           if (['ENGINEER', 'LEADER', 'MANAGER', 'ADMIN', 'HR'].includes(currentUser.role)) {
             renderInternStatusList();
           }
         } else {
           const errData = await response.json();
-          alert('İşlem başarısız: ' + (errData.error || 'Bilinmeyen hata'));
+          showToast('İşlem başarısız: ' + (errData.error || 'Bilinmeyen hata'), 'error');
         }
-      } catch (err) { 
-        console.error('Hata:', err); 
-        alert('Sunucu ile iletişim kurulurken bir hata oluştu.');
+      } catch (err) {
+        console.error('Hata:', err);
+        showToast('Sunucu ile iletişim kurulurken bir hata oluştu.', 'error');
       }
     }
 
@@ -10747,14 +10811,14 @@
         });
 
         if (res.ok) {
-          alert('Günlük not eklendi!');
+          showToast('Günlük not eklendi!', 'success');
           closeLogModal();
           await loadLogs();
           await loadTasks();
           checkDailyLogWarning();
         } else {
           const data = await res.json();
-          alert('Hata: ' + data.error);
+          showToast('Hata: ' + data.error, 'error');
         }
       } catch (err) {
         console.error('Log kaydetme hatası:', err);
@@ -10780,7 +10844,7 @@
     }
 
     async function rejectPendingUser(userId) {
-      if (!confirm("Bu kayıt onay talebini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!")) return;
+      if (!(await showConfirm("Bu kayıt onay talebini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!"))) return;
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
@@ -10821,7 +10885,7 @@
       const isSelf = currentUser.role === 'INTERN' && currentUser.id == internId;
 
       if (!isEngineerOrLead && !isSelf) {
-        alert("Bu staj raporunu indirmek için yetkiniz bulunmamaktadır.");
+        showToast('Bu staj raporunu indirmek için yetkiniz bulunmamaktadır.', 'error');
         return;
       }
 
@@ -11236,8 +11300,11 @@
       if (gcalConnected) {
         disconnectGoogleCalendar();
       } else {
-        // Google izin ekranına git (backend userId'yi state olarak taşır)
-        window.location.href = `${API_BASE_URL}/api/google/auth?userId=${currentUser.id}`;
+        // Google izin ekranına git (backend userId'yi state olarak taşır). window.open (yeni sekme/
+        // pencere isteği) kullanılıyor — Electron (.exe) içinde bu, ana pencereyi Google'a
+        // yönlendirmek yerine sistem tarayıcısında açılır (main.js'teki setWindowOpenHandler);
+        // Google, gömülü/Electron tarayıcılardan gelen OAuth isteklerini genelde reddediyor.
+        window.open(`${API_BASE_URL}/api/google/auth?userId=${currentUser.id}`, '_blank');
       }
     }
 
@@ -11251,7 +11318,7 @@
         if (res.ok) {
           gcalConnected = false;
           updateGcalButton();
-          alert('Google Takvim bağlantısı kaldırıldı.');
+          showToast('Google Takvim bağlantısı kaldırıldı.', 'success');
         }
       } catch (err) {
         console.error('Google bağlantı kaldırma hatası:', err);
@@ -11291,7 +11358,7 @@
           denied: 'Google Takvim bağlantısına izin verilmedi.',
           error: 'Google Takvim bağlanırken bir hata oluştu. Lütfen tekrar deneyin.'
         };
-        if (messages[gcal]) setTimeout(() => alert(messages[gcal]), 300);
+        if (messages[gcal]) setTimeout(() => showToast(messages[gcal], gcal === 'connected' ? 'success' : 'error'), 300);
         // URL'i temizle (yenilemede tekrar uyarı çıkmasın)
         params.delete('gcal');
         const clean = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
