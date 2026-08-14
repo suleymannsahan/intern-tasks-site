@@ -1378,65 +1378,11 @@
                 <div id="projDeptChips" class="flex gap-2 scroll-chips"></div>
               </div>
 
-              <!-- ADIM 2: Firma seçimi -->
+              <!-- ADIM 2: Firma seçimi — seçilince o firmanın projeleri aşağıdaki "Mevcut Projeler"
+                   kısmında listelenir (ayrı bir "Proje Seçin" adımı/grafik artık yok). -->
               <div id="projCompanyWrap" class="hidden">
                 <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Firma Seçin</div>
                 <div id="projCompanyChips" class="flex gap-2 scroll-chips"></div>
-              </div>
-
-              <!-- ADIM 3: Proje seçimi (tıklanınca renk değişir) -->
-              <div id="projProjectWrap" class="hidden">
-                <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Proje Seçin</div>
-                <div id="projProjectChips" class="flex gap-2 scroll-chips"></div>
-              </div>
-
-              <!-- ADIM 4: Grafik + seçilen proje bilgisi -->
-              <div id="projChartWrap" class="hidden space-y-3 pt-1">
-                <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-                  <div class="flex items-center justify-between mb-2">
-                    <div id="projChartTitle" class="text-sm font-bold text-slate-800 dark:text-slate-100"></div>
-                    <div id="projChartBadges" class="flex items-center gap-1.5"></div>
-                  </div>
-                  <div class="relative h-64">
-                    <canvas id="projProgressChart"></canvas>
-                  </div>
-                </div>
-                <!-- Sorumlu / not kutusu -->
-                <div id="projOwnerNote" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-3">
-                  <i class="fa-solid fa-circle-info mt-0.5"></i>
-                  <div id="projOwnerNoteText" class="flex-1"></div>
-                </div>
-                <!-- İlerleme noktası ekleme (admin) -->
-                <div id="projAddProgressWrap" class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
-                  <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Yeni İlerleme Noktası Ekle</div>
-                  <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
-                    <div class="col-span-2 sm:col-span-1">
-                      <label class="block text-[10px] text-slate-500 mb-1">Tarih</label>
-                      <input type="date" id="progNewDate" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-                    </div>
-                    <div>
-                      <label class="block text-[10px] text-slate-500 mb-1">Planlanan %</label>
-                      <input type="number" id="progNewPlanned" min="0" max="100" placeholder="0" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-                    </div>
-                    <div>
-                      <label class="block text-[10px] text-slate-500 mb-1">Gerçekleşen %</label>
-                      <input type="number" id="progNewActual" min="0" max="100" placeholder="0" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-                    </div>
-                    <div class="col-span-2 sm:col-span-1">
-                      <label class="block text-[10px] text-slate-500 mb-1">Not (ops.)</label>
-                      <input type="text" id="progNewNote" placeholder="örn: hastaydım" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-                    </div>
-                    <div class="col-span-2 sm:col-span-5">
-                      <button onclick="handleAddProgress()" class="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-1.5 rounded-lg transition-all">
-                        <i class="fa-solid fa-plus me-1"></i> Kaydet
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div id="projEmptyState" class="text-xs text-slate-400 text-center py-4">
-                Grafikleri görmek için önce bir birim, firma ve proje seçin.
               </div>
             </div>
           </div>
@@ -1445,7 +1391,7 @@
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
             <button type="button" onclick="toggleExistingProjectsPanel()" class="w-full flex items-center justify-between gap-2 p-5 text-left">
               <h3 class="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <i class="fa-solid fa-list text-cyan-500"></i> Mevcut Projeler
+                <i class="fa-solid fa-list text-cyan-500"></i> Mevcut Projeler<span id="projExistingProjectsCompanyLabel" class="text-slate-400 font-normal"></span>
               </h3>
               <i id="projExistingProjectsChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
             </button>
@@ -3300,10 +3246,6 @@
         html.classList.add('dark');
         if (themeText) themeText.innerText = 'Karanlık';
       }
-      // Açık proje grafiği varsa tema renkleriyle yeniden çiz
-      if (typeof projProgressChartInstance !== 'undefined' && projProgressChartInstance && projSelectedProject) {
-        loadProjectChart(projSelectedProject);
-      }
     }
 
     function toggleSidebar() {
@@ -3703,12 +3645,8 @@
     ];
     let PROJECT_DEPTS = [...DEFAULT_PROJECT_DEPTS];
     let projCompaniesCache = [];
-    let projProjectsCache = [];
     let projSelectedDept = null;
     let projSelectedCompany = null;
-    let projSelectedProject = null;
-    let projSelectedProjectOwnerId = null;
-    let projProgressChartInstance = null;
 
     async function loadProjectDashboard() {
       await loadProjectDepartments();
@@ -3718,9 +3656,7 @@
       // ekleme + mevcut projeler) admin ile aynı şekilde açık kalır, sadece kendi birimiyle sınırlanır.
       const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
       const deptStepWrap = document.getElementById('projDeptStepWrap');
-      const addProgressWrap = document.getElementById('projAddProgressWrap');
       if (deptStepWrap) deptStepWrap.classList.toggle('hidden', isManagerView);
-      if (addProgressWrap) addProgressWrap.classList.toggle('hidden', isManagerView);
 
       if (isManagerView && currentUser.department) {
         await selectProjectDept(currentUser.department);
@@ -3805,11 +3741,8 @@
         if (deleted && projSelectedDept === deleted.key) {
           projSelectedDept = null;
           projSelectedCompany = null;
-          projSelectedProject = null;
           document.getElementById('projCompanyWrap')?.classList.add('hidden');
-          document.getElementById('projProjectWrap')?.classList.add('hidden');
-          document.getElementById('projChartWrap')?.classList.add('hidden');
-          document.getElementById('projEmptyState')?.classList.remove('hidden');
+          await renderExistingProjectsList();
         }
         await loadProjectDepartments();
         refreshAllDepartmentSelects();
@@ -3873,7 +3806,6 @@
     async function selectProjectDept(dept) {
       projSelectedDept = dept;
       projSelectedCompany = null;
-      projSelectedProject = null;
       renderProjectDeptChips();
       // Firmaları çek (birime bağlı olanlar + genel olanlar)
       try {
@@ -3882,11 +3814,9 @@
         projCompaniesCache = (all || []).filter(c => !c.department || c.department === dept);
       } catch (e) { projCompaniesCache = []; }
       renderProjectCompanyChips();
-      // Sonraki adımları gizle
       document.getElementById('projCompanyWrap').classList.remove('hidden');
-      document.getElementById('projProjectWrap').classList.add('hidden');
-      document.getElementById('projChartWrap').classList.add('hidden');
-      document.getElementById('projEmptyState').classList.remove('hidden');
+      // Birim değişince önceki firmanın projeleri Mevcut Projeler'de kalmasın
+      await renderExistingProjectsList();
     }
 
     // ADIM 2: Firma çipleri
@@ -3906,182 +3836,17 @@
       }).join('');
     }
 
+    // Firma seçilince "Proje Seçin" adımı/grafik yok artık — o firmanın projeleri doğrudan
+    // aşağıdaki "Mevcut Projeler" listesinde gösterilir (yoksa liste boş kalır).
     async function selectProjectCompany(companyId) {
       projSelectedCompany = companyId;
-      projSelectedProject = null;
       renderProjectCompanyChips();
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/projects?company_id=${companyId}&department=${encodeURIComponent(projSelectedDept)}`);
-        projProjectsCache = await safeJson(res);
-      } catch (e) { projProjectsCache = []; }
-      renderProjectProjectChips();
-      document.getElementById('projProjectWrap').classList.remove('hidden');
-      document.getElementById('projChartWrap').classList.add('hidden');
-      document.getElementById('projEmptyState').classList.remove('hidden');
-    }
-
-    // ADIM 3: Proje çipleri (tıklanınca renk değişir)
-    function renderProjectProjectChips() {
-      const el = document.getElementById('projProjectChips');
-      if (!el) return;
-      if (projProjectsCache.length === 0) {
-        el.innerHTML = `<span class="text-xs text-slate-400">Bu firmaya ait proje yok. "Firma / Proje Yönet" ile ekleyin.</span>`;
-        return;
-      }
-      el.innerHTML = projProjectsCache.map(p => {
-        const active = projSelectedProject === p.id;
-        const overdueDot = p.is_overdue ? '<span class="inline-block w-2 h-2 rounded-full bg-rose-500 ms-1.5"></span>' : '';
-        return `<button onclick="selectProjectProject(${p.id})" class="shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${active
-          ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/20'
-          : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-emerald-500'}">
-          <i class="fa-solid fa-folder me-1.5"></i>${escapeHtmlProj(p.name)}${overdueDot}</button>`;
-      }).join('');
-    }
-
-    async function selectProjectProject(projectId) {
-      projSelectedProject = projectId;
-      renderProjectProjectChips();
-      document.getElementById('projEmptyState').classList.add('hidden');
-      document.getElementById('projChartWrap').classList.remove('hidden');
-      await loadProjectChart(projectId);
-    }
-
-    async function loadProjectChart(projectId) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}`);
-        const data = await safeJson(res);
-        const project = data.project;
-        const progress = data.progress || [];
-        projSelectedProjectOwnerId = project.owner_id;
-
-        // Başlık
-        document.getElementById('projChartTitle').innerText =
-          `${project.company_name || ''} — ${project.name}`;
-
-        // Rozetler: durum + kalan gün
-        const today = new Date().toISOString().substring(0, 10);
-        const daysLeft = Math.round((new Date(project.end_date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
-        const last = progress.length ? progress[progress.length - 1] : null;
-        const actual = last ? Number(last.actual) : 0;
-        const planned = last ? Number(last.planned) : 0;
-        const behind = actual < planned - 5;
-        let daysBadge, daysCls;
-        if (daysLeft < 0) { daysBadge = `${Math.abs(daysLeft)} gün gecikti`; daysCls = 'bg-rose-500/15 text-rose-600 dark:text-rose-400'; }
-        else if (daysLeft <= 3) { daysBadge = `Son ${daysLeft} gün`; daysCls = 'bg-amber-500/15 text-amber-600 dark:text-amber-400'; }
-        else { daysBadge = `${daysLeft} gün kaldı`; daysCls = 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'; }
-        document.getElementById('projChartBadges').innerHTML = `
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${daysCls}">${daysBadge}</span>
-          ${behind ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400">Planın gerisinde</span>' : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-600 dark:text-cyan-400">Yolunda</span>'}
-        `;
-
-        // Sorumlu / not kutusu
-        const noteBox = document.getElementById('projOwnerNote');
-        const noteText = document.getElementById('projOwnerNoteText');
-        // En son notlu ilerleme kaydını bul
-        const lastNoted = [...progress].reverse().find(pr => pr.note && pr.note.trim());
-        let parts = [];
-        if (project.owner_name) parts.push(`<strong>${escapeHtmlProj(project.owner_name)}</strong>`);
-        if (project.note) parts.push(escapeHtmlProj(project.note));
-        if (lastNoted) parts.push(`<span class="opacity-90">${lastNoted.log_date}: ${escapeHtmlProj(lastNoted.note)}</span>`);
-        if (parts.length) {
-          noteText.innerHTML = parts.join(' &middot; ');
-          noteBox.classList.remove('hidden');
-        } else {
-          noteBox.classList.add('hidden');
-        }
-
-        // Grafik
-        renderProjProgressChart(progress);
-
-        // İlerleme ekleme formu tarihini bugüne ayarla
-        const dEl = document.getElementById('progNewDate');
-        if (dEl && !dEl.value) dEl.value = today;
-      } catch (e) {
-        console.error('Proje grafiği yüklenemedi:', e);
-      }
-    }
-
-    function renderProjProgressChart(progress) {
-      const canvas = document.getElementById('projProgressChart');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (projProgressChartInstance) { projProgressChartInstance.destroy(); projProgressChartInstance = null; }
-
-      const sorted = [...progress].sort((a, b) => a.log_date.localeCompare(b.log_date));
-      const labels = sorted.map(p => p.log_date);
-      const plannedData = sorted.map(p => Number(p.planned));
-      const actualData = sorted.map(p => Number(p.actual));
-
-      const isDark = document.documentElement.classList.contains('dark');
-      const gridColor = isDark ? 'rgba(148,163,184,0.15)' : 'rgba(100,116,139,0.15)';
-      const tickColor = isDark ? '#94a3b8' : '#475569';
-
-      projProgressChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [
-            {
-              label: 'Planlanan',
-              data: plannedData,
-              borderColor: '#6366f1',
-              backgroundColor: 'transparent',
-              borderDash: [6, 4],
-              tension: 0.3,
-              pointRadius: 3,
-              pointBackgroundColor: '#6366f1'
-            },
-            {
-              label: 'Gerçekleşen',
-              data: actualData,
-              borderColor: '#06b6d4',
-              backgroundColor: 'rgba(6,182,212,0.12)',
-              tension: 0.3,
-              fill: true,
-              pointRadius: 3,
-              pointBackgroundColor: '#06b6d4'
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          plugins: {
-            legend: { display: true, labels: { color: tickColor, boxWidth: 12, font: { size: 11 } } },
-            tooltip: { callbacks: { label: (c) => `${c.dataset.label}: %${c.parsed.y}` } }
-          },
-          scales: {
-            y: { beginAtZero: true, max: 100, ticks: { color: tickColor, callback: (v) => v + '%' }, grid: { color: gridColor } },
-            x: { ticks: { color: tickColor, font: { size: 10 } }, grid: { color: gridColor } }
-          }
-        }
-      });
-    }
-
-    // İlerleme noktası ekle
-    async function handleAddProgress() {
-      if (!projSelectedProject) return;
-      const date = document.getElementById('progNewDate').value;
-      const planned = document.getElementById('progNewPlanned').value;
-      const actual = document.getElementById('progNewActual').value;
-      const note = document.getElementById('progNewNote').value;
-      if (!date) { showToast('Lütfen tarih seçin.', 'error'); return; }
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/projects/${projSelectedProject}/progress`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ log_date: date, planned, actual, note, userRole: currentUser.role, userId: currentUser.id })
-        });
-        const out = await safeJson(res);
-        if (!res.ok) { showToast(out.error || 'Kaydedilemedi.', 'error'); return; }
-        document.getElementById('progNewPlanned').value = '';
-        document.getElementById('progNewActual').value = '';
-        document.getElementById('progNewNote').value = '';
-        showToast('İlerleme kaydedildi.', 'success');
-        await loadProjectChart(projSelectedProject);
-        await refreshDashboardSummary();
-      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+      await renderExistingProjectsList();
+      // Sonucu hemen görsünler diye "Mevcut Projeler" panelini otomatik aç
+      const body = document.getElementById('projExistingProjectsBody');
+      const chevron = document.getElementById('projExistingProjectsChevron');
+      if (body) body.classList.remove('hidden');
+      if (chevron) chevron.classList.add('rotate-180');
     }
 
     // Alt aciliyet listesi + admin/müdür ana ekranının sağ kolon "Geciken Projeler" hatırlatıcısı.
@@ -4112,7 +3877,7 @@
       const overdue = (projects || []).filter(p => p.days_left < 0).sort((a, b) => a.days_left - b.days_left);
       const upcoming = (projects || []).filter(p => p.days_left >= 0 && p.days_left <= 3).sort((a, b) => a.days_left - b.days_left);
 
-      const cardHtml = (p, text) => `<button onclick="jumpToProject('${p.department}', ${p.id})" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
+      const cardHtml = (p, text) => `<button onclick="jumpToProject(${p.id})" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
           <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
           <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between mt-0.5">
             <span>${escapeHtmlProj(p.owner_name || 'Sorumlu yok')}</span>
@@ -4147,7 +3912,7 @@
         else if (p.urgency >= 40) { barCls = 'bg-amber-500'; lvl = 'Orta'; }
         const width = Math.min(100, Math.max(6, p.urgency));
         const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
-        return `<button onclick="jumpToProject('${p.department}', ${p.id})" class="w-full text-left flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 hover:border-cyan-500 transition-all">
+        return `<button onclick="jumpToProject(${p.id})" class="w-full text-left flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 hover:border-cyan-500 transition-all">
           <div class="w-6 h-6 shrink-0 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-600 dark:text-slate-300">${i + 1}</div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between gap-2">
@@ -4275,28 +4040,11 @@
         : upcoming.slice(0, 8).map(p => cardHtml(p, `${p.days_left} gün kaldı`)).join('');
     }
 
-    // Geciken/aciliyet listesinden projeye zıpla
-    async function jumpToProject(dept, projectId) {
-      // "Geciken Projeler" hatırlatıcısı admin/müdür/ekip lideri ana ekranında; Projeler sayfası
-      // henüz açık değilse role göre önce onu açıp verilerini yükleriz.
-      const projectsPage = document.getElementById('adminPanelSection');
-      if (projectsPage && projectsPage.classList.contains('hidden')) {
-        if (currentUser && isProjectDeptLockedRole(currentUser.role) && typeof openManagerProjectsPage === 'function') {
-          await openManagerProjectsPage();
-        } else if (typeof openAdminProjectsPage === 'function') {
-          await openAdminProjectsPage();
-        }
-      }
-      if (dept) await selectProjectDept(dept);
-      // Projenin firmasını bul
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}`);
-        const data = await safeJson(res);
-        const companyId = data.project.company_id;
-        if (companyId) await selectProjectCompany(companyId);
-        await selectProjectProject(projectId);
-        document.getElementById('projProgressChart').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } catch (e) {}
+    // Geciken/aciliyet listesinden projeye zıpla: doğrudan Proje Detay Sayfası'nı açar
+    // (Mühendis/Teknisyen ana ekranındaki eşdeğer hatırlatıcı kartlarıyla aynı davranış).
+    async function jumpToProject(projectId) {
+      const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
+      await openProjectDetailPage(projectId, isManagerView ? 'leaderSection' : 'adminHomeSection');
     }
 
     // ---- Aşama Şablonları Modalı: liste + builder (oluşturma/düzenleme) görünümleri ----
@@ -4529,17 +4277,27 @@
       if (dept) deptSel.value = dept;
     }
 
+    // Artık firma seçimine bağlı: bir firma seçilmeden hiçbir proje listelenmez; seçilen firmaya
+    // ait proje yoksa liste boş kalır (eskiden burada tüm projeler gösteriliyordu).
     async function renderExistingProjectsList() {
       const el = document.getElementById('projExistingProjectsList');
       if (!el) return;
+      const labelEl = document.getElementById('projExistingProjectsCompanyLabel');
+      if (labelEl) {
+        const company = (projCompaniesCache || []).find(c => c.id === projSelectedCompany);
+        labelEl.innerText = company ? ` — ${company.name}` : '';
+      }
+      if (!projSelectedCompany) {
+        el.innerHTML = `<p class="text-xs text-slate-400">Projeleri görmek için önce bir firma seçin.</p>`;
+        return;
+      }
       try {
         const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
-        const url = isManagerView
-          ? `${API_BASE_URL}/api/projects?department=${encodeURIComponent(currentUser.department)}`
-          : `${API_BASE_URL}/api/projects`;
+        let url = `${API_BASE_URL}/api/projects?company_id=${projSelectedCompany}`;
+        if (isManagerView) url += `&department=${encodeURIComponent(currentUser.department)}`;
         const res = await fetch(url);
         const projects = await safeJson(res);
-        if (!projects.length) { el.innerHTML = `<p class="text-xs text-slate-400">Henüz proje yok.</p>`; return; }
+        if (!projects.length) { el.innerHTML = `<p class="text-xs text-slate-400">Bu firmaya ait proje yok.</p>`; return; }
         el.innerHTML = projects.map(p => `
           <div onclick="openProjectDetailPage(${p.id}, 'adminPanelSection')" class="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-2.5 cursor-pointer transition-all">
             <div class="min-w-0">
