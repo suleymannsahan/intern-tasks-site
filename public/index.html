@@ -416,7 +416,7 @@
               </button>
               <div id="ipBildirimBody" class="hidden">
                 <div class="flex justify-end mb-1">
-                  <button type="button" onclick="ipBildirimTumunuOkundu()" class="text-[10px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline">Tümünü okundu işaretle</button>
+                  <button type="button" onclick="ipBildirimTumunuTemizle()" class="text-[10px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline">Tümünü Temizle</button>
                 </div>
                 <div id="ipBildirimList" class="space-y-1.5 scroll-panel max-h-[280px] pr-1"></div>
                 <p id="ipBildirimEmptyHint" class="text-[11px] text-slate-400 text-center py-4">İş planı bildiriminiz yok.</p>
@@ -523,6 +523,10 @@
               <button type="button" onclick="openLeaderCalendarPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-regular fa-calendar-days"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Takvim</span>
+              </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
               </button>
             </div>
 
@@ -1047,6 +1051,10 @@
               <button type="button" onclick="openAdminReportsPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-chart-column"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Raporlar</span>
+              </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
               </button>
             </div>
 
@@ -1654,6 +1662,10 @@
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-regular fa-calendar-days"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Takvim</span>
               </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
+              </button>
             </div>
 
             <!-- SAĞ TARAF: hatırlatıcılar (mobilde en üstte / admin-İK'de çalışan sayılarının hemen altında görünür) -->
@@ -1834,6 +1846,10 @@
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-regular fa-calendar-days"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Takvim</span>
               </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
+              </button>
             </div>
 
             <!-- SAĞ TARAF: hatırlatıcılar (Mühendis panelindeki ile aynı kurallar; mobilde en üstte görünür) -->
@@ -1902,6 +1918,10 @@
               <button type="button" onclick="openInternCalendarPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-regular fa-calendar-days"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Takvim</span>
+              </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
               </button>
             </div>
 
@@ -2843,14 +2863,67 @@
       `).join('');
     }
 
-    // Bir bildirimin içeriği görüntülendi: sunucudan sil, listeden çıkar, rozetleri güncelle
+    // Bir bildirimin içeriği görüntülendi: sunucudan sil, listeden çıkar, rozetleri güncelle,
+    // sonra bildirimin ilgili olduğu yere (görev/proje/toplantı/vb.) götür.
     async function viewNotification(id) {
-      notificationsList = notificationsList.filter(n => n.id !== id);
+      const n = notificationsList.find(x => x.id === id);
+      notificationsList = notificationsList.filter(x => x.id !== id);
       renderNotificationsPanel();
       refreshNotifBoxBadges();
       try {
         await fetch(`${API_BASE_URL}/api/notifications/${id}`, { method: 'DELETE' });
       } catch (e) { console.error('Bildirim silinemedi:', e.message); }
+      if (n) navigateToNotification(n);
+    }
+
+    // Bir kutucuğa ait, o an EKRANDA GÖRÜNEN (rol bazlı bölüm gizli olmayan) butonu bulup tıklar.
+    // Her rolün kendi "Görevler/Toplantı/..." açma fonksiyonu farklı isimde olduğu için (ör.
+    // openAdminTasksPage/openLeaderTasksPage/openInternTasksPage), isim yerine ortak
+    // data-notif-box işaretinden gidiyoruz — hangi rol section'ı açıksa o kutucuk tıklanır.
+    function dataBoxButonuAc(box) {
+      const adaylar = document.querySelectorAll(`[data-notif-box="${box}"]`);
+      for (const el of adaylar) {
+        if (el.offsetParent !== null) { el.click(); return true; }
+      }
+      return false;
+    }
+
+    // Bildirimin türüne göre ilgili görev/proje detayını açar; özel bir hedefi olmayanlar
+    // (toplantı, yeni kayıt onayı vb.) için o an görünen rol bölümündeki ilgili kutucuğu açar.
+    async function navigateToNotification(n) {
+      if (n.box === 'ATTENDANCE') {
+        // Stajyer giriş/çıkış akışı zaten bildirim panelinin içinde gösteriliyor.
+        openNotificationsPanel();
+        const wrap = document.getElementById('attendanceFeedWrap');
+        if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+
+      closeNotificationsPanel();
+
+      if (n.box === 'TASKS' && n.ref_id) {
+        const acmayiDene = () => {
+          const task = (tasksList || []).find(t => t.id == n.ref_id);
+          if (task) { openTaskDetailModal(n.ref_id); return true; }
+          return false;
+        };
+        if (acmayiDene()) return;
+        if (typeof loadTasks === 'function') {
+          try { await loadTasks(); } catch (e) {}
+          if (acmayiDene()) return;
+        }
+        // Görev artık görünürde değil (silinmiş/erişim değişmiş olabilir) — genel listeye düş
+        dataBoxButonuAc('TASKS');
+        return;
+      }
+
+      if (n.box === 'PROJECTS' && n.ref_id && typeof openProjectDetailPage === 'function') {
+        openProjectDetailPage(n.ref_id);
+        return;
+      }
+
+      // MEETINGS, PENDING_USERS ve özel bir hedefi olmayan diğer kutular
+      dataBoxButonuAc(n.box);
     }
 
     // Bildirimlerin ilgili olduğu her kutucuğun simgesinde küçük bir nokta gösterir/gizler
@@ -7761,8 +7834,13 @@
       ipBildirimListesi = [];
       renderIpBildirimPanel();
       aiChatHistory = [];
+      currentSohbetId = null;
       const aiMsgBox = document.getElementById('aiChatMessages');
       if (aiMsgBox) aiMsgBox.innerHTML = '';
+      const aiListBox = document.getElementById('aiSohbetListView');
+      if (aiListBox) { aiListBox.classList.add('hidden'); aiListBox.innerHTML = ''; }
+      const aiChatViewBox = document.getElementById('aiChatView');
+      if (aiChatViewBox) aiChatViewBox.classList.remove('hidden');
     }
 
     async function showDashboard() {
@@ -11095,43 +11173,146 @@
     let aiChatBusy = false;
     // AI ajan katmanı: onay bekleyen yazma işlemi burada tutulur ({name, args})
     let bekleyenIslem = null;
+    // Şu an açık olan kayıtlı sohbetin id'si; null ise bir sonraki mesaj yeni bir sohbet açar.
+    let currentSohbetId = null;
 
-    // Sohbet panelini geçmiş konuşmalarla doldurur (giriş yapıldığında bir kez çağrılır).
+    // Girişte en son güncellenen kayıtlı sohbeti otomatik açar (varsa).
     async function loadAiChatHistory() {
-      const box = document.getElementById('aiChatMessages');
-      if (!box || !currentUser) return;
+      if (!currentUser) return;
       try {
-        const res = await fetch(`${API_BASE_URL}/api/agent/chat/history?userId=${currentUser.id}`);
+        const res = await fetch(`${API_BASE_URL}/api/agent/conversations?userId=${currentUser.id}`);
         const data = await res.json();
-        if (!res.ok || !Array.isArray(data.history)) return;
-        box.innerHTML = '';
-        aiChatHistory = [];
-        data.history.forEach(h => {
-          appendAiChatBubble(h.role, h.content);
-          aiChatHistory.push({ role: h.role, content: h.content });
-        });
-        if (aiChatHistory.length > 16) aiChatHistory = aiChatHistory.slice(-16);
+        if (res.ok && Array.isArray(data.sohbetler) && data.sohbetler.length) {
+          await aiSohbetSecVeYukle(data.sohbetler[0].id);
+        }
       } catch (err) {
         console.error('Sohbet geçmişi yüklenemedi:', err.message);
       }
     }
 
-    // "Yeni Sohbet" düğmesi: kayıtlı geçmişi sunucudan siler ve paneli sıfırlar.
-    async function handleClearAiChat() {
+    // Mevcut sohbet durumunu (ekran + geçmiş dizisi) sıfırlar; sunucudaki kayıtlara dokunmaz.
+    function aiSohbetDurumSifirla() {
+      currentSohbetId = null;
+      aiChatHistory = [];
+      bekleyenIslem = null;
       const box = document.getElementById('aiChatMessages');
-      if (!currentUser) return;
+      if (box) box.innerHTML = '';
+    }
+
+    // "Yeni Sohbet" düğmesi: ekranı temizler, bir sonraki mesaj sunucuda yeni bir sohbet açar.
+    function handleYeniSohbet() {
+      aiSohbetDurumSifirla();
+      const list = document.getElementById('aiSohbetListView');
+      const chat = document.getElementById('aiChatView');
+      if (list && chat && !list.classList.contains('hidden')) {
+        list.classList.add('hidden');
+        chat.classList.remove('hidden');
+      }
+      const input = document.getElementById('aiChatInput');
+      if (input) input.focus();
+    }
+
+    // Geçmiş sohbetler / sohbet ekranı arasında geçiş yapar.
+    function toggleAiSohbetListesi() {
+      const list = document.getElementById('aiSohbetListView');
+      const chat = document.getElementById('aiChatView');
+      if (!list || !chat) return;
+      const aciliyor = list.classList.contains('hidden');
+      if (aciliyor) {
+        renderAiSohbetListesi();
+        list.classList.remove('hidden');
+        chat.classList.add('hidden');
+      } else {
+        list.classList.add('hidden');
+        chat.classList.remove('hidden');
+      }
+    }
+
+    // Kayıtlı sohbetlerin listesini çekip sol panelde gösterir.
+    async function renderAiSohbetListesi() {
+      const list = document.getElementById('aiSohbetListView');
+      if (!list || !currentUser) return;
+      list.innerHTML = '<div class="text-center text-[11px] text-slate-400 py-4">Yükleniyor...</div>';
       try {
-        await fetch(`${API_BASE_URL}/api/agent/chat/history`, {
+        const res = await fetch(`${API_BASE_URL}/api/agent/conversations?userId=${currentUser.id}`);
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.sohbetler)) {
+          list.innerHTML = '<div class="text-center text-[11px] text-rose-400 py-4">Sohbetler yüklenemedi.</div>';
+          return;
+        }
+        if (!data.sohbetler.length) {
+          list.innerHTML = '<div class="text-center text-[11px] text-slate-400 py-4">Henüz kayıtlı sohbet yok.</div>';
+          return;
+        }
+        list.innerHTML = '';
+        data.sohbetler.forEach(s => {
+          const row = document.createElement('div');
+          row.className = 'flex items-center gap-1 group';
+          const btn = document.createElement('button');
+          btn.className = 'flex-1 min-w-0 text-left px-2.5 py-2 rounded-lg text-xs truncate hover:bg-slate-200 dark:hover:bg-slate-800' +
+            (s.id === currentSohbetId ? ' bg-slate-200 dark:bg-slate-800 font-semibold' : '');
+          btn.innerText = s.baslik || 'Yeni Sohbet';
+          btn.title = s.baslik || '';
+          btn.onclick = async () => { await aiSohbetSecVeYukle(s.id); toggleAiSohbetListesi(); };
+          const sil = document.createElement('button');
+          sil.className = 'shrink-0 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-rose-500';
+          sil.innerHTML = '<i class="fa-solid fa-trash text-[10px]"></i>';
+          sil.title = 'Sohbeti sil';
+          sil.onclick = (e) => aiSohbetSil(s.id, e);
+          row.appendChild(btn);
+          row.appendChild(sil);
+          list.appendChild(row);
+        });
+      } catch (err) {
+        list.innerHTML = '<div class="text-center text-[11px] text-rose-400 py-4">Sohbetler yüklenemedi.</div>';
+      }
+    }
+
+    // Seçilen kayıtlı sohbeti mesaj kutusuna yükler.
+    async function aiSohbetSecVeYukle(sohbetId) {
+      if (!currentUser) return false;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/agent/conversations/${sohbetId}/messages?userId=${currentUser.id}`);
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.mesajlar)) return false;
+        currentSohbetId = sohbetId;
+        aiChatHistory = [];
+        const box = document.getElementById('aiChatMessages');
+        if (box) box.innerHTML = '';
+        data.mesajlar.forEach(m => {
+          appendAiChatBubble(m.role, m.content);
+          aiChatHistory.push({ role: m.role, content: m.content });
+        });
+        if (aiChatHistory.length > 16) aiChatHistory = aiChatHistory.slice(-16);
+        return true;
+      } catch (err) {
+        console.error('Sohbet yüklenemedi:', err.message);
+        return false;
+      }
+    }
+
+    // Kayıtlı bir sohbeti kalıcı olarak siler.
+    async function aiSohbetSil(sohbetId, evt) {
+      if (evt) evt.stopPropagation();
+      if (!currentUser) return;
+      if (!(await showConfirm('Bu sohbeti kalıcı olarak silmek istediğinize emin misiniz?'))) return;
+      try {
+        await fetch(`${API_BASE_URL}/api/agent/conversations/${sohbetId}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentUser.id })
         });
       } catch (err) {
-        console.error('Sohbet geçmişi temizlenemedi:', err.message);
+        console.error('Sohbet silinemedi:', err.message);
       }
-      aiChatHistory = [];
-      bekleyenIslem = null;
-      if (box) box.innerHTML = '';
+      if (sohbetId === currentSohbetId) aiSohbetDurumSifirla();
+      renderAiSohbetListesi();
+    }
+
+    // Başlıktaki çöp kutusu: o an ekranda açık olan sohbeti geçmiş listesine girmeden siler.
+    async function handleAcikSohbetSil() {
+      if (!currentSohbetId) { showToast('Silinecek açık bir sohbet yok.', 'error'); return; }
+      await aiSohbetSil(currentSohbetId);
     }
 
     function toggleAiChatWidget() {
@@ -11180,10 +11361,12 @@
             department: currentUser.department,
             message,
             name: currentUser.name,
-            history: aiChatHistory
+            history: aiChatHistory,
+            sohbetId: currentSohbetId
           })
         });
         const data = await res.json();
+        if (res.ok && data.sohbetId) currentSohbetId = data.sohbetId;
 
         if (res.ok && data.requiresConfirmation) {
           // Yazma işlemi onay bekliyor: balon yerine Onayla/İptal kartı göster
@@ -11252,7 +11435,8 @@
             name: currentUser.name,
             role: currentUser.role,
             department: currentUser.department,
-            action: bekleyenIslem
+            action: bekleyenIslem,
+            sohbetId: currentSohbetId
           })
         });
         const data = await res.json();
@@ -11347,7 +11531,7 @@
       listEl.innerHTML = ipBildirimListesi.map(b => {
         const okundu = Number(b.okundu);
         return `
-        <div onclick="ipBildirimOkundu(${b.id})" class="cursor-pointer ${okundu ? 'opacity-60' : ''} bg-slate-50 dark:bg-slate-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/20 border ${okundu ? 'border-slate-200 dark:border-slate-700' : 'border-amber-300 dark:border-amber-700/60'} rounded-xl p-2.5 transition-all flex items-start gap-2.5">
+        <div onclick="ipBildirimGoster(${b.id})" class="cursor-pointer ${okundu ? 'opacity-60' : ''} bg-slate-50 dark:bg-slate-800/60 hover:bg-amber-50 dark:hover:bg-amber-950/20 border ${okundu ? 'border-slate-200 dark:border-slate-700' : 'border-amber-300 dark:border-amber-700/60'} rounded-xl p-2.5 transition-all flex items-start gap-2.5">
           <div class="h-7 w-7 shrink-0 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs"><i class="${ipBildirimIkon(b.tip)}"></i></div>
           <div class="min-w-0 flex-1">
             <div class="text-[11px] ${okundu ? 'font-medium' : 'font-bold'} text-slate-800 dark:text-slate-100 break-words">${escapeHtmlProj(b.mesaj || '')}</div>
@@ -11365,32 +11549,429 @@
       if (chevron) chevron.classList.toggle('rotate-180', !body.classList.contains('hidden'));
     }
 
-    async function ipBildirimOkundu(id) {
+    // Bir iş planı bildirimi görüntülendi: sunucudan sil, listeden çıkar, ilgili görevin
+    // detayını (İş Planı bölümü dahil) aç — ana bildirim ziliyle aynı mantık.
+    async function ipBildirimGoster(id) {
       const b = ipBildirimListesi.find(x => x.id === id);
-      if (b && !Number(b.okundu)) {
-        b.okundu = 1;
-        renderIpBildirimPanel();
-        try {
-          await fetch(`${API_BASE_URL}/api/bildirimler/okundu`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bildirimId: id })
-          });
-        } catch (e) { console.error('Bildirim okundu işaretlenemedi:', e.message); }
+      ipBildirimListesi = ipBildirimListesi.filter(x => x.id !== id);
+      renderIpBildirimPanel();
+      try {
+        await fetch(`${API_BASE_URL}/api/bildirimler/${id}`, { method: 'DELETE' });
+      } catch (e) { console.error('İş planı bildirimi silinemedi:', e.message); }
+      if (!b || !b.task_id) return;
+
+      closeNotificationsPanel();
+      const acmayiDene = () => {
+        const task = (tasksList || []).find(t => t.id == b.task_id);
+        if (task) { openTaskDetailModal(b.task_id); return true; }
+        return false;
+      };
+      if (acmayiDene()) return;
+      if (typeof loadTasks === 'function') {
+        try { await loadTasks(); } catch (e) {}
+        acmayiDene();
       }
     }
 
-    async function ipBildirimTumunuOkundu() {
+    // "Tümünü Temizle": sunucudaki tüm iş planı bildirimlerini siler. Risk/gecikme uyarıları
+    // tekilleştirilerek yazıldığından, hâlâ geçerli olan bir konu için bir sonraki taramada
+    // (saatlik risk taraması / panel açılışındaki gecikme kontrolü) bildirim yeniden oluşur.
+    async function ipBildirimTumunuTemizle() {
       if (!currentUser || !currentUser.id) return;
-      ipBildirimListesi.forEach(b => { b.okundu = 1; });
+      ipBildirimListesi = [];
       renderIpBildirimPanel();
       try {
-        await fetch(`${API_BASE_URL}/api/bildirimler/okundu`, {
+        await fetch(`${API_BASE_URL}/api/bildirimler?userId=${currentUser.id}`, { method: 'DELETE' });
+      } catch (e) { console.error('İş planı bildirimleri temizlenemedi:', e.message); }
+    }
+
+    // ============================================================
+    // DOKÜMAN DENETİMİ — RAG + LLM-as-a-Judge (aiDokDenetim.js / /api/dok-denetim/*).
+    // Yeni bir .docx (veya yapıştırılan metin) onaylı referans dokümanlarla karşılaştırılıp
+    // uygunluk puanı + eksik/fazla bölüm + üslup + öneri raporu üretir. Onaylanan doküman
+    // otomatik olarak referans hafızasına eklenir (dinamik geri besleme döngüsü).
+    // ============================================================
+    let dokDenetimYeniDosya = null;   // { base64, adi } — "Yeni Değerlendirme" sekmesinde seçilen dosya
+    let dokReferansYeniDosya = null;  // { base64, adi } — "Referans Dokümanlar" sekmesinde seçilen dosya
+    let dokYeniSeciliReferanslar = []; // "Yeni Değerlendirme" için seçilen referans id'leri; boşsa tümü kullanılır
+
+    const DOK_PUAN_RENK = {
+      yuksek: { ring: 'border-emerald-500/40', text: 'text-emerald-500' },
+      orta:   { ring: 'border-amber-500/40',   text: 'text-amber-500' },
+      dusuk:  { ring: 'border-rose-500/40',    text: 'text-rose-500' },
+      yok:    { ring: 'border-slate-400/40',   text: 'text-slate-400' }
+    };
+    function dokPuanSeviyesi(p) {
+      if (p === null || p === undefined || p === '') return 'yok';
+      if (p >= 80) return 'yuksek';
+      if (p >= 50) return 'orta';
+      return 'dusuk';
+    }
+
+    function openDokDenetimModal() {
+      const modal = document.getElementById('dokDenetimModal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      dokDenetimSekmeSec('yeni');
+      const dropdown = document.getElementById('settingsDropdown');
+      if (dropdown) dropdown.classList.add('hidden');
+    }
+    function closeDokDenetimModal() {
+      const modal = document.getElementById('dokDenetimModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function dokDenetimSekmeSec(sekme) {
+      ['yeni', 'referans', 'gecmis'].forEach(s => {
+        const panel = document.getElementById('dokSekme_' + s);
+        const btn = document.getElementById('dokSekmeBtn_' + s);
+        if (panel) panel.classList.toggle('hidden', s !== sekme);
+        if (btn) {
+          btn.classList.toggle('border-cyan-500', s === sekme);
+          btn.classList.toggle('text-cyan-600', s === sekme);
+          btn.classList.toggle('dark:text-cyan-400', s === sekme);
+          btn.classList.toggle('border-transparent', s !== sekme);
+          btn.classList.toggle('text-slate-500', s !== sekme);
+        }
+      });
+      if (sekme === 'yeni') renderDokYeniReferansSecimi();
+      if (sekme === 'referans') renderDokReferanslar();
+      if (sekme === 'gecmis') renderDokGecmis();
+    }
+
+    // "Yeni Değerlendirme" sekmesinde, o an var olan referansları çip listesi olarak gösterir;
+    // kullanıcı istediği referansı/referansları seçip değerlendirmeyi onlarla sınırlayabilir.
+    async function renderDokYeniReferansSecimi() {
+      const el = document.getElementById('dokYeniReferansSecimi');
+      if (!el) return;
+      el.innerHTML = '<span class="text-[11px] text-slate-400">Yükleniyor...</span>';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`);
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.referanslar)) { el.innerHTML = '<span class="text-[11px] text-rose-400">Referanslar yüklenemedi.</span>'; return; }
+        if (!data.referanslar.length) { el.innerHTML = '<span class="text-[11px] text-slate-400">Henüz referans doküman yok — tüm dokümanlar genel kalite kontrolüyle değerlendirilir.</span>'; return; }
+
+        // Silinmiş bir referans seçili kalmışsa listeden düş
+        const gecerliIdler = new Set(data.referanslar.map(r => r.id));
+        dokYeniSeciliReferanslar = dokYeniSeciliReferanslar.filter(id => gecerliIdler.has(id));
+
+        el.innerHTML = data.referanslar.map(r => {
+          const aktif = dokYeniSeciliReferanslar.includes(r.id);
+          return `<button type="button" onclick="dokYeniReferansToggle(${r.id})" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${aktif
+            ? 'bg-violet-600 text-white border-violet-600'
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'}">${escapeHtmlProj(r.baslik || '')}</button>`;
+        }).join('');
+      } catch (err) {
+        el.innerHTML = '<span class="text-[11px] text-rose-400">Referanslar yüklenemedi.</span>';
+      }
+    }
+
+    function dokYeniReferansToggle(id) {
+      const idx = dokYeniSeciliReferanslar.indexOf(id);
+      if (idx === -1) dokYeniSeciliReferanslar.push(id); else dokYeniSeciliReferanslar.splice(idx, 1);
+      renderDokYeniReferansSecimi();
+    }
+
+    // Genel .docx -> base64 dosya seçici (hem yeni değerlendirme hem referans ekleme formunda kullanılır)
+    function dokDosyaSec(inputEl, hedef, etiketId) {
+      const file = inputEl.files && inputEl.files[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { showToast('Dosya boyutu 10MB sınırını aşıyor.', 'error'); inputEl.value = ''; return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = String(reader.result).split(',')[1] || '';
+        if (hedef === 'yeni') dokDenetimYeniDosya = { base64, adi: file.name };
+        else dokReferansYeniDosya = { base64, adi: file.name };
+        const etiket = document.getElementById(etiketId);
+        if (etiket) etiket.innerText = file.name;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function dokListeHtml(baslikTxt, dizi, renkSinifi) {
+      if (!dizi || !dizi.length) return '';
+      return `
+        <div class="mt-3">
+          <div class="text-[11px] font-bold ${renkSinifi} mb-1">${baslikTxt}</div>
+          <ul class="list-disc list-inside space-y-0.5 text-xs text-slate-600 dark:text-slate-300">
+            ${dizi.map(x => `<li>${escapeHtmlProj(x)}</li>`).join('')}
+          </ul>
+        </div>`;
+    }
+
+    function dokRaporKartHtml(rapor, id, durum) {
+      const seviye = dokPuanSeviyesi(rapor.puan);
+      const renk = DOK_PUAN_RENK[seviye];
+      const puanGoster = (rapor.puan === null || rapor.puan === undefined) ? '—' : rapor.puan;
+      const kiyasNotu = rapor.referansVarMi
+        ? `${rapor.kiyaslananReferansSayisi} referans parçasıyla karşılaştırıldı.`
+        : 'Henüz onaylanmış referans doküman yok; bu değerlendirme genel bir kalite kontrolüdür.';
+
+      let aksiyonlar = '';
+      if (durum === 'bekliyor') {
+        aksiyonlar = `
+          <div class="flex gap-2 mt-4">
+            <button onclick="handleDokOnayla(${id})" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 rounded-xl transition-all"><i class="fa-solid fa-check me-1"></i>Onayla ve Referansa Ekle</button>
+            <button onclick="handleDokReddet(${id})" class="flex-1 bg-slate-400 hover:bg-slate-500 text-white text-xs font-semibold py-2 rounded-xl transition-all"><i class="fa-solid fa-xmark me-1"></i>Reddet</button>
+          </div>`;
+      } else if (durum === 'onaylandi') {
+        aksiyonlar = `<div class="mt-3 text-[11px] font-semibold text-emerald-500"><i class="fa-solid fa-circle-check me-1"></i>Onaylandı ve referans hafızasına eklendi.</div>`;
+      } else if (durum === 'reddedildi') {
+        aksiyonlar = `<div class="mt-3 text-[11px] font-semibold text-rose-500"><i class="fa-solid fa-circle-xmark me-1"></i>Reddedildi.</div>`;
+      }
+
+      return `
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+          <div class="flex items-center gap-3">
+            <div class="h-14 w-14 shrink-0 rounded-full border-4 ${renk.ring} ${renk.text} flex items-center justify-center font-bold text-lg">${puanGoster}</div>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-800 dark:text-slate-100">Uygunluk Puanı</div>
+              <div class="text-[11px] text-slate-400">${escapeHtmlProj(kiyasNotu)}</div>
+            </div>
+          </div>
+          ${rapor.ozet ? `<p class="text-xs text-slate-600 dark:text-slate-300 mt-3 italic">${escapeHtmlProj(rapor.ozet)}</p>` : ''}
+          ${dokListeHtml('Eksik Bölümler', rapor.eksikBolumler, 'text-rose-600 dark:text-rose-400')}
+          ${dokListeHtml('Fazla / Gereksiz Bölümler', rapor.fazlaBolumler, 'text-amber-600 dark:text-amber-400')}
+          ${dokListeHtml('Üslup Notları', rapor.uslupNotlari, 'text-cyan-600 dark:text-cyan-400')}
+          ${dokListeHtml('Öneriler', rapor.oneriler, 'text-emerald-600 dark:text-emerald-400')}
+          ${aksiyonlar}
+        </div>`;
+    }
+
+    // -------- Yeni Değerlendirme --------
+    async function handleDokDegerlendir() {
+      const baslikInput = document.getElementById('dokYeniBaslik');
+      const metinInput = document.getElementById('dokYeniMetin');
+      const sonucBox = document.getElementById('dokYeniSonuc');
+      const btn = document.getElementById('dokDegerlendirBtn');
+      const metin = (metinInput.value || '').trim();
+
+      if (!dokDenetimYeniDosya && !metin) { showToast('Bir .docx dosyası seçin veya metni yapıştırın.', 'error'); return; }
+
+      btn.disabled = true;
+      const eskiBtnMetni = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Değerlendiriliyor...';
+      sonucBox.innerHTML = '';
+
+      try {
+        const govde = {
+          userId: currentUser.id,
+          userName: currentUser.name,
+          baslik: (baslikInput.value || '').trim() || (dokDenetimYeniDosya ? dokDenetimYeniDosya.adi : ''),
+          dosyaAdi: dokDenetimYeniDosya ? dokDenetimYeniDosya.adi : null,
+          referansIds: dokYeniSeciliReferanslar
+        };
+        if (dokDenetimYeniDosya) govde.dosyaBase64 = dokDenetimYeniDosya.base64;
+        else govde.metin = metin;
+
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendir`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentUser.id, hepsi: true })
+          body: JSON.stringify(govde)
         });
-      } catch (e) { console.error('Bildirimler okundu işaretlenemedi:', e.message); }
+        const data = await res.json();
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Değerlendirme yapılamadı.'), 'error'); return; }
+
+        sonucBox.innerHTML = dokRaporKartHtml(data.rapor, data.id, 'bekliyor');
+      } catch (err) {
+        console.error('Doküman değerlendirme hatası:', err);
+        showToast('Değerlendirme sırasında bir hata oluştu.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = eskiBtnMetni;
+      }
+    }
+
+    async function handleDokOnayla(id) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendirmeler/${id}/onayla`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, userName: currentUser.name })
+        });
+        const data = await res.json();
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Onaylanamadı.'), 'error'); return; }
+        showToast('Doküman onaylandı ve referans hafızasına eklendi.', 'success');
+        await dokDenetimKararSonrasiTazele(id);
+      } catch (err) {
+        showToast('İşlem gönderilemedi.', 'error');
+      }
+    }
+
+    async function handleDokReddet(id) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendirmeler/${id}/reddet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, userName: currentUser.name })
+        });
+        const data = await res.json();
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Reddedilemedi.'), 'error'); return; }
+        showToast('Değerlendirme reddedildi.', 'success');
+        await dokDenetimKararSonrasiTazele(id);
+      } catch (err) {
+        showToast('İşlem gönderilemedi.', 'error');
+      }
+    }
+
+    // Onay/ret sonrası: eğer karar "Yeni Değerlendirme" sekmesindeki canlı sonuç kartından
+    // verildiyse, formu (başlık/dosya/metin/rapor) tamamen sıfırlar — bir sonraki dokümanı
+    // yüklemeye hazır, temiz bir ekranla karşılaşılsın diye (Reddedildi/Onaylandı etiketiyle
+    // ekranda asılı kalmasın). Karar "Geçmiş" sekmesinden verildiyse sadece o liste tazelenir.
+    async function dokDenetimKararSonrasiTazele(id) {
+      const sonucBox = document.getElementById('dokYeniSonuc');
+      if (sonucBox && sonucBox.innerHTML.includes(`handleDokOnayla(${id})`)) {
+        sonucBox.innerHTML = '';
+        const baslikInput = document.getElementById('dokYeniBaslik');
+        const metinInput = document.getElementById('dokYeniMetin');
+        const dosyaInput = document.getElementById('dokYeniDosyaInput');
+        const etiket = document.getElementById('dokYeniDosyaEtiket');
+        if (baslikInput) baslikInput.value = '';
+        if (metinInput) metinInput.value = '';
+        if (dosyaInput) dosyaInput.value = '';
+        if (etiket) etiket.innerText = 'Dosya seçilmedi';
+        dokDenetimYeniDosya = null;
+      }
+      const gecmisSekme = document.getElementById('dokSekme_gecmis');
+      if (gecmisSekme && !gecmisSekme.classList.contains('hidden')) renderDokGecmis();
+    }
+
+    // -------- Referans Dokümanlar --------
+    async function renderDokReferanslar() {
+      const list = document.getElementById('dokReferansListe');
+      if (!list) return;
+      list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">Yükleniyor...</div>';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`);
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.referanslar)) { list.innerHTML = '<div class="text-center text-xs text-rose-400 py-6">Liste yüklenemedi.</div>'; return; }
+        if (!data.referanslar.length) { list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">Henüz referans doküman eklenmedi.</div>'; return; }
+
+        list.innerHTML = data.referanslar.map(r => `
+          <div class="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(r.baslik || '')}</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">${escapeHtmlProj(r.ekleyen_adi || '—')} • ${escapeHtmlProj(r.created_at || '')} • ${r.parca_sayisi} parça</div>
+            </div>
+            <button onclick="handleDokReferansSil(${r.id})" class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all"><i class="fa-solid fa-trash text-xs"></i></button>
+          </div>
+        `).join('');
+      } catch (err) {
+        list.innerHTML = '<div class="text-center text-xs text-rose-400 py-6">Liste yüklenemedi.</div>';
+      }
+    }
+
+    async function handleDokReferansEkle() {
+      const baslikInput = document.getElementById('dokReferansBaslik');
+      const metinInput = document.getElementById('dokReferansMetin');
+      const btn = document.getElementById('dokReferansEkleBtn');
+      const baslik = (baslikInput.value || '').trim();
+      const metin = (metinInput.value || '').trim();
+
+      if (!baslik) { showToast('Referans için bir başlık girin.', 'error'); return; }
+      if (!dokReferansYeniDosya && !metin) { showToast('Bir .docx dosyası seçin veya metni yapıştırın.', 'error'); return; }
+
+      btn.disabled = true;
+      const eskiBtnMetni = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Ekleniyor...';
+      try {
+        const govde = {
+          userId: currentUser.id, userName: currentUser.name, baslik,
+          dosyaAdi: dokReferansYeniDosya ? dokReferansYeniDosya.adi : null
+        };
+        if (dokReferansYeniDosya) govde.dosyaBase64 = dokReferansYeniDosya.base64;
+        else govde.metin = metin;
+
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(govde)
+        });
+        const data = await res.json();
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Referans eklenemedi.'), 'error'); return; }
+
+        showToast('Referans doküman eklendi.', 'success');
+        baslikInput.value = ''; metinInput.value = ''; dokReferansYeniDosya = null;
+        const dosyaInput = document.getElementById('dokReferansDosyaInput');
+        if (dosyaInput) dosyaInput.value = '';
+        const etiket = document.getElementById('dokReferansDosyaEtiket');
+        if (etiket) etiket.innerText = 'Dosya seçilmedi';
+        await renderDokReferanslar();
+      } catch (err) {
+        showToast('Referans eklenirken bir hata oluştu.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = eskiBtnMetni;
+      }
+    }
+
+    async function handleDokReferansSil(id) {
+      if (!(await showConfirm('Bu referans dokümanı silmek istediğinize emin misiniz?'))) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Silinemedi.'), 'error'); return; }
+        await renderDokReferanslar();
+      } catch (err) {
+        showToast('Silinirken bir hata oluştu.', 'error');
+      }
+    }
+
+    // -------- Geçmiş Değerlendirmeler --------
+    const DOK_DURUM_ETIKET = {
+      bekliyor:   { label: 'Karar Bekliyor', cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
+      onaylandi:  { label: 'Onaylandı',      cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' },
+      reddedildi: { label: 'Reddedildi',     cls: 'bg-rose-500/10 text-rose-500 border-rose-500/30' }
+    };
+
+    async function renderDokGecmis() {
+      const list = document.getElementById('dokGecmisListe');
+      if (!list) return;
+      list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">Yükleniyor...</div>';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendirmeler`);
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.degerlendirmeler)) { list.innerHTML = '<div class="text-center text-xs text-rose-400 py-6">Liste yüklenemedi.</div>'; return; }
+        if (!data.degerlendirmeler.length) { list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">Henüz bir değerlendirme yapılmadı.</div>'; return; }
+
+        list.innerHTML = data.degerlendirmeler.map(d => {
+          const etiket = DOK_DURUM_ETIKET[d.durum] || DOK_DURUM_ETIKET.bekliyor;
+          const seviye = dokPuanSeviyesi(d.puan);
+          const renk = DOK_PUAN_RENK[seviye];
+          return `
+          <div class="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+            <button type="button" onclick="dokGecmisDetayAcKapat(${d.id})" class="w-full flex items-center justify-between gap-3 p-3 text-left">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="h-9 w-9 shrink-0 rounded-full border-2 ${renk.ring} ${renk.text} flex items-center justify-center font-bold text-xs">${d.puan ?? '—'}</div>
+                <div class="min-w-0">
+                  <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(d.baslik || '')}</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">${escapeHtmlProj(d.degerlendiren_adi || '—')} • ${escapeHtmlProj(d.created_at || '')}</div>
+                </div>
+              </div>
+              <span class="shrink-0 px-2 py-0.5 text-[10px] rounded-md font-bold border ${etiket.cls}">${etiket.label}</span>
+            </button>
+            <div id="dokGecmisDetay_${d.id}" class="hidden px-3 pb-3"></div>
+          </div>`;
+        }).join('');
+      } catch (err) {
+        list.innerHTML = '<div class="text-center text-xs text-rose-400 py-6">Liste yüklenemedi.</div>';
+      }
+    }
+
+    async function dokGecmisDetayAcKapat(id) {
+      const kutu = document.getElementById('dokGecmisDetay_' + id);
+      if (!kutu) return;
+      if (!kutu.classList.contains('hidden')) { kutu.classList.add('hidden'); return; }
+      kutu.classList.remove('hidden');
+      kutu.innerHTML = '<div class="text-center text-xs text-slate-400 py-3">Yükleniyor...</div>';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendirmeler/${id}`);
+        const data = await res.json();
+        if (!res.ok) { kutu.innerHTML = '<div class="text-center text-xs text-rose-400 py-3">Yüklenemedi.</div>'; return; }
+        kutu.innerHTML = dokRaporKartHtml(data.rapor, id, data.durum);
+      } catch (err) {
+        kutu.innerHTML = '<div class="text-center text-xs text-rose-400 py-3">Yüklenemedi.</div>';
+      }
     }
 
   </script>
@@ -11404,16 +11985,84 @@
     <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-cyan-600 to-violet-600 text-white">
       <div class="flex items-center gap-2 text-sm font-bold"><span class="inline-flex items-center justify-center h-6 w-6 rounded-md bg-white shrink-0"><img src="Y_logo.png" alt="BEYES" class="max-h-4 w-auto object-contain"></span> BEYES Asistan</div>
       <div class="flex items-center gap-3">
-        <button onclick="handleClearAiChat()" class="text-white/80 hover:text-white text-xs" title="Yeni Sohbet"><i class="fa-solid fa-rotate-left"></i></button>
+        <button onclick="toggleAiSohbetListesi()" class="text-white/80 hover:text-white text-xs" title="Geçmiş Sohbetler"><i class="fa-solid fa-clock-rotate-left"></i></button>
+        <button onclick="handleYeniSohbet()" class="text-white/80 hover:text-white text-xs" title="Yeni Sohbet"><i class="fa-solid fa-plus"></i></button>
+        <button onclick="handleAcikSohbetSil()" class="text-white/80 hover:text-white text-xs" title="Bu Sohbeti Sil"><i class="fa-solid fa-trash"></i></button>
         <button onclick="toggleAiChatWidget()" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </div>
-    <div id="aiChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
-    <div class="p-2.5 border-t border-slate-200 dark:border-slate-800 flex items-end gap-2">
-      <textarea id="aiChatInput" onkeydown="handleAiChatKeydown(event)" rows="1" placeholder="Görevlerinizle ilgili bir şey sorun..." class="flex-1 resize-none bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-cyan-500"></textarea>
-      <button onclick="sendAiChatMessage()" class="w-9 h-9 shrink-0 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white flex items-center justify-center">
-        <i class="fa-solid fa-paper-plane text-xs"></i>
-      </button>
+    <div id="aiSohbetListView" class="hidden flex-1 overflow-y-auto p-2 space-y-1 bg-slate-50 dark:bg-slate-950/40"></div>
+    <div id="aiChatView" class="flex-1 flex flex-col overflow-hidden">
+      <div id="aiChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
+      <div class="p-2.5 border-t border-slate-200 dark:border-slate-800 flex items-end gap-2">
+        <textarea id="aiChatInput" onkeydown="handleAiChatKeydown(event)" rows="1" placeholder="Görevlerinizle ilgili bir şey sorun..." class="flex-1 resize-none bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-cyan-500"></textarea>
+        <button onclick="sendAiChatMessage()" class="w-9 h-9 shrink-0 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white flex items-center justify-center">
+          <i class="fa-solid fa-paper-plane text-xs"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DOKÜMAN DENETİMİ MODALI — RAG + LLM-as-a-Judge (aiDokDenetim.js / /api/dok-denetim/*) -->
+  <div id="dokDenetimModal" onclick="if(event.target===this) closeDokDenetimModal();" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-[80]">
+    <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-3xl max-h-[88vh] overflow-y-auto shadow-2xl space-y-5">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-file-circle-check text-violet-500"></i> Doküman Denetimi
+        </h3>
+        <button onclick="closeDokDenetimModal()" class="text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+        <button id="dokSekmeBtn_yeni" onclick="dokDenetimSekmeSec('yeni')" class="px-4 py-2 text-xs font-bold border-b-2 border-cyan-500 text-cyan-600 dark:text-cyan-400 transition-all">Yeni Değerlendirme</button>
+        <button id="dokSekmeBtn_referans" onclick="dokDenetimSekmeSec('referans')" class="px-4 py-2 text-xs font-bold border-b-2 border-transparent text-slate-500 transition-all">Referans Dokümanlar</button>
+        <button id="dokSekmeBtn_gecmis" onclick="dokDenetimSekmeSec('gecmis')" class="px-4 py-2 text-xs font-bold border-b-2 border-transparent text-slate-500 transition-all">Geçmiş</button>
+      </div>
+
+      <!-- SEKME: Yeni Değerlendirme -->
+      <div id="dokSekme_yeni" class="space-y-3">
+        <p class="text-[11px] text-slate-400">Bir .docx dosyası yükleyin ya da metni doğrudan yapıştırın; onaylı referans dokümanlarla karşılaştırılıp bir uygunluk raporu üretilir.</p>
+        <input type="text" id="dokYeniBaslik" placeholder="Doküman başlığı (boş bırakılırsa dosya adı kullanılır)" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
+        <div>
+          <label class="block text-[11px] font-semibold mb-1.5 text-slate-500 dark:text-slate-400">Karşılaştırılacak referanslar (hiçbiri seçilmezse tümü kullanılır)</label>
+          <div id="dokYeniReferansSecimi" class="flex flex-wrap gap-1.5"></div>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="shrink-0 cursor-pointer bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl transition-all">
+            <i class="fa-solid fa-upload me-1"></i> .docx Seç
+            <input type="file" id="dokYeniDosyaInput" accept=".docx" class="hidden" onchange="dokDosyaSec(this, 'yeni', 'dokYeniDosyaEtiket')">
+          </label>
+          <span id="dokYeniDosyaEtiket" class="text-xs text-slate-400 truncate">Dosya seçilmedi</span>
+        </div>
+        <textarea id="dokYeniMetin" rows="4" placeholder="...veya metni buraya yapıştırın" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500"></textarea>
+        <button id="dokDegerlendirBtn" onclick="handleDokDegerlendir()" class="w-full bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-bold py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-violet-500/20">
+          <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Değerlendir
+        </button>
+        <div id="dokYeniSonuc"></div>
+      </div>
+
+      <!-- SEKME: Referans Dokümanlar -->
+      <div id="dokSekme_referans" class="hidden space-y-4">
+        <div class="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-2.5">
+          <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-plus-circle me-1 text-cyan-500"></i>Referans Ekle</h4>
+          <input type="text" id="dokReferansBaslik" placeholder="Referans başlığı" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
+          <div class="flex items-center gap-2">
+            <label class="shrink-0 cursor-pointer bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl transition-all">
+              <i class="fa-solid fa-upload me-1"></i> .docx Seç
+              <input type="file" id="dokReferansDosyaInput" accept=".docx" class="hidden" onchange="dokDosyaSec(this, 'referans', 'dokReferansDosyaEtiket')">
+            </label>
+            <span id="dokReferansDosyaEtiket" class="text-xs text-slate-400 truncate">Dosya seçilmedi</span>
+          </div>
+          <textarea id="dokReferansMetin" rows="3" placeholder="...veya metni buraya yapıştırın" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500"></textarea>
+          <button id="dokReferansEkleBtn" onclick="handleDokReferansEkle()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2 rounded-xl text-xs transition-all">Referans Hafızasına Ekle</button>
+        </div>
+        <div id="dokReferansListe" class="space-y-2"></div>
+      </div>
+
+      <!-- SEKME: Geçmiş -->
+      <div id="dokSekme_gecmis" class="hidden space-y-2">
+        <div id="dokGecmisListe" class="space-y-2"></div>
+      </div>
     </div>
   </div>
 </body>
