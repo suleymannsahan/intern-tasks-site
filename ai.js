@@ -453,8 +453,6 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
         asama.bitis = isoToTR2(asama.gercekBitis);
         asama.gun = gercekGun;
 
-        // Sonraki TAMAMLANMAMIŞ aşamaları, bu aşamanın gerçek bitişinden itibaren süreleri (gün)
-        // korunarak kaydır — proje bitişi gerçeğe göre güncellenir. 'bitti' aşamalara dokunma.
         const fmtTR2 = (d) => { const g = String(d.getDate()).padStart(2, '0'); const a2 = String(d.getMonth() + 1).padStart(2, '0'); return `${g}.${a2}.${d.getFullYear()}`; };
         let imlec = new Date(asama.gercekBitis);
         for (let j = Number(asamaIndex) + 1; j < plan.adimlar.length; j++) {
@@ -468,7 +466,6 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
           imlec = new Date(yBit);
         }
 
-        // Proje bitişini / toplam günü ve görevin son teslim tarihini güncelle
         const parseTR2 = (str) => { const [g, a2, y] = str.split('.').map(Number); return new Date(y, a2 - 1, g); };
         const planBas2 = parseTR2(plan.adimlar[0].baslangic);
         const planSon2 = parseTR2(plan.adimlar[plan.adimlar.length - 1].bitis);

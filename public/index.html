@@ -10202,7 +10202,7 @@
     }
 
     function closeTaskDetailModal() {
-      ipDuzenleme = null;
+      ipTamamla = null;
       const m = document.getElementById('taskDetailModal');
       if (m) m.classList.add('hidden');
     }
@@ -10356,13 +10356,6 @@
       bitti: { label: 'Tamamlandı', cls: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' }
     };
 
-    // AI planı üretildikten sonra "aşama bitişlerini tek tek onayla/düzenle" adımının durumu.
-    // Doluyken { taskId, plan } tutar; boşken normal görünüm çizilir.
-    let ipDuzenleme = null;
-
-    // Düzenleyici aşama adları (ai.js IS_ADIMLARI ile aynı sıra).
-    const IS_PLANI_ADIMLAR = ['Şematik İnceleme', 'KTTD', 'BDK', 'Visio', 'Sequence', 'Entegrasyon'];
-
     // TR (GG.AA.YYYY) <-> ISO (YYYY-AA-GG) dönüşümleri ve gün farkı.
     function ipTrToIso(tr) {
       const q = String(tr || '').split('.');
@@ -10381,19 +10374,31 @@
       return Math.max(1, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
     }
 
-    // Aşama başlangıçlarını zincirler: 1. aşama = plan başlangıcı (#isPlaniDokumanTarihi),
-    // sonraki aşama başlangıcı = önceki aşamanın bitişi. Bitişlere min koyar (geri tarih engeli).
-    function ipZincirle() {
-      const basEl = document.getElementById('isPlaniDokumanTarihi');
-      if (!basEl) return;
-      let onceki = basEl.value || '';
-      for (let i = 0; i < IS_PLANI_ADIMLAR.length; i++) {
-        const b = document.getElementById('ipBas_' + i);
-        const e = document.getElementById('ipBit_' + i);
-        if (b) b.value = onceki;
-        if (e) e.min = onceki || '';
-        onceki = (e && e.value) ? e.value : '';
+    // Panel içi "Aşamayı Tamamladım" tarih formu açık olan aşama: { taskId, asamaIndex }
+    let ipTamamla = null;
+    function ipTamamlaAc(taskId, asamaIndex) {
+      ipTamamla = { taskId, asamaIndex };
+      openTaskDetailModal(taskId);
+    }
+    function ipTamamlaVazgec() {
+      const tid = ipTamamla && ipTamamla.taskId;
+      ipTamamla = null;
+      if (tid != null) openTaskDetailModal(tid);
+    }
+    async function ipTamamlaKaydet(taskId, asamaIndex) {
+      const inp = document.getElementById('ipTamamlaTarih_' + asamaIndex);
+      const bit = inp ? inp.value : '';
+      if (!bit || !/^\d{4}-\d{2}-\d{2}$/.test(bit)) { showToast('Lütfen bir tarih seçiniz.', 'error'); return; }
+      const task = (tasksList || []).find(t => t.id == taskId);
+      let plan = null;
+      try { plan = task && task.is_plani ? JSON.parse(task.is_plani) : null; } catch (e) {}
+      const a = plan && plan.adimlar ? plan.adimlar[asamaIndex] : null;
+      const basIso = a && a.baslangic ? ipTrToIso(a.baslangic) : (plan ? ipTrToIso(plan.baslangic) : '');
+      if (basIso && bit < basIso) {
+        showToast(`Tamamlanma tarihi, aşamanın başlangıcından (${ipIsoToTR(basIso)}) önce olamaz.`, 'error'); return;
       }
+      ipTamamla = null;
+      await handleIsPlaniStageAction(taskId, asamaIndex, 'bitir', { gercekBaslangic: basIso, gercekBitis: bit });
     }
 
     // Akıllı İş Planı — aşamaları tarih aralıklarına göre renkli Gantt çubuklarıyla çizer.
@@ -10430,113 +10435,10 @@
       return `<div class="mb-3 space-y-1.5">${satirlar}</div>`;
     }
 
-    // AI planı üretildikten sonra gösterilen düzenleyici: her aşamanın BİTİŞİ tek tek onaylanır/değiştirilir.
-    // Başlangıçlar kilitli ve zincirli (1. aşama = plan başlangıcı). Açıklamalar korunur.
-    function ipPlanDuzenleFormu(task) {
-      const plan = ipDuzenleme.plan;
-      const adimlar = plan.adimlar || [];
-      const planBasIso = ipTrToIso(plan.baslangic);
-
-      const satirlar = adimlar.map((a, i) => {
-        const basIso = i === 0 ? planBasIso : ipTrToIso(adimlar[i - 1].bitis);
-        const bitIso = ipTrToIso(a.bitis);
-        return `
-          <div class="flex items-center gap-2">
-            <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 w-24 shrink-0">${i + 1}. ${a.ad}</span>
-            <input type="date" id="ipBas_${i}" value="${basIso}" disabled title="Başlangıç (otomatik)" class="flex-1 min-w-0 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px] text-slate-500" />
-            <span class="text-slate-400 text-[11px] shrink-0">&rarr;</span>
-            <input type="date" id="ipBit_${i}" value="${bitIso}" oninput="ipZincirle()" title="Bitiş — onaylayın veya değiştirin" class="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px]" />
-          </div>`;
-      }).join('');
-
-      return `
-        <div class="bg-violet-500/5 border border-violet-300 dark:border-violet-900/40 rounded-xl p-4">
-          <div class="text-xs font-bold text-violet-600 dark:text-violet-300 mb-2"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Akıllı İş Planı — Aşama Bitişleri</div>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">Yapay zekâ aşağıdaki tarihleri önerdi. Her aşamanın <b>bitişini</b> onaylayın veya değiştirin; başlangıçlar bir önceki aşamanın bitişine göre otomatik güncellenir.</p>
-          <input type="date" id="isPlaniDokumanTarihi" value="${planBasIso}" class="hidden" />
-          <div class="space-y-1.5 mb-3">${satirlar}</div>
-          <div class="flex gap-2">
-            <button onclick="ipEditIptal(${task.id})" class="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold py-2 rounded-xl">İptal</button>
-            <button onclick="ipEditKaydet(${task.id})" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl"><i class="fa-solid fa-check me-1"></i> Planı Kaydet</button>
-          </div>
-        </div>`;
-    }
-
-    // Düzenleyicideki bitişleri alıp planı yeniden kurar (başlangıçlar zincirli), sonra kaydeder.
-    async function ipEditKaydet(taskId) {
-      if (!ipDuzenleme || ipDuzenleme.taskId !== taskId) return;
-      const plan = ipDuzenleme.plan;
-      const adimlar = plan.adimlar || [];
-      const planBasIso = ipTrToIso(plan.baslangic);
-
-      const bitisler = [];
-      for (let i = 0; i < adimlar.length; i++) {
-        const v = (document.getElementById('ipBit_' + i) || {}).value;
-        if (!v) { showToast(`${i + 1}. aşamanın (${adimlar[i].ad}) bitiş tarihini giriniz.`, 'error'); return; }
-        bitisler.push(v);
-      }
-      let onceki = planBasIso;
-      for (let i = 0; i < bitisler.length; i++) {
-        if (bitisler[i] <= onceki) {
-          showToast(`${i + 1}. aşamanın (${adimlar[i].ad}) bitişi, başlangıcından (${ipIsoToTR(onceki)}) sonra olmalı.`, 'error');
-          return;
-        }
-        onceki = bitisler[i];
-      }
-
-      let basIso = planBasIso;
-      const yeniAdimlar = adimlar.map((a, i) => {
-        const bitIso = bitisler[i];
-        const adim = {
-          ...a,
-          baslangic: ipIsoToTR(basIso),
-          bitis: ipIsoToTR(bitIso),
-          gun: ipGunFark(basIso, bitIso),
-          durum: a.durum || 'bekliyor'
-        };
-        basIso = bitIso;
-        return adim;
-      });
-
-      const yeniPlan = {
-        ...plan,
-        baslangic: ipIsoToTR(planBasIso),
-        bitis: ipIsoToTR(bitisler[bitisler.length - 1]),
-        toplamGun: ipGunFark(planBasIso, bitisler[bitisler.length - 1]),
-        adimlar: yeniAdimlar
-      };
-
-      try {
-        const saveRes = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-kaydet`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plan: yeniPlan, userRole: currentUser.role })
-        });
-        if (!saveRes.ok) { const d = await saveRes.json(); showToast('Hata: ' + (d.error || 'Plan kaydedilemedi.'), 'error'); return; }
-        ipDuzenleme = null;
-        await loadTasks();
-        openTaskDetailModal(taskId);
-      } catch (err) {
-        console.error('İş planı kaydetme hatası:', err);
-        showToast('İş planı kaydedilirken bir hata oluştu.', 'error');
-      }
-    }
-
-    // Düzenlemeyi iptal et: taslak atılır, oluşturma formuna dönülür (plan henüz kaydedilmedi).
-    function ipEditIptal(taskId) {
-      ipDuzenleme = null;
-      openTaskDetailModal(taskId);
-    }
-
     function renderIsPlaniSection(task) {
       const canManage = IS_PLANI_YETKILI_ROLLER.includes(currentUser.role);
       const isAssignee = task.assigned_to === currentUser.id;
       if (!canManage && !isAssignee) return '';
-
-      // AI planı üretildikten SONRA: aşama bitişlerini tek tek onaylama/düzenleme adımı.
-      if (ipDuzenleme && ipDuzenleme.taskId === task.id) {
-        return ipPlanDuzenleFormu(task);
-      }
 
       if (!task.is_plani) {
         if (!canManage) return '';
@@ -10585,11 +10487,28 @@
             `;
           }
         } else if ((durum === 'bekliyor' || durum === 'devam') && oncekiBitti && isAssignee) {
-          actionHtml = `
-            <button onclick="handleIsPlaniStageAction(${task.id}, ${i}, 'bitir')" class="mt-2 w-full bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-semibold py-1.5 rounded-lg">
-              <i class="fa-solid fa-check me-1"></i> Aşamayı Tamamladım
-            </button>
-          `;
+          const basIso = ipTrToIso(a.baslangic);
+          const bugunIso = new Date().toISOString().slice(0, 10);
+          const varsayilan = (bugunIso >= basIso) ? bugunIso : basIso;
+          if (ipTamamla && ipTamamla.taskId === task.id && ipTamamla.asamaIndex === i) {
+            actionHtml = `
+              <div class="mt-2 bg-cyan-500/5 border border-cyan-300 dark:border-cyan-900/40 rounded-lg p-2">
+                <label class="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bu aşamayı hangi tarihte tamamladınız?</label>
+                <div class="flex items-center gap-1.5">
+                  <input type="date" id="ipTamamlaTarih_${i}" value="${varsayilan}" min="${basIso}" class="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-[11px]" />
+                  <button onclick="ipTamamlaKaydet(${task.id}, ${i})" class="shrink-0 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg"><i class="fa-solid fa-check me-1"></i>Kaydet</button>
+                  <button onclick="ipTamamlaVazgec()" class="shrink-0 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-semibold px-2 py-1 rounded-lg">Vazgeç</button>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-1">Başlangıç: ${a.baslangic} (otomatik)</p>
+              </div>
+            `;
+          } else {
+            actionHtml = `
+              <button onclick="ipTamamlaAc(${task.id}, ${i})" class="mt-2 w-full bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-semibold py-1.5 rounded-lg">
+                <i class="fa-solid fa-check me-1"></i> Aşamayı Tamamladım
+              </button>
+            `;
+          }
         }
 
         return `
@@ -10639,8 +10558,14 @@
         const plan = await res.json();
         if (!res.ok) { showToast('Hata: ' + (plan.error || 'Plan oluşturulamadı.'), 'error'); return; }
 
-        // AI planı hazır. Kaydetmeden ÖNCE: aşama bitişlerini tek tek onaylama/düzenleme adımına geç.
-        ipDuzenleme = { taskId, plan };
+        const saveRes = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-kaydet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan, userRole: currentUser.role })
+        });
+        if (!saveRes.ok) { const d = await saveRes.json(); showToast('Hata: ' + (d.error || 'Plan kaydedilemedi.'), 'error'); return; }
+
+        await loadTasks();
         openTaskDetailModal(taskId);
       } catch (err) {
         console.error('İş planı oluşturma hatası:', err);
@@ -10648,15 +10573,16 @@
       }
     }
 
-    async function handleIsPlaniStageAction(taskId, asamaIndex, islem) {
+    async function handleIsPlaniStageAction(taskId, asamaIndex, islem, extra) {
+      const govde = { asamaIndex, islem, kullanici: currentUser.name, userId: currentUser.id, userRole: currentUser.role };
+      if (extra && extra.gercekBaslangic) govde.gercekBaslangic = extra.gercekBaslangic;
+      if (extra && extra.gercekBitis) govde.gercekBitis = extra.gercekBitis;
+
       try {
         const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/asama-durum`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            asamaIndex, islem, kullanici: currentUser.name,
-            userId: currentUser.id, userRole: currentUser.role
-          })
+          body: JSON.stringify(govde)
         });
         const data = await res.json();
         if (!res.ok) { showToast('Hata: ' + (data.error || 'İşlem yapılamadı.'), 'error'); return; }
