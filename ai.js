@@ -632,7 +632,8 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
     }
   });
 
-  // Bildirimi okundu işaretle (tek ya da hepsi)
+  // Bildirimi okundu işaretle (tek ya da hepsi) — geriye dönük uyumluluk için tutulur,
+  // panel artık görüntülemede DELETE ile siliyor (bkz. aşağıdaki iki uç).
   router.post('/bildirimler/okundu', async (req, res) => {
     try {
       const { bildirimId, userId, hepsi } = req.body;
@@ -642,6 +643,31 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
         await db.execute({ sql: `UPDATE asama_bildirimleri SET okundu = 1 WHERE id = ?`, args: [bildirimId] });
       }
       res.json({ message: 'Okundu işaretlendi.' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Bir iş planı bildirimi görüntülendiğinde: kalıcı olarak silinir (ana bildirim ziliyle aynı
+  // mantık). Risk/gecikme bildirimleri task+aşama+kullanıcı bazında tekilleştirilerek yazıldığı
+  // için (riskBildirimleriYaz / gecikme-kontrol), satır silinince konu hâlâ güncelse bir sonraki
+  // taramada bildirim kendiliğinden yeniden oluşur — bilgi kaybolmaz.
+  router.delete('/bildirimler/:id', async (req, res) => {
+    try {
+      await db.execute({ sql: `DELETE FROM asama_bildirimleri WHERE id = ?`, args: [req.params.id] });
+      res.json({ message: 'ok' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // "Tümünü Temizle" — kullanıcının tüm iş planı bildirimlerini siler
+  router.delete('/bildirimler', async (req, res) => {
+    try {
+      const userId = req.query.userId;
+      if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
+      await db.execute({ sql: `DELETE FROM asama_bildirimleri WHERE user_id = ?`, args: [userId] });
+      res.json({ message: 'ok' });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -777,4 +803,25 @@ ${gorevMetni}`;
   return router;
 }
 
-module.exports = { createAiRouter, initAiSchema, IS_PLANI_YETKILI };
+// İş Planı Bildirimleri (asama_bildirimleri) için "günlük" temizlik: bugüne ait olmayan
+// (dünden kalma) satırlar silinir. created_at burada saat içermeyen salt tarihtir ("YYYY-MM-DD"),
+// bu yüzden ana bildirim zilindeki gibi kayan 24 saat değil, takvim gününe göre temizlenir.
+// Risk/gecikme bildirimleri tekilleştirilerek yazıldığından (bkz. riskBildirimleriYaz /
+// gecikme-kontrol), satır silinince konu hâlâ güncelse yeni taramada kendiliğinden yeniden oluşur.
+let _bildirimTemizlikBasladi = false;
+function startBildirimCleanup(db) {
+  if (_bildirimTemizlikBasladi) return;
+  _bildirimTemizlikBasladi = true;
+  const tick = async () => {
+    try {
+      const bugunStr = nowTurkeyLocal().substring(0, 10); // 'YYYY-MM-DD'
+      const r = await db.execute({ sql: `DELETE FROM asama_bildirimleri WHERE created_at < ?`, args: [bugunStr] });
+      if (r.rowsAffected) console.log(`🧹 ${r.rowsAffected} eski iş planı bildirimi temizlendi.`);
+    } catch (e) { console.error('İş planı bildirimi temizleme hatası:', e.message); }
+  };
+  setTimeout(tick, 25000);
+  setInterval(tick, 60 * 60 * 1000);
+  console.log('🧹 İş Planı Bildirimleri günlük temizleme zamanlayıcısı aktif.');
+}
+
+module.exports = { createAiRouter, initAiSchema, IS_PLANI_YETKILI, startBildirimCleanup };

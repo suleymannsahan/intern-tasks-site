@@ -1507,6 +1507,8 @@ app.use('/api', aiDokDenetim.createDokDenetimRouter(db, { isAdmin }));
 
 // Bildirim zili: 24 saatten eski, hiç tıklanmamış bildirimleri otomatik temizler.
 startNotificationCleanup();
+// İş Planı Bildirimleri: dünden kalma, hiç görüntülenmemiş satırları günlük temizler.
+ai.startBildirimCleanup(db);
 
 // --- SİSTEM AYARLARI ---
 
