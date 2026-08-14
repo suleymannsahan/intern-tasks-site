@@ -11217,7 +11217,7 @@
           btn.title = s.baslik || '';
           btn.onclick = async () => { await aiSohbetSecVeYukle(s.id); toggleAiSohbetListesi(); };
           const sil = document.createElement('button');
-          sil.className = 'shrink-0 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100';
+          sil.className = 'shrink-0 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-rose-500';
           sil.innerHTML = '<i class="fa-solid fa-trash text-[10px]"></i>';
           sil.title = 'Sohbeti sil';
           sil.onclick = (e) => aiSohbetSil(s.id, e);
@@ -11257,6 +11257,7 @@
     async function aiSohbetSil(sohbetId, evt) {
       if (evt) evt.stopPropagation();
       if (!currentUser) return;
+      if (!(await showConfirm('Bu sohbeti kalıcı olarak silmek istediğinize emin misiniz?'))) return;
       try {
         await fetch(`${API_BASE_URL}/api/agent/conversations/${sohbetId}`, {
           method: 'DELETE',
@@ -11268,6 +11269,12 @@
       }
       if (sohbetId === currentSohbetId) aiSohbetDurumSifirla();
       renderAiSohbetListesi();
+    }
+
+    // Başlıktaki çöp kutusu: o an ekranda açık olan sohbeti geçmiş listesine girmeden siler.
+    async function handleAcikSohbetSil() {
+      if (!currentSohbetId) { showToast('Silinecek açık bir sohbet yok.', 'error'); return; }
+      await aiSohbetSil(currentSohbetId);
     }
 
     function toggleAiChatWidget() {
@@ -11898,6 +11905,7 @@
       <div class="flex items-center gap-3">
         <button onclick="toggleAiSohbetListesi()" class="text-white/80 hover:text-white text-xs" title="Geçmiş Sohbetler"><i class="fa-solid fa-clock-rotate-left"></i></button>
         <button onclick="handleYeniSohbet()" class="text-white/80 hover:text-white text-xs" title="Yeni Sohbet"><i class="fa-solid fa-plus"></i></button>
+        <button onclick="handleAcikSohbetSil()" class="text-white/80 hover:text-white text-xs" title="Bu Sohbeti Sil"><i class="fa-solid fa-trash"></i></button>
         <button onclick="toggleAiChatWidget()" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </div>
