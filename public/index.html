@@ -7750,6 +7750,8 @@
       document.getElementById('dashboardContainer').classList.remove('hidden');
       const aiBtn = document.getElementById('aiChatWidgetBtn');
       if (aiBtn) aiBtn.classList.remove('hidden');
+      // Sohbet asistanının geçmiş konuşmalarını yükle (AI)
+      loadAiChatHistory();
       // İş Planı bildirim takibini başlat (AI)
       baslatIpBildirimTakibi();
 
@@ -11073,6 +11075,44 @@
     // AI ajan katmanı: onay bekleyen yazma işlemi burada tutulur ({name, args})
     let bekleyenIslem = null;
 
+    // Sohbet panelini geçmiş konuşmalarla doldurur (giriş yapıldığında bir kez çağrılır).
+    async function loadAiChatHistory() {
+      const box = document.getElementById('aiChatMessages');
+      if (!box || !currentUser) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/agent/chat/history?userId=${currentUser.id}`);
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.history)) return;
+        box.innerHTML = '';
+        aiChatHistory = [];
+        data.history.forEach(h => {
+          appendAiChatBubble(h.role, h.content);
+          aiChatHistory.push({ role: h.role, content: h.content });
+        });
+        if (aiChatHistory.length > 16) aiChatHistory = aiChatHistory.slice(-16);
+      } catch (err) {
+        console.error('Sohbet geçmişi yüklenemedi:', err.message);
+      }
+    }
+
+    // "Yeni Sohbet" düğmesi: kayıtlı geçmişi sunucudan siler ve paneli sıfırlar.
+    async function handleClearAiChat() {
+      const box = document.getElementById('aiChatMessages');
+      if (!currentUser) return;
+      try {
+        await fetch(`${API_BASE_URL}/api/agent/chat/history`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id })
+        });
+      } catch (err) {
+        console.error('Sohbet geçmişi temizlenemedi:', err.message);
+      }
+      aiChatHistory = [];
+      bekleyenIslem = null;
+      if (box) box.innerHTML = '';
+    }
+
     function toggleAiChatWidget() {
       const panel = document.getElementById('aiChatPanel');
       if (!panel) return;
@@ -11342,7 +11382,10 @@
   <div id="aiChatPanel" class="hidden fixed bottom-24 right-5 z-[70] w-80 sm:w-96 max-w-[92vw] h-[28rem] max-h-[75vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-cyan-600 to-violet-600 text-white">
       <div class="flex items-center gap-2 text-sm font-bold"><span class="inline-flex items-center justify-center h-6 w-6 rounded-md bg-white shrink-0"><img src="Y_logo.png" alt="BEYES" class="max-h-4 w-auto object-contain"></span> BEYES Asistan</div>
-      <button onclick="toggleAiChatWidget()" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      <div class="flex items-center gap-3">
+        <button onclick="handleClearAiChat()" class="text-white/80 hover:text-white text-xs" title="Yeni Sohbet"><i class="fa-solid fa-rotate-left"></i></button>
+        <button onclick="toggleAiChatWidget()" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
     </div>
     <div id="aiChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
     <div class="p-2.5 border-t border-slate-200 dark:border-slate-800 flex items-end gap-2">

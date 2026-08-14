@@ -608,6 +608,18 @@ function createAgentRouter(db, { isAdmin }) {
   // Toplantı bildirimlerini server.js ile aynı tabloya yazan yardımcı (db'ye bağlı)
   const agentNotifyUsers = makeAgentNotifyUsers(db);
 
+  // Sohbet geçmişini ai_sohbet_gecmisi tablosuna yazar (ai.js initAiSchema tabloyu oluşturur).
+  // Hatayı yutar ki geçmiş kaydedilemese bile kullanıcı yanıtı almaya devam etsin.
+  async function sohbetKaydet(userId, role, content) {
+    if (!userId || !content) return;
+    try {
+      await db.execute({
+        sql: `INSERT INTO ai_sohbet_gecmisi (user_id, role, content, created_at) VALUES (?, ?, ?, ?)`,
+        args: [userId, role, String(content).slice(0, 4000), agentNowTurkeyLocal()]
+      });
+    } catch (e) { console.error('Sohbet geçmişi kaydedilemedi:', e.message); }
+  }
+
   router.use((req, res, next) => {
     if (!MISTRAL_API_KEY) {
       return res.status(503).json({ error: 'Yapay zeka özellikleri yapılandırılmamış (MISTRAL_API_KEY tanımlı değil).' });
@@ -942,6 +954,7 @@ function createAgentRouter(db, { isAdmin }) {
         });
       }
       messages.push({ role: 'user', content: String(message).slice(0, 2000) });
+      sohbetKaydet(userId, 'user', message);
 
       // Araç döngüsü: okuma araçlarını çalıştır, yazma gelirse dur ve onay iste.
       // Herhangi bir aşamada Mistral tool isteği patlarsa, kullanıcıyı boş bırakmamak için
@@ -953,7 +966,9 @@ function createAgentRouter(db, { isAdmin }) {
           const toolCalls = ai.tool_calls || [];
 
           if (!toolCalls.length) {
-            return res.json({ reply: (ai.content || 'Bir yanıt üretemedim.').trim() });
+            const cevap = (ai.content || 'Bir yanıt üretemedim.').trim();
+            sohbetKaydet(userId, 'assistant', cevap);
+            return res.json({ reply: cevap });
           }
 
           // Model asistan mesajını (tool_calls ile) geçmişe ekle
@@ -963,11 +978,14 @@ function createAgentRouter(db, { isAdmin }) {
           const yazma = toolCalls.find(tc => aracYazmaMi(tc.function.name));
           if (yazma) {
             if (!aracYetkiliMi(yazma.function.name, role)) {
-              return res.json({ reply: 'Bu işlem için yetkiniz bulunmuyor.' });
+              const cevap = 'Bu işlem için yetkiniz bulunmuyor.';
+              sohbetKaydet(userId, 'assistant', cevap);
+              return res.json({ reply: cevap });
             }
             let args = {};
             try { args = JSON.parse(yazma.function.arguments || '{}'); } catch (e) {}
             const ozet = await yazmaOzeti(yazma.function.name, args);
+            sohbetKaydet(userId, 'assistant', ozet);
             return res.json({
               requiresConfirmation: true,
               pendingAction: { name: yazma.function.name, args },
@@ -986,13 +1004,17 @@ function createAgentRouter(db, { isAdmin }) {
             });
           }
         }
-        return res.json({ reply: 'İşlem uzadı, lütfen isteğinizi biraz daha netleştirin.' });
+        const zamanAsimi = 'İşlem uzadı, lütfen isteğinizi biraz daha netleştirin.';
+        sohbetKaydet(userId, 'assistant', zamanAsimi);
+        return res.json({ reply: zamanAsimi });
       } catch (toolHata) {
         // Tool yolu başarısız (ör. Mistral araç formatı/servis hatası) → araçsız düz cevaba düş
         console.error('Ajan tool yolu hatası, düz sohbete düşülüyor:', toolHata.message);
         const duzMesajlar = messages.filter(m => m.role === 'system' || m.role === 'user' || (m.role === 'assistant' && !m.tool_calls));
         const cevap = await duzSohbet(duzMesajlar);
-        return res.json({ reply: cevap || 'Şu an araç tabanlı işlemlerde bir sorun var, ama buradayım. Sorunuzu tekrar yazar mısınız?' });
+        const nihaiCevap = cevap || 'Şu an araç tabanlı işlemlerde bir sorun var, ama buradayım. Sorunuzu tekrar yazar mısınız?';
+        sohbetKaydet(userId, 'assistant', nihaiCevap);
+        return res.json({ reply: nihaiCevap });
       }
     } catch (error) {
       console.error('Ajan genel hatası:', error.message);
@@ -1001,10 +1023,47 @@ function createAgentRouter(db, { isAdmin }) {
   });
 
   // ============================================================
+  // GET /api/agent/chat/history?userId=... — kayıtlı sohbet geçmişini getirir (son 40 mesaj)
+  // DELETE /api/agent/chat/history — kullanıcının sohbet geçmişini temizler (yeni sohbet)
+  // ============================================================
+  router.get('/agent/chat/history', async (req, res) => {
+    try {
+      const userId = req.query.userId;
+      if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
+      const r = await db.execute({
+        sql: `SELECT role, content, created_at FROM ai_sohbet_gecmisi WHERE user_id = ? ORDER BY id DESC LIMIT 40`,
+        args: [userId]
+      });
+      res.json({ history: r.rows.reverse() });
+    } catch (error) {
+      res.status(500).json({ error: 'Sohbet geçmişi alınamadı: ' + error.message });
+    }
+  });
+
+  router.delete('/agent/chat/history', async (req, res) => {
+    try {
+      const userId = req.body ? req.body.userId : null;
+      if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
+      await db.execute({ sql: `DELETE FROM ai_sohbet_gecmisi WHERE user_id = ?`, args: [userId] });
+      res.json({ message: 'Sohbet geçmişi temizlendi.' });
+    } catch (error) {
+      res.status(500).json({ error: 'Sohbet geçmişi temizlenemedi: ' + error.message });
+    }
+  });
+
+  // ============================================================
   // POST /api/agent/execute — Onaylanan YAZMA işlemini uygular (yetki TEKRAR kontrol edilir)
   // Body: { userId, name, role, department, action: { name, args } }
   // ============================================================
   router.post('/agent/execute', async (req, res) => {
+    // Bu uçtaki her dönüş noktası ayrı ayrı düzenlenmeden, oluşan "reply" alanını
+    // otomatik olarak sohbet geçmişine yazmak için res.json sarmalanır.
+    const executeUserId = req.body ? req.body.userId : null;
+    const cevapDonduMu = res.json.bind(res);
+    res.json = (payload) => {
+      if (payload && payload.reply) sohbetKaydet(executeUserId, 'assistant', payload.reply);
+      return cevapDonduMu(payload);
+    };
     try {
       const { userId, name, role, department, action } = req.body;
       if (!action || !action.name) return res.status(400).json({ error: 'İşlem bilgisi eksik.' });
