@@ -10170,6 +10170,8 @@
       adimlar.forEach(a => { const b = parseTR(a.bitis); if (b > sonBit) sonBit = b; });
       const toplamMs = Math.max(1, sonBit - bas0);
       const RENKLER = ['#0e7490', '#4338ca', '#6d28d9', '#be185d', '#b45309', '#047857'];
+      // Şu anda üzerinde çalışılan aşama: ilk "bitti" olmayan adım.
+      const guncelIndex = adimlar.findIndex(a => (a.durum || 'bekliyor') !== 'bitti');
       const satirlar = adimlar.map((a, i) => {
         const bas = parseTR(a.baslangic), bit = parseTR(a.bitis);
         let sol = ((bas - bas0) / toplamMs) * 100;
@@ -10179,7 +10181,7 @@
         if (sol + gen > 100) gen = Math.max(3, 100 - sol);
         const durum = a.durum || 'bekliyor';
         const bitti = durum === 'bitti';
-        const aktif = durum === 'devam' || durum === 'onay_bekliyor';
+        const aktif = i === guncelIndex;
         const solukCls = (bitti || aktif) ? '' : 'ip-gantt-soluk';
         const aktifCls = aktif ? 'ip-gantt-active' : '';
         const bittiIk = bitti ? '<i class="fa-solid fa-check text-white text-[9px] me-1"></i>' : '';
