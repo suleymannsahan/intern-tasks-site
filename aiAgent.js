@@ -608,16 +608,25 @@ function createAgentRouter(db, { isAdmin }) {
   // Toplantı bildirimlerini server.js ile aynı tabloya yazan yardımcı (db'ye bağlı)
   const agentNotifyUsers = makeAgentNotifyUsers(db);
 
-  // Sohbet geçmişini ai_sohbet_gecmisi tablosuna yazar (ai.js initAiSchema tabloyu oluşturur).
+  // Bir mesajı, belirli bir kayıtlı sohbete (ai_sohbetler) ait olarak ai_sohbet_gecmisi
+  // tablosuna yazar ve o sohbetin güncellenme zamanını tazeler (liste en-son-üste sıralı olsun diye).
   // Hatayı yutar ki geçmiş kaydedilemese bile kullanıcı yanıtı almaya devam etsin.
-  async function sohbetKaydet(userId, role, content) {
-    if (!userId || !content) return;
+  async function sohbetKaydet(userId, sohbetId, role, content) {
+    if (!userId || !sohbetId || !content) return;
     try {
       await db.execute({
-        sql: `INSERT INTO ai_sohbet_gecmisi (user_id, role, content, created_at) VALUES (?, ?, ?, ?)`,
-        args: [userId, role, String(content).slice(0, 4000), agentNowTurkeyLocal()]
+        sql: `INSERT INTO ai_sohbet_gecmisi (user_id, sohbet_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`,
+        args: [userId, sohbetId, role, String(content).slice(0, 4000), agentNowTurkeyLocal()]
       });
+      await db.execute({ sql: `UPDATE ai_sohbetler SET guncellenme_at = ? WHERE id = ?`, args: [agentNowTurkeyLocal(), sohbetId] });
     } catch (e) { console.error('Sohbet geçmişi kaydedilemedi:', e.message); }
+  }
+
+  // message'ın ilk ~60 karakterinden kısa bir konuşma başlığı üretir (ChatGPT tarzı).
+  function sohbetBasligiUret(message) {
+    const temiz = String(message || '').trim().replace(/\s+/g, ' ');
+    if (!temiz) return 'Yeni Sohbet';
+    return temiz.length > 60 ? temiz.slice(0, 60) + '…' : temiz;
   }
 
   router.use((req, res, next) => {
@@ -941,6 +950,19 @@ function createAgentRouter(db, { isAdmin }) {
       const { userId, name, role, department, message, history } = req.body;
       if (!message || !String(message).trim()) return res.status(400).json({ error: 'Mesaj boş olamaz.' });
 
+      // sohbetId gelmediyse (ilk mesaj) yeni bir konuşma kaydı aç; her yanıtta sohbetId'yi
+      // geri gönder ki istemci sonraki mesajlarda aynı konuşmaya devam etsin.
+      let sohbetId = req.body.sohbetId ? Number(req.body.sohbetId) : null;
+      if (!sohbetId) {
+        const ins = await db.execute({
+          sql: `INSERT INTO ai_sohbetler (user_id, baslik, created_at, guncellenme_at) VALUES (?, ?, ?, ?)`,
+          args: [userId, sohbetBasligiUret(message), agentNowTurkeyLocal(), agentNowTurkeyLocal()]
+        });
+        sohbetId = Number(ins.lastInsertRowid);
+      }
+      const asilJson = res.json.bind(res);
+      res.json = (payload) => asilJson({ ...payload, sohbetId });
+
       const user = { userId, name, role, department };
       const bugunStr = new Date().toISOString().split('T')[0];
       const tools = rolIcinAraclar(role);
@@ -954,7 +976,7 @@ function createAgentRouter(db, { isAdmin }) {
         });
       }
       messages.push({ role: 'user', content: String(message).slice(0, 2000) });
-      sohbetKaydet(userId, 'user', message);
+      sohbetKaydet(userId, sohbetId, 'user', message);
 
       // Araç döngüsü: okuma araçlarını çalıştır, yazma gelirse dur ve onay iste.
       // Herhangi bir aşamada Mistral tool isteği patlarsa, kullanıcıyı boş bırakmamak için
@@ -967,7 +989,7 @@ function createAgentRouter(db, { isAdmin }) {
 
           if (!toolCalls.length) {
             const cevap = (ai.content || 'Bir yanıt üretemedim.').trim();
-            sohbetKaydet(userId, 'assistant', cevap);
+            sohbetKaydet(userId, sohbetId, 'assistant', cevap);
             return res.json({ reply: cevap });
           }
 
@@ -979,13 +1001,13 @@ function createAgentRouter(db, { isAdmin }) {
           if (yazma) {
             if (!aracYetkiliMi(yazma.function.name, role)) {
               const cevap = 'Bu işlem için yetkiniz bulunmuyor.';
-              sohbetKaydet(userId, 'assistant', cevap);
+              sohbetKaydet(userId, sohbetId, 'assistant', cevap);
               return res.json({ reply: cevap });
             }
             let args = {};
             try { args = JSON.parse(yazma.function.arguments || '{}'); } catch (e) {}
             const ozet = await yazmaOzeti(yazma.function.name, args);
-            sohbetKaydet(userId, 'assistant', ozet);
+            sohbetKaydet(userId, sohbetId, 'assistant', ozet);
             return res.json({
               requiresConfirmation: true,
               pendingAction: { name: yazma.function.name, args },
@@ -1005,7 +1027,7 @@ function createAgentRouter(db, { isAdmin }) {
           }
         }
         const zamanAsimi = 'İşlem uzadı, lütfen isteğinizi biraz daha netleştirin.';
-        sohbetKaydet(userId, 'assistant', zamanAsimi);
+        sohbetKaydet(userId, sohbetId, 'assistant', zamanAsimi);
         return res.json({ reply: zamanAsimi });
       } catch (toolHata) {
         // Tool yolu başarısız (ör. Mistral araç formatı/servis hatası) → araçsız düz cevaba düş
@@ -1013,7 +1035,7 @@ function createAgentRouter(db, { isAdmin }) {
         const duzMesajlar = messages.filter(m => m.role === 'system' || m.role === 'user' || (m.role === 'assistant' && !m.tool_calls));
         const cevap = await duzSohbet(duzMesajlar);
         const nihaiCevap = cevap || 'Şu an araç tabanlı işlemlerde bir sorun var, ama buradayım. Sorunuzu tekrar yazar mısınız?';
-        sohbetKaydet(userId, 'assistant', nihaiCevap);
+        sohbetKaydet(userId, sohbetId, 'assistant', nihaiCevap);
         return res.json({ reply: nihaiCevap });
       }
     } catch (error) {
@@ -1023,45 +1045,69 @@ function createAgentRouter(db, { isAdmin }) {
   });
 
   // ============================================================
-  // GET /api/agent/chat/history?userId=... — kayıtlı sohbet geçmişini getirir (son 40 mesaj)
-  // DELETE /api/agent/chat/history — kullanıcının sohbet geçmişini temizler (yeni sohbet)
+  // Kayıtlı sohbetler (ChatGPT tarzı geçmiş listesi):
+  //   GET    /api/agent/conversations?userId=...              → konuşma listesi (başlık + son güncelleme)
+  //   GET    /api/agent/conversations/:id/messages?userId=...  → bir konuşmanın tüm mesajları
+  //   DELETE /api/agent/conversations/:id  (body: {userId})    → bir konuşmayı kalıcı siler
   // ============================================================
-  router.get('/agent/chat/history', async (req, res) => {
+  router.get('/agent/conversations', async (req, res) => {
     try {
       const userId = req.query.userId;
       if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
       const r = await db.execute({
-        sql: `SELECT role, content, created_at FROM ai_sohbet_gecmisi WHERE user_id = ? ORDER BY id DESC LIMIT 40`,
+        sql: `SELECT id, baslik, guncellenme_at FROM ai_sohbetler WHERE user_id = ? ORDER BY guncellenme_at DESC LIMIT 30`,
         args: [userId]
       });
-      res.json({ history: r.rows.reverse() });
+      res.json({ sohbetler: r.rows });
     } catch (error) {
-      res.status(500).json({ error: 'Sohbet geçmişi alınamadı: ' + error.message });
+      res.status(500).json({ error: 'Sohbet listesi alınamadı: ' + error.message });
     }
   });
 
-  router.delete('/agent/chat/history', async (req, res) => {
+  router.get('/agent/conversations/:id/messages', async (req, res) => {
+    try {
+      const userId = req.query.userId;
+      const sohbetId = Number(req.params.id);
+      if (!userId || !sohbetId) return res.status(400).json({ error: 'userId ve sohbet id gerekli.' });
+      const sahiplik = await db.execute({ sql: `SELECT id FROM ai_sohbetler WHERE id = ? AND user_id = ?`, args: [sohbetId, userId] });
+      if (!sahiplik.rows[0]) return res.status(404).json({ error: 'Sohbet bulunamadı.' });
+      const r = await db.execute({
+        sql: `SELECT role, content, created_at FROM ai_sohbet_gecmisi WHERE sohbet_id = ? ORDER BY id ASC`,
+        args: [sohbetId]
+      });
+      res.json({ mesajlar: r.rows });
+    } catch (error) {
+      res.status(500).json({ error: 'Sohbet mesajları alınamadı: ' + error.message });
+    }
+  });
+
+  router.delete('/agent/conversations/:id', async (req, res) => {
     try {
       const userId = req.body ? req.body.userId : null;
-      if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
-      await db.execute({ sql: `DELETE FROM ai_sohbet_gecmisi WHERE user_id = ?`, args: [userId] });
-      res.json({ message: 'Sohbet geçmişi temizlendi.' });
+      const sohbetId = Number(req.params.id);
+      if (!userId || !sohbetId) return res.status(400).json({ error: 'userId ve sohbet id gerekli.' });
+      const sahiplik = await db.execute({ sql: `SELECT id FROM ai_sohbetler WHERE id = ? AND user_id = ?`, args: [sohbetId, userId] });
+      if (!sahiplik.rows[0]) return res.status(404).json({ error: 'Sohbet bulunamadı.' });
+      await db.execute({ sql: `DELETE FROM ai_sohbet_gecmisi WHERE sohbet_id = ?`, args: [sohbetId] });
+      await db.execute({ sql: `DELETE FROM ai_sohbetler WHERE id = ?`, args: [sohbetId] });
+      res.json({ message: 'Sohbet silindi.' });
     } catch (error) {
-      res.status(500).json({ error: 'Sohbet geçmişi temizlenemedi: ' + error.message });
+      res.status(500).json({ error: 'Sohbet silinemedi: ' + error.message });
     }
   });
 
   // ============================================================
   // POST /api/agent/execute — Onaylanan YAZMA işlemini uygular (yetki TEKRAR kontrol edilir)
-  // Body: { userId, name, role, department, action: { name, args } }
+  // Body: { userId, name, role, department, action: { name, args }, sohbetId }
   // ============================================================
   router.post('/agent/execute', async (req, res) => {
     // Bu uçtaki her dönüş noktası ayrı ayrı düzenlenmeden, oluşan "reply" alanını
     // otomatik olarak sohbet geçmişine yazmak için res.json sarmalanır.
     const executeUserId = req.body ? req.body.userId : null;
+    const executeSohbetId = req.body && req.body.sohbetId ? Number(req.body.sohbetId) : null;
     const cevapDonduMu = res.json.bind(res);
     res.json = (payload) => {
-      if (payload && payload.reply) sohbetKaydet(executeUserId, 'assistant', payload.reply);
+      if (payload && payload.reply) sohbetKaydet(executeUserId, executeSohbetId, 'assistant', payload.reply);
       return cevapDonduMu(payload);
     };
     try {

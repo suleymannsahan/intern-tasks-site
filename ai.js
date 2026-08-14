@@ -136,6 +136,33 @@ async function initAiSchema(db) {
       )
     `);
   } catch (e) { console.log('ai_sohbet_gecmisi:', e.message); }
+  // Sohbetleri ayrı konuşma başlıkları altında gruplamak için (ChatGPT tarzı geçmiş listesi)
+  try { await db.execute(`ALTER TABLE ai_sohbet_gecmisi ADD COLUMN sohbet_id INTEGER`); } catch (e) {}
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ai_sohbetler (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        baslik TEXT,
+        created_at TEXT NOT NULL,
+        guncellenme_at TEXT NOT NULL
+      )
+    `);
+  } catch (e) { console.log('ai_sohbetler:', e.message); }
+  // Geriye dönük uyum: sohbet_id eklenmeden önce yazılmış mesajları kullanıcı başına tek bir
+  // "Önceki Sohbet" konuşmasına taşır. sohbet_id atandıktan sonra bu blok bir daha çalışmaz.
+  try {
+    const yetimler = await db.execute(`SELECT DISTINCT user_id FROM ai_sohbet_gecmisi WHERE sohbet_id IS NULL`);
+    for (const row of yetimler.rows) {
+      const uid = row.user_id;
+      const ins = await db.execute({
+        sql: `INSERT INTO ai_sohbetler (user_id, baslik, created_at, guncellenme_at) VALUES (?, 'Önceki Sohbet', ?, ?)`,
+        args: [uid, nowTurkeyLocal(), nowTurkeyLocal()]
+      });
+      const yeniId = Number(ins.lastInsertRowid);
+      await db.execute({ sql: `UPDATE ai_sohbet_gecmisi SET sohbet_id = ? WHERE user_id = ? AND sohbet_id IS NULL`, args: [yeniId, uid] });
+    }
+  } catch (e) { console.log('ai_sohbet_gecmisi migrasyon:', e.message); }
 }
 
 function createAiRouter(db, { isAdmin }) {

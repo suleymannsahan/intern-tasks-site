@@ -7740,8 +7740,13 @@
       ipBildirimListesi = [];
       renderIpBildirimPanel();
       aiChatHistory = [];
+      currentSohbetId = null;
       const aiMsgBox = document.getElementById('aiChatMessages');
       if (aiMsgBox) aiMsgBox.innerHTML = '';
+      const aiListBox = document.getElementById('aiSohbetListView');
+      if (aiListBox) { aiListBox.classList.add('hidden'); aiListBox.innerHTML = ''; }
+      const aiChatViewBox = document.getElementById('aiChatView');
+      if (aiChatViewBox) aiChatViewBox.classList.remove('hidden');
     }
 
     async function showDashboard() {
@@ -11074,43 +11079,139 @@
     let aiChatBusy = false;
     // AI ajan katmanı: onay bekleyen yazma işlemi burada tutulur ({name, args})
     let bekleyenIslem = null;
+    // Şu an açık olan kayıtlı sohbetin id'si; null ise bir sonraki mesaj yeni bir sohbet açar.
+    let currentSohbetId = null;
 
-    // Sohbet panelini geçmiş konuşmalarla doldurur (giriş yapıldığında bir kez çağrılır).
+    // Girişte en son güncellenen kayıtlı sohbeti otomatik açar (varsa).
     async function loadAiChatHistory() {
-      const box = document.getElementById('aiChatMessages');
-      if (!box || !currentUser) return;
+      if (!currentUser) return;
       try {
-        const res = await fetch(`${API_BASE_URL}/api/agent/chat/history?userId=${currentUser.id}`);
+        const res = await fetch(`${API_BASE_URL}/api/agent/conversations?userId=${currentUser.id}`);
         const data = await res.json();
-        if (!res.ok || !Array.isArray(data.history)) return;
-        box.innerHTML = '';
-        aiChatHistory = [];
-        data.history.forEach(h => {
-          appendAiChatBubble(h.role, h.content);
-          aiChatHistory.push({ role: h.role, content: h.content });
-        });
-        if (aiChatHistory.length > 16) aiChatHistory = aiChatHistory.slice(-16);
+        if (res.ok && Array.isArray(data.sohbetler) && data.sohbetler.length) {
+          await aiSohbetSecVeYukle(data.sohbetler[0].id);
+        }
       } catch (err) {
         console.error('Sohbet geçmişi yüklenemedi:', err.message);
       }
     }
 
-    // "Yeni Sohbet" düğmesi: kayıtlı geçmişi sunucudan siler ve paneli sıfırlar.
-    async function handleClearAiChat() {
+    // Mevcut sohbet durumunu (ekran + geçmiş dizisi) sıfırlar; sunucudaki kayıtlara dokunmaz.
+    function aiSohbetDurumSifirla() {
+      currentSohbetId = null;
+      aiChatHistory = [];
+      bekleyenIslem = null;
       const box = document.getElementById('aiChatMessages');
+      if (box) box.innerHTML = '';
+    }
+
+    // "Yeni Sohbet" düğmesi: ekranı temizler, bir sonraki mesaj sunucuda yeni bir sohbet açar.
+    function handleYeniSohbet() {
+      aiSohbetDurumSifirla();
+      const list = document.getElementById('aiSohbetListView');
+      const chat = document.getElementById('aiChatView');
+      if (list && chat && !list.classList.contains('hidden')) {
+        list.classList.add('hidden');
+        chat.classList.remove('hidden');
+      }
+      const input = document.getElementById('aiChatInput');
+      if (input) input.focus();
+    }
+
+    // Geçmiş sohbetler / sohbet ekranı arasında geçiş yapar.
+    function toggleAiSohbetListesi() {
+      const list = document.getElementById('aiSohbetListView');
+      const chat = document.getElementById('aiChatView');
+      if (!list || !chat) return;
+      const aciliyor = list.classList.contains('hidden');
+      if (aciliyor) {
+        renderAiSohbetListesi();
+        list.classList.remove('hidden');
+        chat.classList.add('hidden');
+      } else {
+        list.classList.add('hidden');
+        chat.classList.remove('hidden');
+      }
+    }
+
+    // Kayıtlı sohbetlerin listesini çekip sol panelde gösterir.
+    async function renderAiSohbetListesi() {
+      const list = document.getElementById('aiSohbetListView');
+      if (!list || !currentUser) return;
+      list.innerHTML = '<div class="text-center text-[11px] text-slate-400 py-4">Yükleniyor...</div>';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/agent/conversations?userId=${currentUser.id}`);
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.sohbetler)) {
+          list.innerHTML = '<div class="text-center text-[11px] text-rose-400 py-4">Sohbetler yüklenemedi.</div>';
+          return;
+        }
+        if (!data.sohbetler.length) {
+          list.innerHTML = '<div class="text-center text-[11px] text-slate-400 py-4">Henüz kayıtlı sohbet yok.</div>';
+          return;
+        }
+        list.innerHTML = '';
+        data.sohbetler.forEach(s => {
+          const row = document.createElement('div');
+          row.className = 'flex items-center gap-1 group';
+          const btn = document.createElement('button');
+          btn.className = 'flex-1 min-w-0 text-left px-2.5 py-2 rounded-lg text-xs truncate hover:bg-slate-200 dark:hover:bg-slate-800' +
+            (s.id === currentSohbetId ? ' bg-slate-200 dark:bg-slate-800 font-semibold' : '');
+          btn.innerText = s.baslik || 'Yeni Sohbet';
+          btn.title = s.baslik || '';
+          btn.onclick = async () => { await aiSohbetSecVeYukle(s.id); toggleAiSohbetListesi(); };
+          const sil = document.createElement('button');
+          sil.className = 'shrink-0 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100';
+          sil.innerHTML = '<i class="fa-solid fa-trash text-[10px]"></i>';
+          sil.title = 'Sohbeti sil';
+          sil.onclick = (e) => aiSohbetSil(s.id, e);
+          row.appendChild(btn);
+          row.appendChild(sil);
+          list.appendChild(row);
+        });
+      } catch (err) {
+        list.innerHTML = '<div class="text-center text-[11px] text-rose-400 py-4">Sohbetler yüklenemedi.</div>';
+      }
+    }
+
+    // Seçilen kayıtlı sohbeti mesaj kutusuna yükler.
+    async function aiSohbetSecVeYukle(sohbetId) {
+      if (!currentUser) return false;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/agent/conversations/${sohbetId}/messages?userId=${currentUser.id}`);
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.mesajlar)) return false;
+        currentSohbetId = sohbetId;
+        aiChatHistory = [];
+        const box = document.getElementById('aiChatMessages');
+        if (box) box.innerHTML = '';
+        data.mesajlar.forEach(m => {
+          appendAiChatBubble(m.role, m.content);
+          aiChatHistory.push({ role: m.role, content: m.content });
+        });
+        if (aiChatHistory.length > 16) aiChatHistory = aiChatHistory.slice(-16);
+        return true;
+      } catch (err) {
+        console.error('Sohbet yüklenemedi:', err.message);
+        return false;
+      }
+    }
+
+    // Kayıtlı bir sohbeti kalıcı olarak siler.
+    async function aiSohbetSil(sohbetId, evt) {
+      if (evt) evt.stopPropagation();
       if (!currentUser) return;
       try {
-        await fetch(`${API_BASE_URL}/api/agent/chat/history`, {
+        await fetch(`${API_BASE_URL}/api/agent/conversations/${sohbetId}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: currentUser.id })
         });
       } catch (err) {
-        console.error('Sohbet geçmişi temizlenemedi:', err.message);
+        console.error('Sohbet silinemedi:', err.message);
       }
-      aiChatHistory = [];
-      bekleyenIslem = null;
-      if (box) box.innerHTML = '';
+      if (sohbetId === currentSohbetId) aiSohbetDurumSifirla();
+      renderAiSohbetListesi();
     }
 
     function toggleAiChatWidget() {
@@ -11159,10 +11260,12 @@
             department: currentUser.department,
             message,
             name: currentUser.name,
-            history: aiChatHistory
+            history: aiChatHistory,
+            sohbetId: currentSohbetId
           })
         });
         const data = await res.json();
+        if (res.ok && data.sohbetId) currentSohbetId = data.sohbetId;
 
         if (res.ok && data.requiresConfirmation) {
           // Yazma işlemi onay bekliyor: balon yerine Onayla/İptal kartı göster
@@ -11231,7 +11334,8 @@
             name: currentUser.name,
             role: currentUser.role,
             department: currentUser.department,
-            action: bekleyenIslem
+            action: bekleyenIslem,
+            sohbetId: currentSohbetId
           })
         });
         const data = await res.json();
@@ -11383,16 +11487,20 @@
     <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-cyan-600 to-violet-600 text-white">
       <div class="flex items-center gap-2 text-sm font-bold"><span class="inline-flex items-center justify-center h-6 w-6 rounded-md bg-white shrink-0"><img src="Y_logo.png" alt="BEYES" class="max-h-4 w-auto object-contain"></span> BEYES Asistan</div>
       <div class="flex items-center gap-3">
-        <button onclick="handleClearAiChat()" class="text-white/80 hover:text-white text-xs" title="Yeni Sohbet"><i class="fa-solid fa-rotate-left"></i></button>
+        <button onclick="toggleAiSohbetListesi()" class="text-white/80 hover:text-white text-xs" title="Geçmiş Sohbetler"><i class="fa-solid fa-clock-rotate-left"></i></button>
+        <button onclick="handleYeniSohbet()" class="text-white/80 hover:text-white text-xs" title="Yeni Sohbet"><i class="fa-solid fa-plus"></i></button>
         <button onclick="toggleAiChatWidget()" class="text-white/80 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
       </div>
     </div>
-    <div id="aiChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
-    <div class="p-2.5 border-t border-slate-200 dark:border-slate-800 flex items-end gap-2">
-      <textarea id="aiChatInput" onkeydown="handleAiChatKeydown(event)" rows="1" placeholder="Görevlerinizle ilgili bir şey sorun..." class="flex-1 resize-none bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-cyan-500"></textarea>
-      <button onclick="sendAiChatMessage()" class="w-9 h-9 shrink-0 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white flex items-center justify-center">
-        <i class="fa-solid fa-paper-plane text-xs"></i>
-      </button>
+    <div id="aiSohbetListView" class="hidden flex-1 overflow-y-auto p-2 space-y-1 bg-slate-50 dark:bg-slate-950/40"></div>
+    <div id="aiChatView" class="flex-1 flex flex-col overflow-hidden">
+      <div id="aiChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
+      <div class="p-2.5 border-t border-slate-200 dark:border-slate-800 flex items-end gap-2">
+        <textarea id="aiChatInput" onkeydown="handleAiChatKeydown(event)" rows="1" placeholder="Görevlerinizle ilgili bir şey sorun..." class="flex-1 resize-none bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-cyan-500"></textarea>
+        <button onclick="sendAiChatMessage()" class="w-9 h-9 shrink-0 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white flex items-center justify-center">
+          <i class="fa-solid fa-paper-plane text-xs"></i>
+        </button>
+      </div>
     </div>
   </div>
 </body>
