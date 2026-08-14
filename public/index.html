@@ -448,9 +448,6 @@
               <span class="flex items-center gap-2.5"><i class="fa-solid fa-moon text-amber-500 dark:text-cyan-400"></i> Tema Modu</span>
               <span id="themeText" class="text-[10px] text-slate-400">Aydınlık</span>
             </button>
-            <button onclick="openDokDenetimModal()" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 transition-all">
-              <i class="fa-solid fa-file-circle-check text-violet-500"></i> Doküman Denetimi
-            </button>
             <div class="border-t border-slate-200 dark:border-slate-800 my-1"></div>
             <button onclick="handleLogout()" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2.5 transition-all">
               <i class="fa-solid fa-right-from-bracket"></i> Çıkış Yap
@@ -524,6 +521,10 @@
               <button type="button" onclick="openLeaderCalendarPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-regular fa-calendar-days"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Takvim</span>
+              </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
               </button>
             </div>
 
@@ -1048,6 +1049,10 @@
               <button type="button" onclick="openAdminReportsPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-chart-column"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Raporlar</span>
+              </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
               </button>
             </div>
 
@@ -1655,6 +1660,10 @@
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-regular fa-calendar-days"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Takvim</span>
               </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
+              </button>
             </div>
 
             <!-- SAĞ TARAF: hatırlatıcılar (mobilde en üstte / admin-İK'de çalışan sayılarının hemen altında görünür) -->
@@ -1835,6 +1844,10 @@
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-regular fa-calendar-days"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Takvim</span>
               </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
+              </button>
             </div>
 
             <!-- SAĞ TARAF: hatırlatıcılar (Mühendis panelindeki ile aynı kurallar; mobilde en üstte görünür) -->
@@ -1903,6 +1916,10 @@
               <button type="button" onclick="openInternCalendarPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-regular fa-calendar-days"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Takvim</span>
+              </button>
+              <button type="button" onclick="openDokDenetimModal()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-violet-500 dark:hover:border-violet-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-violet-500/10 text-violet-500 flex items-center justify-center text-xl group-hover:bg-violet-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-circle-check"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
               </button>
             </div>
 
