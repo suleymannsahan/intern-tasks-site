@@ -492,6 +492,28 @@ async function notifyUsers(userIds, type, box, title, message, refId) {
   }
 }
 
+// Bildirim zili tıklanmadan biriken satırları temizler ki panelde kalabalık oluşmasın.
+// Bu tablodaki bildirimler tek seferlik olay bildirimleridir (görev atandı, toplantı onaylandı vb.);
+// 24 saatten eski, görülmemiş bir bildirim artık güncel değildir — ilgili konu hâlâ güncelse
+// (görev hâlâ atanmış, toplantı hâlâ bekliyor gibi) zaten görev/toplantı listesinde görünmeye
+// devam eder, sadece "yeni" olay bildirimi silinmiş olur.
+let _notifTemizlikBasladi = false;
+function startNotificationCleanup() {
+  if (_notifTemizlikBasladi) return;
+  _notifTemizlikBasladi = true;
+  const tick = async () => {
+    try {
+      const sinirTarih = new Date(Date.now() - 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000)
+        .toISOString().replace('T', ' ').substring(0, 19);
+      const r = await db.execute({ sql: `DELETE FROM notifications WHERE created_at < ?`, args: [sinirTarih] });
+      if (r.rowsAffected) console.log(`🧹 ${r.rowsAffected} eski bildirim otomatik temizlendi.`);
+    } catch (e) { console.error('Bildirim temizleme hatası:', e.message); }
+  };
+  setTimeout(tick, 20000);
+  setInterval(tick, 60 * 60 * 1000); // saatlik kontrol
+  console.log('🧹 Bildirim otomatik temizleme zamanlayıcısı aktif (24 saat).');
+}
+
 // ============================================================
 // GOOGLE TAKVİM ENTEGRASYONU
 // ============================================================
@@ -1482,6 +1504,9 @@ aiInsights.startRiskScheduler(db); // saatlik risk taraması -> bildirim panelin
 const aiDokDenetim = require('./aiDokDenetim');
 aiDokDenetim.initDokDenetimSchema(db).catch(e => console.error('Doküman Denetimi şema:', e.message));
 app.use('/api', aiDokDenetim.createDokDenetimRouter(db, { isAdmin }));
+
+// Bildirim zili: 24 saatten eski, hiç tıklanmamış bildirimleri otomatik temizler.
+startNotificationCleanup();
 
 // --- SİSTEM AYARLARI ---
 

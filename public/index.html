@@ -2844,14 +2844,67 @@
       `).join('');
     }
 
-    // Bir bildirimin içeriği görüntülendi: sunucudan sil, listeden çıkar, rozetleri güncelle
+    // Bir bildirimin içeriği görüntülendi: sunucudan sil, listeden çıkar, rozetleri güncelle,
+    // sonra bildirimin ilgili olduğu yere (görev/proje/toplantı/vb.) götür.
     async function viewNotification(id) {
-      notificationsList = notificationsList.filter(n => n.id !== id);
+      const n = notificationsList.find(x => x.id === id);
+      notificationsList = notificationsList.filter(x => x.id !== id);
       renderNotificationsPanel();
       refreshNotifBoxBadges();
       try {
         await fetch(`${API_BASE_URL}/api/notifications/${id}`, { method: 'DELETE' });
       } catch (e) { console.error('Bildirim silinemedi:', e.message); }
+      if (n) navigateToNotification(n);
+    }
+
+    // Bir kutucuğa ait, o an EKRANDA GÖRÜNEN (rol bazlı bölüm gizli olmayan) butonu bulup tıklar.
+    // Her rolün kendi "Görevler/Toplantı/..." açma fonksiyonu farklı isimde olduğu için (ör.
+    // openAdminTasksPage/openLeaderTasksPage/openInternTasksPage), isim yerine ortak
+    // data-notif-box işaretinden gidiyoruz — hangi rol section'ı açıksa o kutucuk tıklanır.
+    function dataBoxButonuAc(box) {
+      const adaylar = document.querySelectorAll(`[data-notif-box="${box}"]`);
+      for (const el of adaylar) {
+        if (el.offsetParent !== null) { el.click(); return true; }
+      }
+      return false;
+    }
+
+    // Bildirimin türüne göre ilgili görev/proje detayını açar; özel bir hedefi olmayanlar
+    // (toplantı, yeni kayıt onayı vb.) için o an görünen rol bölümündeki ilgili kutucuğu açar.
+    async function navigateToNotification(n) {
+      if (n.box === 'ATTENDANCE') {
+        // Stajyer giriş/çıkış akışı zaten bildirim panelinin içinde gösteriliyor.
+        openNotificationsPanel();
+        const wrap = document.getElementById('attendanceFeedWrap');
+        if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+
+      closeNotificationsPanel();
+
+      if (n.box === 'TASKS' && n.ref_id) {
+        const acmayiDene = () => {
+          const task = (tasksList || []).find(t => t.id == n.ref_id);
+          if (task) { openTaskDetailModal(n.ref_id); return true; }
+          return false;
+        };
+        if (acmayiDene()) return;
+        if (typeof loadTasks === 'function') {
+          try { await loadTasks(); } catch (e) {}
+          if (acmayiDene()) return;
+        }
+        // Görev artık görünürde değil (silinmiş/erişim değişmiş olabilir) — genel listeye düş
+        dataBoxButonuAc('TASKS');
+        return;
+      }
+
+      if (n.box === 'PROJECTS' && n.ref_id && typeof openProjectDetailPage === 'function') {
+        openProjectDetailPage(n.ref_id);
+        return;
+      }
+
+      // MEETINGS, PENDING_USERS ve özel bir hedefi olmayan diğer kutular
+      dataBoxButonuAc(n.box);
     }
 
     // Bildirimlerin ilgili olduğu her kutucuğun simgesinde küçük bir nokta gösterir/gizler
