@@ -28,6 +28,36 @@
       from { opacity: 0; transform: translateY(16px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    /* Sayfa/panel geçiş animasyonu: her *Section id'li kök konteyner "hidden" sınıfından
+       çıkıp (display:none -> görünür) tekrar render edildiğinde tarayıcı bu animasyonu
+       otomatik olarak baştan çalıştırır — tek tek her openXPage() fonksiyonuna dokunmadan,
+       tüm sayfa geçişlerine tutarlı bir fade+kayma efekti kazandırır. */
+    [id$="Section"]:not(.hidden) {
+      animation: pageSectionEnter 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes pageSectionEnter {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      [id$="Section"]:not(.hidden) { animation: none; }
+    }
+    /* Skeleton loader: içerik yüklenirken düz "Yükleniyor..." metni yerine nabız gibi atan
+       gri bloklar gösterir (gerçek içeriğin yaklaşık şeklini taklit eder). */
+    .skeleton-block {
+      background: linear-gradient(90deg, rgba(148,163,184,0.15) 25%, rgba(148,163,184,0.3) 37%, rgba(148,163,184,0.15) 63%);
+      background-size: 400% 100%;
+      animation: skeletonShimmer 1.4s ease-in-out infinite;
+      border-radius: 0.5rem;
+    }
+    .dark .skeleton-block {
+      background: linear-gradient(90deg, rgba(51,65,85,0.4) 25%, rgba(71,85,105,0.6) 37%, rgba(51,65,85,0.4) 63%);
+      background-size: 400% 100%;
+    }
+    @keyframes skeletonShimmer {
+      0% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
     input[type="date"]::-webkit-calendar-picker-indicator {
       filter: invert(0.8);
       cursor: pointer;
@@ -1895,7 +1925,7 @@
                 <div id="attendanceStatusIcon" class="h-11 w-11 rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-400 flex items-center justify-center text-lg"><i class="fa-solid fa-clock"></i></div>
                 <div>
                   <div class="text-xs text-slate-400">Bugünkü Durum</div>
-                  <div id="attendanceStatusText" class="text-sm font-bold text-slate-800 dark:text-slate-100">Yükleniyor...</div>
+                  <div id="attendanceStatusText" class="text-sm font-bold text-slate-800 dark:text-slate-100"><span class="inline-block h-4 w-20 skeleton-block align-middle"></span></div>
                 </div>
               </div>
               <div class="flex items-center gap-2">
@@ -4074,7 +4104,7 @@
       listEl.innerHTML = engineerOwnedProjects.map(p => {
         const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
         const daysCls = p.days_left < 0 ? 'text-rose-500' : p.days_left <= 3 ? 'text-amber-500' : 'text-emerald-500';
-        return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-3 transition-all">
+        return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
           <div class="flex items-center justify-between gap-2">
             <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
             <span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>
@@ -4171,7 +4201,7 @@
 
     async function renderStageTemplateList() {
       const container = document.getElementById('stageTemplateListContainer');
-      container.innerHTML = `<p class="text-xs text-slate-400">Yükleniyor...</p>`;
+      container.innerHTML = skeletonListHtml(2);
       const templates = await loadStageTemplatesCache(true);
       if (!templates || templates.length === 0) {
         container.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Henüz şablon yok.</p>`;
@@ -4548,6 +4578,26 @@
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
+    // Skeleton loader yardımcıları: "Yükleniyor..." düz metni yerine nabız gibi atan gri
+    // bloklar üretir (.skeleton-block animasyonu <style> içinde tanımlı).
+    function skeletonBar(width = 'w-32', height = 'h-4') {
+      return `<span class="inline-block ${height} ${width} skeleton-block align-middle"></span>`;
+    }
+    function skeletonListHtml(count = 3) {
+      let html = '';
+      for (let i = 0; i < count; i++) {
+        html += `
+          <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+            <div class="h-9 w-9 rounded-lg skeleton-block shrink-0"></div>
+            <div class="flex-1 min-w-0 space-y-1.5">
+              <div class="h-3 w-2/3 skeleton-block"></div>
+              <div class="h-2.5 w-1/3 skeleton-block"></div>
+            </div>
+          </div>`;
+      }
+      return html;
+    }
+
     // Basit toast bildirim
     function showToast(message, type = 'info') {
       let holder = document.getElementById('toastHolder');
@@ -4557,15 +4607,16 @@
         holder.className = 'fixed bottom-5 right-5 z-[100] flex flex-col gap-2 items-end';
         document.body.appendChild(holder);
       }
-      const colors = {
-        success: 'bg-emerald-600 border-emerald-500',
-        error: 'bg-rose-600 border-rose-500',
-        info: 'bg-slate-800 border-slate-600'
+      const accents = {
+        success: { bar: 'bg-emerald-500', icon: 'text-emerald-500' },
+        error: { bar: 'bg-rose-500', icon: 'text-rose-500' },
+        info: { bar: 'bg-cyan-500', icon: 'text-cyan-500' }
       };
       const icons = { success: 'fa-circle-check', error: 'fa-circle-exclamation', info: 'fa-circle-info' };
+      const a = accents[type] || accents.info;
       const t = document.createElement('div');
-      t.className = `${colors[type] || colors.info} text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-2xl border flex items-center gap-2.5 max-w-xs transition-all duration-300 translate-x-4 opacity-0`;
-      t.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${escapeHtmlProj(message)}</span>`;
+      t.className = `relative overflow-hidden bg-white/85 dark:bg-slate-900/80 backdrop-blur-md text-slate-800 dark:text-slate-100 text-sm font-semibold pl-4 pr-4 py-2.5 rounded-xl shadow-2xl border border-white/40 dark:border-slate-700/60 flex items-center gap-2.5 max-w-xs transition-all duration-300 translate-x-4 opacity-0`;
+      t.innerHTML = `<span class="absolute left-0 top-0 bottom-0 w-1 ${a.bar}"></span><i class="fa-solid ${icons[type] || icons.info} ${a.icon}"></i><span>${escapeHtmlProj(message)}</span>`;
       holder.appendChild(t);
       requestAnimationFrame(() => { t.classList.remove('translate-x-4', 'opacity-0'); });
       setTimeout(() => {
@@ -4950,7 +5001,7 @@
       scrollMainTo(0, true);
 
       // Yükleniyor durumları
-      document.getElementById('pdName').innerText = 'Yükleniyor...';
+      document.getElementById('pdName').innerHTML = skeletonBar('w-48', 'h-6');
       document.getElementById('pdPersonalInfo').innerHTML = '';
       document.getElementById('pdProjects').innerHTML = '';
       document.getElementById('pdTasks').innerHTML = '';
@@ -5098,7 +5149,7 @@
         projEl.innerHTML = projects.map(p => {
           const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
           const daysCls = p.days_left < 0 ? 'text-rose-500' : p.days_left <= 3 ? 'text-amber-500' : 'text-emerald-500';
-          return `<button type="button" onclick="openPersonProjectInline(${p.id}, ${u.id})" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-lg p-3 transition-all">
+          return `<button type="button" onclick="openPersonProjectInline(${p.id}, ${u.id})" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
             <div class="flex items-center justify-between gap-2">
               <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
               <span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>
@@ -5243,7 +5294,7 @@
       detailSec.classList.remove('hidden');
       scrollMainTo(0, true);
 
-      document.getElementById('projDetTitle').innerText = 'Yükleniyor...';
+      document.getElementById('projDetTitle').innerHTML = skeletonBar('w-48', 'h-6');
       document.getElementById('projDetMeta').innerHTML = '';
       document.getElementById('projDetBadges').innerHTML = '';
       document.getElementById('projDetNoteRow').classList.add('hidden');
@@ -11309,7 +11360,7 @@
     async function renderAiSohbetListesi() {
       const list = document.getElementById('aiSohbetListView');
       if (!list || !currentUser) return;
-      list.innerHTML = '<div class="text-center text-[11px] text-slate-400 py-4">Yükleniyor...</div>';
+      list.innerHTML = skeletonListHtml(3);
       try {
         const res = await fetch(`${API_BASE_URL}/api/agent/conversations?userId=${currentUser.id}`);
         const data = await res.json();
@@ -11721,7 +11772,7 @@
     async function renderDokYeniReferansSecimi() {
       const el = document.getElementById('dokYeniReferansSecimi');
       if (!el) return;
-      el.innerHTML = '<span class="text-[11px] text-slate-400">Yükleniyor...</span>';
+      el.innerHTML = skeletonBar('w-24', 'h-3.5');
       try {
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`);
         const data = await res.json();
@@ -11917,7 +11968,7 @@
     async function renderDokReferanslar() {
       const list = document.getElementById('dokReferansListe');
       if (!list) return;
-      list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">Yükleniyor...</div>';
+      list.innerHTML = skeletonListHtml(3);
       try {
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`);
         const data = await res.json();
@@ -12004,7 +12055,7 @@
     async function renderDokGecmis() {
       const list = document.getElementById('dokGecmisListe');
       if (!list) return;
-      list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">Yükleniyor...</div>';
+      list.innerHTML = skeletonListHtml(3);
       try {
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendirmeler`);
         const data = await res.json();
@@ -12040,7 +12091,7 @@
       if (!kutu) return;
       if (!kutu.classList.contains('hidden')) { kutu.classList.add('hidden'); return; }
       kutu.classList.remove('hidden');
-      kutu.innerHTML = '<div class="text-center text-xs text-slate-400 py-3">Yükleniyor...</div>';
+      kutu.innerHTML = skeletonListHtml(2);
       try {
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendirmeler/${id}`);
         const data = await res.json();
