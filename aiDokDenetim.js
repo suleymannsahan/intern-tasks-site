@@ -158,11 +158,18 @@ async function referansEkle(db, { baslik, dosyaAdi, tamMetin, ekleyenId, ekleyen
 
 // ---- Yeni dokümanın parçalarına en benzer referans parçalarını bulur --------
 // Brute-force kosinüs benzerliği: bu ölçekte (yüzlerce parça) sorun değil.
-async function enBenzerParcalariBul(db, sorguParcalari, k = 8) {
-  const r = await db.execute(`
+// referansIdler verilirse (kullanıcı belirli referansları seçtiyse) arama SADECE onlarla sınırlanır.
+async function enBenzerParcalariBul(db, sorguParcalari, k = 8, referansIdler = []) {
+  let sql = `
     SELECT p.id, p.parca_metni, p.embedding, ref.baslik AS referans_baslik
     FROM dok_referans_parcalari p JOIN dok_referanslar ref ON ref.id = p.referans_id
-  `);
+  `;
+  const args = [];
+  if (referansIdler && referansIdler.length) {
+    sql += ` WHERE p.referans_id IN (${referansIdler.map(() => '?').join(',')})`;
+    args.push(...referansIdler);
+  }
+  const r = await db.execute({ sql, args });
   const referansParcalari = r.rows
     .map(row => { try { return { ...row, embVec: JSON.parse(row.embedding) }; } catch (e) { return null; } })
     .filter(Boolean);
@@ -296,17 +303,27 @@ function createDokDenetimRouter(db, { isAdmin }) {
   // -------- Değerlendirme (RAG karşılaştırma + LLM-as-a-Judge) --------
   router.post('/dok-denetim/degerlendir', async (req, res) => {
     try {
-      const { userId, userName, baslik, dosyaAdi, dosyaBase64, metin } = req.body;
+      const { userId, userName, baslik, dosyaAdi, dosyaBase64, metin, referansIds } = req.body;
       let tamMetin = metin;
       if (!tamMetin && dosyaBase64) tamMetin = await docxMetneCevir(dosyaBase64);
       if (!tamMetin || !tamMetin.trim()) return res.status(400).json({ error: 'Dokümandan metin okunamadı.' });
 
+      // Kullanıcı belirli referans(lar) seçtiyse (dosyaadaki kaynak farklıysa karışmasın diye)
+      // karşılaştırma SADECE o referanslarla yapılır; seçim yoksa tüm referans havuzu kullanılır.
+      const seciliReferansIds = Array.isArray(referansIds) ? referansIds.map(Number).filter(Number.isInteger) : [];
+
       const parcalar = metniParcala(tamMetin);
-      const sayimSonucu = await db.execute(`SELECT COUNT(*) AS c FROM dok_referans_parcalari`);
+      let sayimSql = `SELECT COUNT(*) AS c FROM dok_referans_parcalari`;
+      let sayimArgs = [];
+      if (seciliReferansIds.length) {
+        sayimSql += ` WHERE referans_id IN (${seciliReferansIds.map(() => '?').join(',')})`;
+        sayimArgs = seciliReferansIds;
+      }
+      const sayimSonucu = await db.execute({ sql: sayimSql, args: sayimArgs });
       const referansVarMi = Number(sayimSonucu.rows[0].c) > 0;
 
       // Çok uzun dokümanlarda maliyeti sınırlamak için ilk 20 parçayla örnekleme yapılır.
-      const benzerParcalar = referansVarMi ? await enBenzerParcalariBul(db, parcalar.slice(0, 20), 8) : [];
+      const benzerParcalar = referansVarMi ? await enBenzerParcalariBul(db, parcalar.slice(0, 20), 8, seciliReferansIds) : [];
       const rapor = await raporUret(tamMetin, benzerParcalar, referansVarMi);
 
       const nihaiBaslik = (baslik && String(baslik).trim()) || dosyaAdi || 'Adsız Doküman';

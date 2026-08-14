@@ -11572,6 +11572,7 @@
     // ============================================================
     let dokDenetimYeniDosya = null;   // { base64, adi } — "Yeni Değerlendirme" sekmesinde seçilen dosya
     let dokReferansYeniDosya = null;  // { base64, adi } — "Referans Dokümanlar" sekmesinde seçilen dosya
+    let dokYeniSeciliReferanslar = []; // "Yeni Değerlendirme" için seçilen referans id'leri; boşsa tümü kullanılır
 
     const DOK_PUAN_RENK = {
       yuksek: { ring: 'border-emerald-500/40', text: 'text-emerald-500' },
@@ -11612,8 +11613,42 @@
           btn.classList.toggle('text-slate-500', s !== sekme);
         }
       });
+      if (sekme === 'yeni') renderDokYeniReferansSecimi();
       if (sekme === 'referans') renderDokReferanslar();
       if (sekme === 'gecmis') renderDokGecmis();
+    }
+
+    // "Yeni Değerlendirme" sekmesinde, o an var olan referansları çip listesi olarak gösterir;
+    // kullanıcı istediği referansı/referansları seçip değerlendirmeyi onlarla sınırlayabilir.
+    async function renderDokYeniReferansSecimi() {
+      const el = document.getElementById('dokYeniReferansSecimi');
+      if (!el) return;
+      el.innerHTML = '<span class="text-[11px] text-slate-400">Yükleniyor...</span>';
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`);
+        const data = await res.json();
+        if (!res.ok || !Array.isArray(data.referanslar)) { el.innerHTML = '<span class="text-[11px] text-rose-400">Referanslar yüklenemedi.</span>'; return; }
+        if (!data.referanslar.length) { el.innerHTML = '<span class="text-[11px] text-slate-400">Henüz referans doküman yok — tüm dokümanlar genel kalite kontrolüyle değerlendirilir.</span>'; return; }
+
+        // Silinmiş bir referans seçili kalmışsa listeden düş
+        const gecerliIdler = new Set(data.referanslar.map(r => r.id));
+        dokYeniSeciliReferanslar = dokYeniSeciliReferanslar.filter(id => gecerliIdler.has(id));
+
+        el.innerHTML = data.referanslar.map(r => {
+          const aktif = dokYeniSeciliReferanslar.includes(r.id);
+          return `<button type="button" onclick="dokYeniReferansToggle(${r.id})" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${aktif
+            ? 'bg-violet-600 text-white border-violet-600'
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'}">${escapeHtmlProj(r.baslik || '')}</button>`;
+        }).join('');
+      } catch (err) {
+        el.innerHTML = '<span class="text-[11px] text-rose-400">Referanslar yüklenemedi.</span>';
+      }
+    }
+
+    function dokYeniReferansToggle(id) {
+      const idx = dokYeniSeciliReferanslar.indexOf(id);
+      if (idx === -1) dokYeniSeciliReferanslar.push(id); else dokYeniSeciliReferanslar.splice(idx, 1);
+      renderDokYeniReferansSecimi();
     }
 
     // Genel .docx -> base64 dosya seçici (hem yeni değerlendirme hem referans ekleme formunda kullanılır)
@@ -11702,7 +11737,8 @@
           userId: currentUser.id,
           userName: currentUser.name,
           baslik: (baslikInput.value || '').trim() || (dokDenetimYeniDosya ? dokDenetimYeniDosya.adi : ''),
-          dosyaAdi: dokDenetimYeniDosya ? dokDenetimYeniDosya.adi : null
+          dosyaAdi: dokDenetimYeniDosya ? dokDenetimYeniDosya.adi : null,
+          referansIds: dokYeniSeciliReferanslar
         };
         if (dokDenetimYeniDosya) govde.dosyaBase64 = dokDenetimYeniDosya.base64;
         else govde.metin = metin;
@@ -11958,6 +11994,10 @@
       <div id="dokSekme_yeni" class="space-y-3">
         <p class="text-[11px] text-slate-400">Bir .docx dosyası yükleyin ya da metni doğrudan yapıştırın; onaylı referans dokümanlarla karşılaştırılıp bir uygunluk raporu üretilir.</p>
         <input type="text" id="dokYeniBaslik" placeholder="Doküman başlığı (boş bırakılırsa dosya adı kullanılır)" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
+        <div>
+          <label class="block text-[11px] font-semibold mb-1.5 text-slate-500 dark:text-slate-400">Karşılaştırılacak referanslar (hiçbiri seçilmezse tümü kullanılır)</label>
+          <div id="dokYeniReferansSecimi" class="flex flex-wrap gap-1.5"></div>
+        </div>
         <div class="flex items-center gap-2">
           <label class="shrink-0 cursor-pointer bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl transition-all">
             <i class="fa-solid fa-upload me-1"></i> .docx Seç
