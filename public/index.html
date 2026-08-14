@@ -320,11 +320,13 @@
     </div>
   </div>
 
-  <!-- GİRİŞ SONRASI TANITIM VİDEOSU: Apple tarzı, tam ekran, kullanıcı aşağı kaydırana kadar
-       loop oynar; kaydırınca (veya ipucuna tıklanınca) ana panele geçilir. -->
-  <div id="introVideoScreen" class="hidden relative w-full h-[180vh] bg-black">
+  <!-- GİRİŞ SONRASI TANITIM VİDEOSU: Apple tarzı, tam ekran; video otomatik oynamaz,
+       kullanıcı aşağı kaydırdıkça oynama pozisyonu (currentTime) kaydırma miktarıyla
+       birebir eşlenir (scroll-scrub). Video sonuna gelinince (veya ipucuna tıklanınca)
+       ana panele geçilir. -->
+  <div id="introVideoScreen" class="hidden relative w-full h-[400vh] bg-black">
     <div class="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center">
-      <video id="introVideo" class="absolute inset-0 w-full h-full object-cover" autoplay muted loop playsinline>
+      <video id="introVideo" class="absolute inset-0 w-full h-full object-cover" muted playsinline preload="auto">
         <source src="login-bg-3.mp4" type="video/mp4">
       </video>
       <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-black/70"></div>
@@ -7558,8 +7560,10 @@
       }
     }
 
-    // Giriş sonrası tanıtım videosu: authContainer'ı gizler, tam ekran videoyu gösterir ve
-    // kullanıcı aşağı kaydırana (veya ipucuna tıklayana) kadar dashboard'u AÇMADAN bekler.
+    // Giriş sonrası tanıtım videosu: authContainer'ı gizler, tam ekran videoyu gösterir.
+    // Video otomatik oynamaz — kullanıcı aşağı kaydırdıkça video.currentTime, kaydırma
+    // oranıyla (scrollY / kaydırılabilir toplam mesafe) birebir eşlenir. Video sonuna
+    // ulaşılınca (veya ipucuna tıklanınca) dashboard AÇILIR.
     let finishPostLoginIntroFn = null;
     function startPostLoginIntro() {
       return new Promise((resolve) => {
@@ -7575,25 +7579,42 @@
         if (welcomeEl) welcomeEl.innerText = currentUser && currentUser.name ? `Hoş geldin, ${currentUser.name}` : '';
 
         const video = document.getElementById('introVideo');
-        if (video) {
-          video.currentTime = 0;
-          video.play().catch(() => {});
-        }
-
         let finished = false;
+        let rafId = null;
+
         const finish = () => {
           if (finished) return;
           finished = true;
           window.removeEventListener('scroll', onScroll);
+          if (rafId !== null) cancelAnimationFrame(rafId);
           introEl.classList.add('hidden');
           if (video) video.pause();
           window.scrollTo(0, 0);
           finishPostLoginIntroFn = null;
           resolve();
         };
-        const onScroll = () => {
-          if (window.scrollY > window.innerHeight * 0.7) finish();
+
+        // Kaydırma oranını videonun süresine eşleyip currentTime'ı günceller (scroll-scrub).
+        const scrubVideo = () => {
+          rafId = null;
+          if (finished || !video || !video.duration || isNaN(video.duration)) return;
+          const maxScroll = introEl.offsetHeight - window.innerHeight;
+          if (maxScroll <= 0) return;
+          const progress = Math.min(1, Math.max(0, window.scrollY / maxScroll));
+          video.currentTime = progress * video.duration;
+          if (progress >= 0.98) finish();
         };
+
+        const onScroll = () => {
+          if (rafId === null) rafId = requestAnimationFrame(scrubVideo);
+        };
+
+        if (video) {
+          video.pause();
+          video.currentTime = 0;
+          video.addEventListener('loadedmetadata', scrubVideo, { once: true });
+        }
+
         window.addEventListener('scroll', onScroll, { passive: true });
         finishPostLoginIntroFn = finish;
       });
