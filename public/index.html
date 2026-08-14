@@ -1404,7 +1404,7 @@
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
             <button type="button" onclick="toggleUrgencyRankingPanel()" class="w-full flex items-center justify-between gap-2 p-5 text-left">
               <h3 class="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <i class="fa-solid fa-arrow-up-wide-short text-indigo-500"></i> Projelerin Aciliyet & Önem Sırası
+                <i class="fa-solid fa-arrow-up-wide-short text-indigo-500"></i> Projelerin Aciliyet & Önem Sırası<span id="urgencyRankingCompanyLabel" class="text-slate-400 font-normal"></span>
               </h3>
               <i id="urgencyRankingChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
             </button>
@@ -3629,7 +3629,7 @@
     }
 
     // ============================================================
-    // PROJE GİDİŞATI PANELİ (Firma → Proje → Planlanan/Gerçekleşen grafik)
+    // PROJE GİDİŞATI PANELİ (Birim → Firma → Mevcut Projeler / Aciliyet Sırası)
     // ============================================================
     // Bu rollerde "Projeler" sayfası kendi birimiyle sabitlenir (Admin gibi tüm birimleri
     // değil, yalnızca kendi biriminin firma/proje/gidişat verilerini görür)
@@ -3815,8 +3815,9 @@
       } catch (e) { projCompaniesCache = []; }
       renderProjectCompanyChips();
       document.getElementById('projCompanyWrap').classList.remove('hidden');
-      // Birim değişince önceki firmanın projeleri Mevcut Projeler'de kalmasın
+      // Birim değişince önceki firmanın projeleri Mevcut Projeler / Aciliyet Sırası'nda kalmasın
       await renderExistingProjectsList();
+      renderUrgencyRanking(cachedUrgencyRanking);
     }
 
     // ADIM 2: Firma çipleri
@@ -3842,12 +3843,21 @@
       projSelectedCompany = companyId;
       renderProjectCompanyChips();
       await renderExistingProjectsList();
-      // Sonucu hemen görsünler diye "Mevcut Projeler" panelini otomatik aç
+      renderUrgencyRanking(cachedUrgencyRanking);
+      // Sonucu hemen görsünler diye "Mevcut Projeler" ve "Aciliyet Sırası" panellerini otomatik aç
       const body = document.getElementById('projExistingProjectsBody');
       const chevron = document.getElementById('projExistingProjectsChevron');
       if (body) body.classList.remove('hidden');
       if (chevron) chevron.classList.add('rotate-180');
+      const urgencyBody = document.getElementById('urgencyRankingBody');
+      const urgencyChevron = document.getElementById('urgencyRankingChevron');
+      if (urgencyBody) urgencyBody.classList.remove('hidden');
+      if (urgencyChevron) urgencyChevron.classList.add('rotate-180');
     }
+
+    // "Projelerin Aciliyet & Önem Sırası" panelinin (Proje Gidişatı içinde) son çekilen tam listesi —
+    // firma seçimi değiştiğinde ağa gitmeden yeniden filtrelemek için önbelleklenir.
+    let cachedUrgencyRanking = [];
 
     // Alt aciliyet listesi + admin/müdür ana ekranının sağ kolon "Geciken Projeler" hatırlatıcısı.
     // Müdür için istek kendi birimiyle sınırlanır (backend bunu department parametresiyle uygular).
@@ -3860,8 +3870,9 @@
         const res = await fetch(url);
         if (!res.ok) return;
         const data = await safeJson(res);
-        renderUrgencyRanking(data.urgencyRanking || []);
-        renderAdminOverdueReminder(data.urgencyRanking || []);
+        cachedUrgencyRanking = data.urgencyRanking || [];
+        renderUrgencyRanking(cachedUrgencyRanking);
+        renderAdminOverdueReminder(cachedUrgencyRanking);
       } catch (e) { console.error('Dashboard özeti alınamadı:', e); }
     }
 
@@ -3898,14 +3909,26 @@
         : upcomingVisible.map(p => cardHtml(p, `${p.days_left} gün kaldı`)).join('');
     }
 
+    // Mevcut Projeler ile aynı mantık: bir firma seçilmeden hiçbir proje listelenmez, seçilen
+    // firmaya ait proje yoksa liste boş kalır.
     function renderUrgencyRanking(projects) {
       const el = document.getElementById('urgencyRankingList');
       if (!el) return;
-      if (projects.length === 0) { el.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Henüz proje eklenmedi. "Firma / Proje Yönet" ile başlayın.</p>`; return; }
+      const labelEl = document.getElementById('urgencyRankingCompanyLabel');
+      if (labelEl) {
+        const company = (projCompaniesCache || []).find(c => c.id === projSelectedCompany);
+        labelEl.innerText = company ? ` — ${company.name}` : '';
+      }
+      if (!projSelectedCompany) {
+        el.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Projeleri görmek için önce bir firma seçin.</p>`;
+        return;
+      }
+      const filtered = (projects || []).filter(p => p.company_id === projSelectedCompany);
+      if (filtered.length === 0) { el.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Bu firmaya ait proje yok.</p>`; return; }
       // Müdür kendi biriminin TÜM projelerini görür (en acilden en az acile);
       // Admin (çok departmanlı, potansiyel olarak uzun liste) ilk 10 ile sınırlı kalır.
       const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
-      const visible = isManagerView ? projects : projects.slice(0, 10);
+      const visible = isManagerView ? filtered : filtered.slice(0, 10);
       el.innerHTML = visible.map((p, i) => {
         let barCls = 'bg-emerald-500', lvl = 'Düşük';
         if (p.urgency >= 70) { barCls = 'bg-rose-500'; lvl = 'Kritik'; }
@@ -3933,13 +3956,13 @@
     // ============================================================
     // MÜHENDİS: "Projeler" kutucuğu ve sağ kolon "Geciken Projeler" hatırlatıcısı.
     // Backend değişikliği gerekmiyor: GET /api/person/:id/detail zaten owner_id'ye göre
-    // filtrelenmiş projeleri (days_left/actual/planned/behind/priority ile) döndürüyor;
+    // filtrelenmiş projeleri (days_left/actual/priority ile) döndürüyor;
     // "aciliyet" skoru admin'deki /api/admin/dashboard formülüyle aynı şekilde client-side hesaplanır.
     // ============================================================
     let engineerOwnedProjects = [];
 
     function computeProjectUrgency(p) {
-      return (p.behind ? 40 : 0) + (p.days_left < 0 ? 60 : Math.max(0, 30 - p.days_left * 2)) +
+      return (p.days_left < 0 ? 60 : Math.max(0, 30 - p.days_left * 2)) +
         (p.priority === 'YÜKSEK' || p.priority === 'HIGH' ? 20 : (p.priority === 'DÜŞÜK' || p.priority === 'LOW' ? -10 : 0));
     }
 
@@ -3976,9 +3999,9 @@
           </div>
           <div class="flex items-center gap-2 mt-2">
             <div class="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-              <div class="h-full ${p.behind ? 'bg-rose-500' : 'bg-cyan-500'} rounded-full" style="width:${Math.min(100, Math.max(3, p.actual))}%"></div>
+              <div class="h-full bg-cyan-500 rounded-full" style="width:${Math.min(100, Math.max(3, p.actual))}%"></div>
             </div>
-            <span class="text-[10px] text-slate-400 shrink-0">%${p.actual}${p.planned ? ' / hedef %' + p.planned : ''}</span>
+            <span class="text-[10px] text-slate-400 shrink-0">%${p.actual}</span>
           </div>
           ${p.note ? `<div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">${escapeHtmlProj(p.note)}</div>` : ''}
         </button>`;
@@ -5000,9 +5023,9 @@
             </div>
             <div class="flex items-center gap-2 mt-2">
               <div class="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                <div class="h-full ${p.behind ? 'bg-rose-500' : 'bg-cyan-500'} rounded-full" style="width:${Math.min(100, Math.max(3, p.actual))}%"></div>
+                <div class="h-full bg-cyan-500 rounded-full" style="width:${Math.min(100, Math.max(3, p.actual))}%"></div>
               </div>
-              <span class="text-[10px] text-slate-400 shrink-0">%${p.actual}${p.planned ? ' / hedef %' + p.planned : ''}</span>
+              <span class="text-[10px] text-slate-400 shrink-0">%${p.actual}</span>
             </div>
             ${p.note ? `<div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">${escapeHtmlProj(p.note)}</div>` : ''}
             <div class="text-[10px] font-semibold text-indigo-500 mt-1.5"><i class="fa-solid fa-chart-line me-1"></i>İlerlemeyi görüntüle / takip et</div>
@@ -5193,19 +5216,6 @@
       renderPersonProjectModal(data);
     }
 
-    // "Planlanan %": manuel girilmez, proje başlangıç/bitiş tarihine göre doğrusal olarak
-    // arka planda hesaplanır (log_date, projenin süresi içinde nerede duruyor).
-    function computePlannedPct(logDate, startDate, endDate) {
-      if (!logDate || !startDate || !endDate) return 0;
-      const start = new Date(startDate + 'T00:00:00');
-      const end = new Date(endDate + 'T00:00:00');
-      const cur = new Date(logDate + 'T00:00:00');
-      const totalMs = end - start;
-      if (totalMs <= 0) return 100;
-      const pct = ((cur - start) / totalMs) * 100;
-      return Math.max(0, Math.min(100, Math.round(pct)));
-    }
-
     async function renderPersonProjectModal(data) {
       const idp = ppIdPrefix;
       const project = data.project;
@@ -5217,8 +5227,6 @@
       const sorted = [...progress].sort((a, b) => a.log_date.localeCompare(b.log_date));
       const last = sorted.length ? sorted[sorted.length - 1] : null;
       const actual = last ? Number(last.actual) : 0;
-      const planned = last ? computePlannedPct(last.log_date, project.start_date, project.end_date) : 0;
-      const behind = actual < planned - 5;
 
       let daysBadge, daysCls;
       if (daysLeft < 0) { daysBadge = `${Math.abs(daysLeft)} gün gecikti`; daysCls = 'bg-rose-500/15 text-rose-600 dark:text-rose-400'; }
@@ -5227,10 +5235,10 @@
 
       document.getElementById(idp + 'Badges').innerHTML = `
         <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${daysCls}">${daysBadge}</span>
-        <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${behind ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400'}">${behind ? 'Planın gerisinde' : 'Yolunda'} · %${actual}</span>
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-600 dark:text-cyan-400">Gerçekleşen · %${actual}</span>
       `;
 
-      // Grafik: zaman içinde planlanan vs. gerçekleşen %
+      // Grafik: zaman içinde gerçekleşen %
       const canvas = document.getElementById(idp + 'Chart');
       const ctx = canvas.getContext('2d');
       if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
@@ -5241,7 +5249,6 @@
           // aynı günde birden fazla giriş yapılsa bile üst üste binmeden ayrı ayrı gösterilir.
           labels: sorted.map((p, i) => `${i + 1}. Giriş`),
           datasets: [
-            { label: 'Planlanan %', data: sorted.map(p => computePlannedPct(p.log_date, project.start_date, project.end_date)), borderColor: '#6366f1', backgroundColor: 'transparent', tension: 0.3 },
             { label: 'Gerçekleşen %', data: sorted.map(p => Number(p.actual)), borderColor: '#06b6d4', backgroundColor: 'transparent', tension: 0.3 }
           ]
         },
@@ -5281,7 +5288,7 @@
           return `
             <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-xs">
               <div class="flex justify-between items-start gap-2">
-                <div class="flex justify-between flex-1 min-w-0 text-slate-500 dark:text-slate-400"><span>${p.log_date}</span><span>Plan %${computePlannedPct(p.log_date, project.start_date, project.end_date)} · Gerçek %${p.actual}</span></div>
+                <div class="flex justify-between flex-1 min-w-0 text-slate-500 dark:text-slate-400"><span>${p.log_date}</span><span>Gerçek %${p.actual}</span></div>
                 ${isAdminViewer ? `
                   <div class="flex items-center gap-1 shrink-0">
                     <button onclick="openEditProgressNote(${p.id})" title="Düzenle" class="text-amber-500 p-0.5"><i class="fa-solid fa-pen"></i></button>
@@ -5564,12 +5571,10 @@
       const actual = document.getElementById(idp + 'Actual').value;
       const note = document.getElementById(idp + 'Note').value.trim();
       if (!log_date) { showToast('Tarih gerekli.', 'error'); return; }
-      const project = personProjectData ? personProjectData.project : null;
-      const planned = project ? computePlannedPct(log_date, project.start_date, project.end_date) : 0;
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects/${personProjectCurrentId}/progress`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ log_date, planned, actual, note, userRole: currentUser.role, userId: currentUser.id })
+          body: JSON.stringify({ log_date, actual, note, userRole: currentUser.role, userId: currentUser.id })
         });
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Kaydedilemedi.', 'error'); return; }
@@ -5598,14 +5603,12 @@
       const actual = document.getElementById(`${idp}EditActual_${progressId}`).value;
       const note = document.getElementById(`${idp}EditNote_${progressId}`).value.trim();
       if (!log_date) { showToast('Tarih gerekli.', 'error'); return; }
-      const project = personProjectData ? personProjectData.project : null;
-      const planned = project ? computePlannedPct(log_date, project.start_date, project.end_date) : 0;
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/progress/${progressId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ log_date, planned, actual, note, userRole: currentUser.role })
+          body: JSON.stringify({ log_date, actual, note, userRole: currentUser.role })
         });
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); return; }
@@ -6787,14 +6790,12 @@
           { key: 'company', label: 'Firma' },
           { key: 'deptLabel', label: 'Birim' },
           { key: 'owner', label: 'Sorumlu' },
-          { key: 'plannedLabel', label: 'Planlanan' },
           { key: 'actualLabel', label: 'Gerçekleşen' },
           { key: 'statusLabel', label: 'Durum' },
           { key: 'endDate', label: 'Bitiş' }
         ], data.projects.map(p => ({
           ...p,
           deptLabel: DEPARTMENT_LABELS[p.department] || p.department,
-          plannedLabel: `%${p.planned}`,
           actualLabel: `%${p.actual}`,
           statusLabel: (REPORT_PROJECT_STATUS_TR[p.status] || p.status) + (p.overdue ? ' (Gecikti)' : '')
         })));
@@ -6819,14 +6820,12 @@
           { key: 'company', label: 'Firma', width: 24 },
           { key: 'deptLabel', label: 'Birim', width: 20 },
           { key: 'owner', label: 'Sorumlu', width: 28 },
-          { key: 'plannedLabel', label: 'Plan', width: 15 },
           { key: 'actualLabel', label: 'Gercek', width: 17 },
           { key: 'statusLabel', label: 'Durum', width: 30 }
         ],
         data.projects.map(p => ({
           ...p,
           deptLabel: DEPARTMENT_LABELS[p.department] || p.department,
-          plannedLabel: `%${p.planned}`,
           actualLabel: `%${p.actual}`,
           statusLabel: (REPORT_PROJECT_STATUS_TR[p.status] || p.status) + (p.overdue ? ' (Gec.)' : '')
         })),

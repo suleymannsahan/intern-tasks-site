@@ -104,47 +104,6 @@ async function initDbMigration() {
 // Sunucu kalkarken veya DB başlatılırken çağırın
 initDbMigration();
 
-// "Planlanan %"yi projenin başlangıç/bitiş tarihine göre doğrusal olarak hesaplar — istemcideki
-// computePlannedPct (index.html) ile birebir aynı formül. Hem açılıştaki backfill hem de aşama
-// tamamlama sonrası otomatik ilerleme kaydı ekleme akışı bu fonksiyonu kullanır.
-// Geçersiz/eksik tarihlerde null döner (0 ile karıştırılmasın diye — çağıran taraf bu durumda
-// kaydı atlamayı ya da 0'a düşmeyi kendi bağlamına göre seçer).
-function computePlannedPctServer(logDate, startDate, endDate) {
-  if (!logDate || !startDate || !endDate) return null;
-  const start = new Date(startDate + 'T00:00:00');
-  const end = new Date(endDate + 'T00:00:00');
-  const cur = new Date(logDate + 'T00:00:00');
-  if (isNaN(start) || isNaN(end) || isNaN(cur)) return null;
-  const totalMs = end - start;
-  if (totalMs <= 0) return 100;
-  return Math.max(0, Math.min(100, Math.round(((cur - start) / totalMs) * 100)));
-}
-
-// Var olan tüm ilerleme kayıtlarının "planned" (Planlanan %) değerini yeniden hesaplar. Sunucu her
-// açılışta çalışır; böylece bir projenin tarihleri sonradan değişse bile eski kayıtlar güncel kalır.
-async function backfillPlannedPercentages() {
-  try {
-    const rows = await db.execute(`
-      SELECT project_progress.id AS id, project_progress.log_date AS log_date, project_progress.planned AS planned,
-             projects.start_date AS start_date, projects.end_date AS end_date
-      FROM project_progress
-      JOIN projects ON project_progress.project_id = projects.id
-    `);
-    let updated = 0;
-    for (const row of rows.rows) {
-      const pct = computePlannedPctServer(row.log_date, row.start_date, row.end_date);
-      if (pct === null) continue;
-      if (Number(row.planned) !== pct) {
-        await db.execute({ sql: `UPDATE project_progress SET planned = ? WHERE id = ?`, args: [pct, row.id] });
-        updated++;
-      }
-    }
-    if (updated > 0) console.log(`✅ ${updated} ilerleme kaydının Planlanan % değeri proje süresine göre yeniden hesaplandı.`);
-  } catch (err) {
-    console.error('Planlanan % yeniden hesaplama hatası:', err.message);
-  }
-}
-
 // ASELSAN firması için varsayılan aşama şablonu: 18 ana aşama, bir kısmının alt aşamaları var.
 // Bu liste sadece ilk seed için kullanılır — kaydedildikten sonra normal bir şablon gibi
 // (stage_templates/stage_template_items) düzenlenebilir/silinebilir.
@@ -326,8 +285,6 @@ async function initDb() {
     try { await db.execute(`ALTER TABLE projects ADD COLUMN note TEXT`); } catch (e) {}
     try { await db.execute(`ALTER TABLE projects ADD COLUMN priority TEXT DEFAULT 'NORMAL'`); } catch (e) {}
     try { await db.execute(`ALTER TABLE projects ADD COLUMN status TEXT DEFAULT 'ACTIVE'`); } catch (e) {}
-
-    await backfillPlannedPercentages();
 
     // ============================================================
     // AŞAMA ŞABLONLARI: bir projeye uygulanabilen, tekrar kullanılabilir "ana aşama + alt aşama"
@@ -1966,7 +1923,7 @@ app.get('/api/reports/projects', async (req, res) => {
       const isOverdue = p.status === 'ACTIVE' && p.end_date && p.end_date < today;
       return {
         id: p.id, name: p.name, company: p.company_name || '-', department: p.department,
-        owner: p.owner_name || '-', planned: latest ? latest.planned : 0, actual: latest ? latest.actual : 0,
+        owner: p.owner_name || '-', actual: latest ? latest.actual : 0,
         status: p.status, priority: p.priority, endDate: p.end_date, overdue: isOverdue
       };
     });
@@ -3350,21 +3307,19 @@ app.get('/api/projects', async (req, res) => {
     const enriched = [];
     for (const p of r.rows) {
       const prog = await db.execute({
-        sql: `SELECT planned, actual, log_date FROM project_progress WHERE project_id = ? ORDER BY log_date ASC`,
+        sql: `SELECT actual, log_date FROM project_progress WHERE project_id = ? ORDER BY log_date ASC`,
         args: [p.id]
       });
       const rows = prog.rows;
       const last = rows.length ? rows[rows.length - 1] : null;
       const actual = last ? Number(last.actual) : 0;
-      const planned = last ? Number(last.planned) : 0;
       const daysLeft = daysBetween(today, p.end_date);
-      const isOverdue = (p.status !== 'COMPLETED') && (daysLeft < 0 || (daysLeft <= 3 && actual < 90 && actual < planned - 5));
+      const isOverdue = (p.status !== 'COMPLETED') && daysLeft < 0;
       enriched.push({
         ...p,
-        actual, planned,
+        actual,
         days_left: daysLeft,
-        is_overdue: isOverdue,
-        behind: actual < planned - 5
+        is_overdue: isOverdue
       });
     }
     res.json(enriched);
@@ -3387,7 +3342,7 @@ app.get('/api/projects/:id', async (req, res) => {
     });
     if (pr.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
     const progress = await db.execute({
-      sql: `SELECT id, log_date, planned, actual, note FROM project_progress WHERE project_id = ? ORDER BY log_date ASC, id ASC`,
+      sql: `SELECT id, log_date, actual, note FROM project_progress WHERE project_id = ? ORDER BY log_date ASC, id ASC`,
       args: [pid]
     });
     res.json({ project: pr.rows[0], progress: progress.rows });
@@ -3535,7 +3490,7 @@ app.delete('/api/projects/:id', async (req, res) => {
 // İlerleme noktası ekle (Admin veya proje sahibi)
 app.post('/api/projects/:id/progress', async (req, res) => {
   try {
-    const { log_date, planned, actual, note, userRole, userId } = req.body;
+    const { log_date, actual, note, userRole, userId } = req.body;
     const pid = req.params.id;
     const cur = await db.execute({ sql: `SELECT owner_id, name FROM projects WHERE id = ?`, args: [pid] });
     if (cur.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
@@ -3544,8 +3499,8 @@ app.post('/api/projects/:id/progress', async (req, res) => {
     if (!isAdmin(userRole) && !isOwner) return res.status(403).json({ error: 'Yetkisiz erişim.' });
     if (!log_date) return res.status(400).json({ error: 'Tarih gerekli.' });
     await db.execute({
-      sql: `INSERT INTO project_progress (project_id, log_date, planned, actual, note, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [pid, log_date, Number(planned) || 0, Number(actual) || 0, note || null, todayISO()]
+      sql: `INSERT INTO project_progress (project_id, log_date, actual, note, created_at) VALUES (?, ?, ?, ?, ?)`,
+      args: [pid, log_date, Number(actual) || 0, note || null, todayISO()]
     });
 
     // Admin eklediyse proje sahibine, sahibi eklediyse Admin'lere bildirim düşür
@@ -3570,15 +3525,15 @@ app.post('/api/projects/:id/progress', async (req, res) => {
 });
 
 // İlerleme noktası sil (Admin)
-// İlerleme notu düzenle (Admin) — tarih/planlanan/gerçekleşen/not alanlarının tümü değiştirilebilir
+// İlerleme notu düzenle (Admin) — tarih/gerçekleşen/not alanları değiştirilebilir
 app.put('/api/progress/:id', async (req, res) => {
   try {
-    const { userRole, log_date, planned, actual, note } = req.body;
+    const { userRole, log_date, actual, note } = req.body;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
     if (!log_date) return res.status(400).json({ error: 'Tarih gerekli.' });
     const result = await db.execute({
-      sql: `UPDATE project_progress SET log_date = ?, planned = ?, actual = ?, note = ? WHERE id = ?`,
-      args: [log_date, Number(planned) || 0, Number(actual) || 0, note || null, req.params.id]
+      sql: `UPDATE project_progress SET log_date = ?, actual = ?, note = ? WHERE id = ?`,
+      args: [log_date, Number(actual) || 0, note || null, req.params.id]
     });
     if (result.rowsAffected === 0) return res.status(404).json({ error: 'Kayıt bulunamadı.' });
     res.json({ message: 'Kayıt güncellendi.' });
@@ -3809,11 +3764,10 @@ app.put('/api/projects/:id/stages/:stageId', async (req, res) => {
       const allRowsRes = await db.execute({ sql: `SELECT id, parent_id, is_done FROM project_stages WHERE project_id = ?`, args: [pid] });
       const percentage = computeStagePercentage(allRowsRes.rows);
       const today = todayISO();
-      const planned = computePlannedPctServer(today, project.start_date, project.end_date) ?? 0;
       const noteText = `${stage.title} ${isDone ? 'tamamlandı' : 'geri alındı'}${isDone && note && note.trim() ? ' — ' + note.trim() : ''}`;
       await db.execute({
-        sql: `INSERT INTO project_progress (project_id, log_date, planned, actual, note, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [pid, today, planned, Math.round(percentage), noteText, new Date().toISOString()]
+        sql: `INSERT INTO project_progress (project_id, log_date, actual, note, created_at) VALUES (?, ?, ?, ?, ?)`,
+        args: [pid, today, Math.round(percentage), noteText, new Date().toISOString()]
       });
     }
 
@@ -3892,17 +3846,16 @@ app.get('/api/person/:id/detail', async (req, res) => {
     const projects = [];
     for (const p of pRes.rows) {
       const prog = await db.execute({
-        sql: `SELECT planned, actual FROM project_progress WHERE project_id = ? ORDER BY log_date DESC LIMIT 1`,
+        sql: `SELECT actual FROM project_progress WHERE project_id = ? ORDER BY log_date DESC LIMIT 1`,
         args: [p.id]
       });
       const last = prog.rows[0];
       const actual = last ? Number(last.actual) : 0;
-      const planned = last ? Number(last.planned) : 0;
       const daysLeft = daysBetween(today, p.end_date);
       projects.push({
         id: p.id, name: p.name, company_name: p.company_name, department: p.department,
         end_date: p.end_date, priority: p.priority, status: p.status, note: p.note,
-        actual, planned, days_left: daysLeft, behind: actual < planned - 5
+        actual, days_left: daysLeft
       });
     }
 
@@ -3947,22 +3900,20 @@ app.get('/api/admin/dashboard', async (req, res) => {
     const all = [];
     for (const p of projRes.rows) {
       const prog = await db.execute({
-        sql: `SELECT planned, actual FROM project_progress WHERE project_id = ? ORDER BY log_date DESC LIMIT 1`,
+        sql: `SELECT actual FROM project_progress WHERE project_id = ? ORDER BY log_date DESC LIMIT 1`,
         args: [p.id]
       });
       const last = prog.rows[0];
       const actual = last ? Number(last.actual) : 0;
-      const planned = last ? Number(last.planned) : 0;
       const daysLeft = daysBetween(today, p.end_date);
-      const behind = actual < planned - 5;
-      const overdue = (p.status !== 'COMPLETED') && (daysLeft < 0 || (daysLeft <= 3 && actual < 90 && behind));
-      // Aciliyet skoru: az gün kalması + geri kalması artırır
-      const urgency = (behind ? 40 : 0) + (daysLeft < 0 ? 60 : Math.max(0, 30 - daysLeft * 2)) +
+      const overdue = (p.status !== 'COMPLETED') && daysLeft < 0;
+      // Aciliyet skoru: son teslim tarihine az gün kalması ve öncelik artırır
+      const urgency = (daysLeft < 0 ? 60 : Math.max(0, 30 - daysLeft * 2)) +
         (p.priority === 'YÜKSEK' || p.priority === 'HIGH' ? 20 : (p.priority === 'DÜŞÜK' || p.priority === 'LOW' ? -10 : 0));
       all.push({
-        id: p.id, name: p.name, company_name: p.company_name, department: p.department,
+        id: p.id, name: p.name, company_id: p.company_id, company_name: p.company_name, department: p.department,
         owner_name: p.owner_name, end_date: p.end_date, priority: p.priority, status: p.status,
-        note: p.note, actual, planned, days_left: daysLeft, behind, is_overdue: overdue,
+        note: p.note, actual, days_left: daysLeft, is_overdue: overdue,
         urgency: Math.round(urgency)
       });
     }
