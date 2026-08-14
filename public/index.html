@@ -4017,7 +4017,7 @@
         : overdueVisible.map(p => cardHtml(p, `${Math.abs(p.days_left)} gün geçti`)).join('');
 
       upcomingEl.innerHTML = upcomingVisible.length === 0
-        ? `<p class="text-xs text-slate-400">Yaklaşan proje yok.</p>`
+        ? emptyStateHtml('fa-diagram-project', 'Yaklaşan proje yok.')
         : upcomingVisible.map(p => cardHtml(p, `${p.days_left} gün kaldı`)).join('');
     }
 
@@ -4036,7 +4036,7 @@
         return;
       }
       const filtered = (projects || []).filter(p => p.company_id === projSelectedCompany);
-      if (filtered.length === 0) { el.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Bu firmaya ait proje yok.</p>`; return; }
+      if (filtered.length === 0) { el.innerHTML = emptyStateHtml('fa-diagram-project', 'Bu firmaya ait proje yok.'); return; }
       // Müdür kendi biriminin TÜM projelerini görür (en acilden en az acile);
       // Admin (çok departmanlı, potansiyel olarak uzun liste) ilk 10 ile sınırlı kalır.
       const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
@@ -4096,8 +4096,8 @@
       if (!listEl || !rankEl) return;
 
       if (engineerOwnedProjects.length === 0) {
-        listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Sorumlu olduğunuz proje yok.</p>`;
-        rankEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Sorumlu olduğunuz proje yok.</p>`;
+        listEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz proje yok.');
+        rankEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz proje yok.');
         return;
       }
 
@@ -4171,7 +4171,7 @@
         : overdue.slice(0, 8).map(p => cardHtml(p, `${Math.abs(p.days_left)} gün geçti`)).join('');
 
       upcomingEl.innerHTML = upcoming.length === 0
-        ? `<p class="text-xs text-slate-400">Yaklaşan proje yok.</p>`
+        ? emptyStateHtml('fa-diagram-project', 'Yaklaşan proje yok.')
         : upcoming.slice(0, 8).map(p => cardHtml(p, `${p.days_left} gün kaldı`)).join('');
     }
 
@@ -4204,7 +4204,7 @@
       container.innerHTML = skeletonListHtml(2);
       const templates = await loadStageTemplatesCache(true);
       if (!templates || templates.length === 0) {
-        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Henüz şablon yok.</p>`;
+        container.innerHTML = emptyStateHtml('fa-layer-group', 'Henüz şablon yok.');
         return;
       }
       container.innerHTML = templates.map(t => `
@@ -4432,7 +4432,7 @@
         if (isManagerView) url += `&department=${encodeURIComponent(currentUser.department)}`;
         const res = await fetch(url);
         const projects = await safeJson(res);
-        if (!projects.length) { el.innerHTML = `<p class="text-xs text-slate-400">Bu firmaya ait proje yok.</p>`; return; }
+        if (!projects.length) { el.innerHTML = emptyStateHtml('fa-diagram-project', 'Bu firmaya ait proje yok.'); return; }
         el.innerHTML = projects.map(p => `
           <div onclick="openProjectDetailPage(${p.id}, 'adminPanelSection')" class="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-2.5 cursor-pointer transition-all">
             <div class="min-w-0">
@@ -4596,6 +4596,11 @@
           </div>`;
       }
       return html;
+    }
+
+    // Boş durum (empty state) yardımcısı: düz gri metin yerine ikon + metin birlikte gösterir.
+    function emptyStateHtml(icon, text, extraClass = '') {
+      return `<div class="text-center py-3 ${extraClass}"><i class="fa-solid ${icon} text-xl text-slate-300 dark:text-slate-600 mb-1.5"></i><p class="text-xs text-slate-400">${text}</p></div>`;
     }
 
     // Basit toast bildirim
@@ -5172,7 +5177,7 @@
       const personTasks = (tasksList || []).filter(t => t.assigned_to == u.id)
         .slice().sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
       if (personTasks.length === 0) {
-        taskEl.innerHTML = `<p class="text-xs text-slate-400 py-2">Bu kişide görev yok.</p>`;
+        taskEl.innerHTML = emptyStateHtml('fa-list-check', 'Bu kişide görev yok.');
       } else {
         const isManagerView = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && u.id != currentUser.id;
         personTasks.forEach(t => {
@@ -5185,7 +5190,7 @@
       // Günlük loglar
       const logEl = document.getElementById('pdLogs');
       if (logs.length === 0) {
-        logEl.innerHTML = `<p class="text-xs text-slate-400 py-2">Günlük not yok.</p>`;
+        logEl.innerHTML = emptyStateHtml('fa-note-sticky', 'Günlük not yok.');
       } else {
         logEl.innerHTML = logs.map(l => `
           <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5">
@@ -5375,6 +5380,11 @@
       const canvas = document.getElementById(idp + 'Chart');
       const ctx = canvas.getContext('2d');
       if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
+      // Çizginin altına hafif bir gradient dolgu (yukarıdan aşağı saydamlaşan cyan) —
+      // düz "transparent" dolguya göre grafiği çok daha zengin/premium gösterir.
+      const chartFill = ctx.createLinearGradient(0, 0, 0, 220);
+      chartFill.addColorStop(0, 'rgba(6, 182, 212, 0.35)');
+      chartFill.addColorStop(1, 'rgba(6, 182, 212, 0)');
       personProjectChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -5382,7 +5392,7 @@
           // aynı günde birden fazla giriş yapılsa bile üst üste binmeden ayrı ayrı gösterilir.
           labels: sorted.map((p, i) => `${i + 1}. Giriş`),
           datasets: [
-            { label: 'Gerçekleşen %', data: sorted.map(p => Number(p.actual)), borderColor: '#06b6d4', backgroundColor: 'transparent', tension: 0.3 }
+            { label: 'Gerçekleşen %', data: sorted.map(p => Number(p.actual)), borderColor: '#06b6d4', backgroundColor: chartFill, fill: true, tension: 0.3, pointBackgroundColor: '#06b6d4', pointBorderColor: '#fff', pointBorderWidth: 1.5, pointRadius: 4, pointHoverRadius: 6 }
           ]
         },
         options: {
@@ -5400,7 +5410,7 @@
       const isAdminViewer = currentUser.role === 'ADMIN' || currentUser.role === 'HR';
       const logsEl = document.getElementById(idp + 'Logs');
       if (sorted.length === 0) {
-        logsEl.innerHTML = `<p class="text-xs text-slate-400">Henüz ilerleme kaydı yok.</p>`;
+        logsEl.innerHTML = emptyStateHtml('fa-chart-line', 'Henüz ilerleme kaydı yok.');
       } else {
         logsEl.innerHTML = sorted.slice().reverse().map(p => {
           if (isAdminViewer && ppEditingId == p.id) {
@@ -5909,6 +5919,9 @@
         return running;
       });
 
+      const personProgressFill = ctx.createLinearGradient(0, 0, 0, 220);
+      personProgressFill.addColorStop(0, 'rgba(6, 182, 212, 0.35)');
+      personProgressFill.addColorStop(1, 'rgba(6, 182, 212, 0)');
       personProgressChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -5917,7 +5930,7 @@
             label: 'Kümülatif Log Girişi',
             data: dataPoints,
             borderColor: '#06b6d4',
-            backgroundColor: '#06b6d420',
+            backgroundColor: personProgressFill,
             tension: 0.3,
             fill: true,
             pointRadius: 3
@@ -6033,7 +6046,7 @@
           });
 
         if (thisWeek.length === 0) {
-          el.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Bu hafta toplantı yok.</p>`;
+          el.innerHTML = emptyStateHtml('fa-calendar-days', 'Bu hafta toplantı yok.');
           return;
         }
         const statusLabels = { APPROVED: 'Onaylı', PENDING: 'Bekliyor' };
@@ -6170,11 +6183,11 @@
 
         pendingList.innerHTML = pending.length > 0
           ? pending.map(renderMeetingCard).join('')
-          : `<p class="text-xs text-slate-400 text-center py-4">Bekleyen talep bulunmuyor.</p>`;
+          : emptyStateHtml('fa-inbox', 'Bekleyen talep bulunmuyor.');
 
         rejectedList.innerHTML = rejected.length > 0
           ? rejected.map(renderMeetingCard).join('')
-          : `<p class="text-xs text-slate-400 text-center py-4">Reddedilen talep bulunmuyor.</p>`;
+          : emptyStateHtml('fa-inbox', 'Reddedilen talep bulunmuyor.');
       } catch (err) {
         console.error("Toplantı talepleri alınamadı:", err);
         const errHtml = `<p class="text-xs text-rose-500 text-center py-4">Veriler yüklenirken hata oluştu.</p>`;
@@ -6473,7 +6486,7 @@
         .slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
 
       if (people.length === 0) {
-        grid.innerHTML = `<p class="text-xs text-slate-400 text-center py-6 col-span-full">Bu rolde kullanıcı bulunmuyor.</p>`;
+        grid.innerHTML = emptyStateHtml('fa-users', 'Bu rolde kullanıcı bulunmuyor.', 'col-span-full');
         return;
       }
 
@@ -6575,7 +6588,7 @@
       if (!el) return;
       const sorted = [...settingsHolidaysWorking].sort();
       if (sorted.length === 0) {
-        el.innerHTML = `<p class="text-xs text-slate-400">Henüz tatil günü eklenmedi.</p>`;
+        el.innerHTML = emptyStateHtml('fa-umbrella-beach', 'Henüz tatil günü eklenmedi.');
         return;
       }
       el.innerHTML = sorted.map(d => `
@@ -7037,7 +7050,7 @@
         updateUserMgmtBadge(users.length);
 
         if (users.length === 0) {
-          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">Kayıtlı kullanıcı yok.</p>`;
+          container.innerHTML = emptyStateHtml('fa-users', 'Kayıtlı kullanıcı yok.');
           return;
         }
 
@@ -9112,7 +9125,7 @@
         const res = await fetch(`${API_BASE_URL}/api/attendance/mine?internId=${currentUser.id}`);
         const rows = await safeJson(res) || [];
         if (!Array.isArray(rows) || rows.length === 0) {
-          listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-3">Henüz kayıt yok.</p>`;
+          listEl.innerHTML = emptyStateHtml('fa-clock', 'Henüz kayıt yok.');
           return;
         }
         listEl.innerHTML = rows.map(r => {
@@ -9157,7 +9170,7 @@
         const res = await fetch(`${API_BASE_URL}/api/attendance/team?engineerId=${currentUser.id}`);
         const rows = await safeJson(res) || [];
         if (!Array.isArray(rows) || rows.length === 0) {
-          listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-3">Henüz kayıt yok.</p>`;
+          listEl.innerHTML = emptyStateHtml('fa-clock', 'Henüz kayıt yok.');
           return;
         }
         listEl.innerHTML = rows.map(r => {
@@ -9212,7 +9225,7 @@
         : overdue.map(t => cardHtml(t, `${Math.abs(t.days_left)} gün geçti`)).join('');
 
       upcomingEl.innerHTML = upcoming.length === 0
-        ? `<p class="text-xs text-slate-400">Yaklaşan görev yok.</p>`
+        ? emptyStateHtml('fa-list-check', 'Yaklaşan görev yok.')
         : upcoming.map(t => cardHtml(t, `${t.days_left} gün kaldı`)).join('');
     }
 
@@ -9364,7 +9377,7 @@
 
       el.innerHTML = '';
       if (mine.length === 0) {
-        el.innerHTML = `<p class="text-xs text-slate-400 col-span-full text-center py-4">Henüz kendinize atadığınız bir görev yok.</p>`;
+        el.innerHTML = emptyStateHtml('fa-list-check', 'Henüz kendinize atadığınız bir görev yok.', 'col-span-full');
         return;
       }
       mine.forEach(t => el.appendChild(createTaskCard(t, t.status === 'APPROVED' || t.status === 'COMPLETED', false)));
@@ -11129,7 +11142,7 @@
       titleEl.innerText = `${d} ${CAL_MONTH_NAMES[m - 1]} ${y}`;
 
       if (dayEvents.length === 0) {
-        bodyEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Bu güne ait kayıt yok.</p>`;
+        bodyEl.innerHTML = emptyStateHtml('fa-calendar-day', 'Bu güne ait kayıt yok.');
       } else {
         bodyEl.innerHTML = dayEvents.map(ev => {
           const isTask = ev.type === 'task';
