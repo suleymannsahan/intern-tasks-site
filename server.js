@@ -1477,6 +1477,12 @@ const aiInsights = require('./aiInsights');
 app.use('/api', aiInsights.createInsightsRouter(db, { isAdmin }));
 aiInsights.startRiskScheduler(db); // saatlik risk taraması -> bildirim paneline yazar
 
+// DOKÜMAN DENETİMİ — RAG + LLM-as-a-Judge: yeni .docx dokümanları onaylı referans
+// dokümanlara göre denetler; onaylanan dokümanlar otomatik olarak referans hafızasına eklenir.
+const aiDokDenetim = require('./aiDokDenetim');
+aiDokDenetim.initDokDenetimSchema(db).catch(e => console.error('Doküman Denetimi şema:', e.message));
+app.use('/api', aiDokDenetim.createDokDenetimRouter(db, { isAdmin }));
+
 // --- SİSTEM AYARLARI ---
 
 // Tüm ayarları döner (varsayılanlarla birleştirilmiş güncel değerler) — Admin/İK
