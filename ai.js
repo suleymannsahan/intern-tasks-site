@@ -125,6 +125,17 @@ async function initAiSchema(db) {
       )
     `);
   } catch (e) { console.log('asama_bildirimleri:', e.message); }
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS ai_sohbet_gecmisi (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `);
+  } catch (e) { console.log('ai_sohbet_gecmisi:', e.message); }
 }
 
 function createAiRouter(db, { isAdmin }) {
