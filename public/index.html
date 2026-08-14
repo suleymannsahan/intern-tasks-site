@@ -7654,11 +7654,18 @@
         const video = document.getElementById('introVideo');
         let finished = false;
         let rafId = null;
+        // Tarayıcı bir seek'i bitirmeden yenisi istenirse seek kuyruğu birikip video
+        // kasar/donar; bu yüzden her an sadece TEK bir seek isteği beklemede tutulur —
+        // 'seeked' olayı gelmeden yeni currentTime yazılmaz, sadece en güncel hedef saklanır.
+        let seekPending = false;
+        let pendingProgress = null;
+        let lastAppliedProgress = -1;
 
         const finish = () => {
           if (finished) return;
           finished = true;
           window.removeEventListener('scroll', onScroll);
+          if (video) video.removeEventListener('seeked', onSeeked);
           if (rafId !== null) cancelAnimationFrame(rafId);
           introEl.classList.add('hidden');
           if (video) video.pause();
@@ -7667,15 +7674,33 @@
           resolve();
         };
 
+        const applyProgress = (progress) => {
+          if (finished || !video || !video.duration || isNaN(video.duration)) return;
+          if (Math.abs(progress - lastAppliedProgress) < 0.003) return;
+          if (seekPending) { pendingProgress = progress; return; }
+          lastAppliedProgress = progress;
+          seekPending = true;
+          video.currentTime = progress * video.duration;
+          if (progress >= 0.98) finish();
+        };
+
+        const onSeeked = () => {
+          seekPending = false;
+          if (pendingProgress !== null) {
+            const next = pendingProgress;
+            pendingProgress = null;
+            applyProgress(next);
+          }
+        };
+
         // Kaydırma oranını videonun süresine eşleyip currentTime'ı günceller (scroll-scrub).
         const scrubVideo = () => {
           rafId = null;
-          if (finished || !video || !video.duration || isNaN(video.duration)) return;
+          if (finished) return;
           const maxScroll = introEl.offsetHeight - window.innerHeight;
           if (maxScroll <= 0) return;
           const progress = Math.min(1, Math.max(0, window.scrollY / maxScroll));
-          video.currentTime = progress * video.duration;
-          if (progress >= 0.98) finish();
+          applyProgress(progress);
         };
 
         const onScroll = () => {
@@ -7685,6 +7710,7 @@
         if (video) {
           video.pause();
           video.currentTime = 0;
+          video.addEventListener('seeked', onSeeked);
           video.addEventListener('loadedmetadata', scrubVideo, { once: true });
         }
 
