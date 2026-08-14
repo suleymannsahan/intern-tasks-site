@@ -11771,7 +11771,7 @@
         const data = await res.json();
         if (!res.ok) { showToast('Hata: ' + (data.error || 'Onaylanamadı.'), 'error'); return; }
         showToast('Doküman onaylandı ve referans hafızasına eklendi.', 'success');
-        await dokDenetimKararSonrasiTazele(id, 'onaylandi');
+        await dokDenetimKararSonrasiTazele(id);
       } catch (err) {
         showToast('İşlem gönderilemedi.', 'error');
       }
@@ -11787,21 +11787,29 @@
         const data = await res.json();
         if (!res.ok) { showToast('Hata: ' + (data.error || 'Reddedilemedi.'), 'error'); return; }
         showToast('Değerlendirme reddedildi.', 'success');
-        await dokDenetimKararSonrasiTazele(id, 'reddedildi');
+        await dokDenetimKararSonrasiTazele(id);
       } catch (err) {
         showToast('İşlem gönderilemedi.', 'error');
       }
     }
 
-    // Onay/ret sonrası: hem "Yeni Değerlendirme" sonuç kartı hem (açıksa) "Geçmiş" listesi güncellenir.
-    async function dokDenetimKararSonrasiTazele(id, yeniDurum) {
+    // Onay/ret sonrası: eğer karar "Yeni Değerlendirme" sekmesindeki canlı sonuç kartından
+    // verildiyse, formu (başlık/dosya/metin/rapor) tamamen sıfırlar — bir sonraki dokümanı
+    // yüklemeye hazır, temiz bir ekranla karşılaşılsın diye (Reddedildi/Onaylandı etiketiyle
+    // ekranda asılı kalmasın). Karar "Geçmiş" sekmesinden verildiyse sadece o liste tazelenir.
+    async function dokDenetimKararSonrasiTazele(id) {
       const sonucBox = document.getElementById('dokYeniSonuc');
       if (sonucBox && sonucBox.innerHTML.includes(`handleDokOnayla(${id})`)) {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendirmeler/${id}`);
-          const data = await res.json();
-          if (res.ok) sonucBox.innerHTML = dokRaporKartHtml(data.rapor, id, yeniDurum);
-        } catch (e) {}
+        sonucBox.innerHTML = '';
+        const baslikInput = document.getElementById('dokYeniBaslik');
+        const metinInput = document.getElementById('dokYeniMetin');
+        const dosyaInput = document.getElementById('dokYeniDosyaInput');
+        const etiket = document.getElementById('dokYeniDosyaEtiket');
+        if (baslikInput) baslikInput.value = '';
+        if (metinInput) metinInput.value = '';
+        if (dosyaInput) dosyaInput.value = '';
+        if (etiket) etiket.innerText = 'Dosya seçilmedi';
+        dokDenetimYeniDosya = null;
       }
       const gecmisSekme = document.getElementById('dokSekme_gecmis');
       if (gecmisSekme && !gecmisSekme.classList.contains('hidden')) renderDokGecmis();
@@ -12001,7 +12009,7 @@
         <div class="flex items-center gap-2">
           <label class="shrink-0 cursor-pointer bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl transition-all">
             <i class="fa-solid fa-upload me-1"></i> .docx Seç
-            <input type="file" accept=".docx" class="hidden" onchange="dokDosyaSec(this, 'yeni', 'dokYeniDosyaEtiket')">
+            <input type="file" id="dokYeniDosyaInput" accept=".docx" class="hidden" onchange="dokDosyaSec(this, 'yeni', 'dokYeniDosyaEtiket')">
           </label>
           <span id="dokYeniDosyaEtiket" class="text-xs text-slate-400 truncate">Dosya seçilmedi</span>
         </div>
