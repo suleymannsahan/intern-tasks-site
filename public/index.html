@@ -1651,14 +1651,14 @@
           <!-- Sadece Test ekibi + plan oluşturma yetkisi olanlara görünür (bkz. renderProjectKartPlaniPicker) -->
           <div id="projDetKartPlaniWrap" class="hidden bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-900/40 rounded-2xl p-5 shadow-sm space-y-3">
             <div class="text-xs font-bold text-violet-600 dark:text-violet-300 flex items-center gap-2"><i class="fa-solid fa-microchip"></i> Kart için Planla</div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400">Test ekibinin sabit 6 aşamalı kart tasarım süreci (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon) — bu projeye bağlı, henüz planı olmayan bir göreve uygulanır.</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">Test ekibinin sabit 6 aşamalı kart tasarım süreci (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon) — henüz planı olmayan bir göreve uygulanır.</p>
             <select id="projDetKartGorev" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"></select>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <select id="projDetKartKategori" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
-                <option value="1">Küçük (3 ay)</option>
-                <option value="2">Orta (4 ay)</option>
-                <option value="3">Büyük (5 ay)</option>
-                <option value="4">Çok Büyük (6 ay)</option>
+                <option value="1">Kategori 1</option>
+                <option value="2">Kategori 2</option>
+                <option value="3">Kategori 3</option>
+                <option value="4">Kategori 4</option>
               </select>
               <input type="date" id="projDetKartBaslangic" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
               <input type="date" id="projDetKartBitis" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
@@ -10833,8 +10833,8 @@
     }
 
     // Proje detay sayfasında "Kart için Planla" kutusunu doldurur/gizler: sadece Test ekibi +
-    // plan oluşturma yetkisi olan roller görür; içindeki seçici, bu projeye bağlı (project_id
-    // eşleşen) ve henüz iş planı olmayan görevleri listeler.
+    // plan oluşturma yetkisi olan roller görür; içindeki seçici, projeyle sınırlı olmaksızın
+    // henüz iş planı olmayan tüm görevleri listeler.
     function renderProjectKartPlaniPicker(project) {
       const wrap = document.getElementById('projDetKartPlaniWrap');
       if (!wrap) return;
@@ -10844,10 +10844,10 @@
 
       const secim = document.getElementById('projDetKartGorev');
       const btn = document.getElementById('projDetKartBtn');
-      const uygunGorevler = (tasksList || []).filter(t => t.project_id == project.id && !t.is_plani);
+      const uygunGorevler = (tasksList || []).filter(t => !t.is_plani);
 
       if (uygunGorevler.length === 0) {
-        secim.innerHTML = '<option value="">Bu projeye bağlı, planı olmayan görev yok</option>';
+        secim.innerHTML = '<option value="">Planı olmayan görev yok</option>';
         secim.disabled = true;
         if (btn) btn.disabled = true;
         return;
