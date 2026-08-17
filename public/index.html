@@ -10058,10 +10058,19 @@
         && new Date(task.end_date + 'T00:00:00') < new Date(today + 'T00:00:00');
       const gunGecikti = isOverdue ? Math.round((new Date(today + 'T00:00:00') - new Date(task.end_date + 'T00:00:00')) / 86400000) : 0;
 
-      card.className = "text-left w-full bg-white/80 dark:bg-slate-800/60 border rounded-2xl p-4 shadow-md backdrop-blur-sm hover:shadow-lg hover:-translate-y-0.5 transition-all "
-        + (isOverdue
-          ? "border-rose-300 dark:border-rose-900/60 hover:border-rose-500 dark:hover:border-rose-500"
-          : "border-slate-200 dark:border-slate-700/80 hover:border-cyan-500 dark:hover:border-cyan-500");
+      // Kart kenarlığı duruma göre renklenir: gecikmiş (kırmızı) her zaman öncelikli; sonra
+      // Onaylandı (yeşil) / Onay Bekliyor (camgöbeği) / Devam Ediyor (amber) ayırt edilir.
+      let borderCls;
+      if (isOverdue || task.status === 'REVISION_REQUESTED') {
+        borderCls = "border-rose-300 dark:border-rose-900/60 hover:border-rose-500 dark:hover:border-rose-500";
+      } else if (task.status === 'APPROVED') {
+        borderCls = "border-emerald-300 dark:border-emerald-900/50 hover:border-emerald-500 dark:hover:border-emerald-500";
+      } else if (task.status === 'COMPLETED') {
+        borderCls = "border-cyan-300 dark:border-cyan-900/50 hover:border-cyan-500 dark:hover:border-cyan-500";
+      } else {
+        borderCls = "border-amber-200 dark:border-amber-900/40 hover:border-amber-500 dark:hover:border-amber-500";
+      }
+      card.className = "text-left w-full bg-white/80 dark:bg-slate-800/60 border rounded-2xl p-4 shadow-md backdrop-blur-sm hover:shadow-lg hover:-translate-y-0.5 transition-all " + borderCls;
 
       const noteCount = taskLogs.length;
       const revCount = (task.revisions && task.revisions.length) || 0;
