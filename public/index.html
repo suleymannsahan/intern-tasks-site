@@ -1648,6 +1648,26 @@
             <div id="projDetNoteRow" class="hidden mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300"></div>
           </div>
 
+          <!-- Sadece Test ekibi + plan oluşturma yetkisi olanlara görünür (bkz. renderProjectKartPlaniPicker) -->
+          <div id="projDetKartPlaniWrap" class="hidden bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-900/40 rounded-2xl p-5 shadow-sm space-y-3">
+            <div class="text-xs font-bold text-violet-600 dark:text-violet-300 flex items-center gap-2"><i class="fa-solid fa-microchip"></i> Kart için Planla</div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">Test ekibinin sabit 6 aşamalı kart tasarım süreci (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon) — bu projeye bağlı, henüz planı olmayan bir göreve uygulanır.</p>
+            <select id="projDetKartGorev" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs"></select>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <select id="projDetKartKategori" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+                <option value="1">Küçük (3 ay)</option>
+                <option value="2">Orta (4 ay)</option>
+                <option value="3">Büyük (5 ay)</option>
+                <option value="4">Çok Büyük (6 ay)</option>
+              </select>
+              <input type="date" id="projDetKartBaslangic" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              <input type="date" id="projDetKartBitis" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+            </div>
+            <button id="projDetKartBtn" onclick="handleGenerateIsPlaniFromProject()" class="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
+              <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Kart Planı Oluştur
+            </button>
+          </div>
+
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm space-y-4">
             <canvas id="projDetChart" height="90"></canvas>
             <div>
@@ -1864,6 +1884,13 @@
               <div>
                 <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Görevin Bitiş Tarihi</label>
                 <input type="date" id="taskEndDate" required onchange="updateCalculatedWorkDays()" class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Proje (opsiyonel)</label>
+                <select id="taskProject" class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                  <option value="">Bir projeye bağlı değil</option>
+                </select>
+                <p class="text-[10px] text-slate-400 mt-1">Bağlarsanız, bu görev o projenin "Kart için Planla" görev listesinde seçilebilir hale gelir.</p>
               </div>
               <div class="md:col-span-2 flex justify-between items-center bg-slate-100 dark:bg-slate-950/70 p-3.5 rounded-xl border border-slate-300 dark:border-slate-800">
                 <span class="text-xs text-slate-500 dark:text-slate-400">Hesaplanan Net İş Günü: <strong id="calculatedDaysText" class="text-cyan-600 dark:text-cyan-400 text-sm">0 gün</strong></span>
@@ -2785,6 +2812,12 @@
           <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">Bitiş Tarihi</label>
           <input type="date" id="editTaskEndDate" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
         </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">Proje (opsiyonel)</label>
+          <select id="editTaskProject" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+            <option value="">Bir projeye bağlı değil</option>
+          </select>
+        </div>
         <div class="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
           <button type="button" onclick="closeEditTaskModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-xs rounded-xl text-slate-700 dark:text-slate-300">İptal</button>
           <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-xs rounded-xl text-white font-semibold">Değişiklikleri Kaydet</button>
@@ -3409,6 +3442,7 @@
       document.getElementById('editTaskDescription').value = task.description || '';
       document.getElementById('editTaskCategory').value = task.category;
       document.getElementById('editTaskEndDate').value = task.end_date;
+      populateTaskProjectSelect('editTaskProject', task.project_id);
 
       document.getElementById('editTaskModal').classList.remove('hidden');
     }
@@ -3436,12 +3470,19 @@
       const description = document.getElementById('editTaskDescription').value;
       const category = document.getElementById('editTaskCategory').value;
       const endDate = document.getElementById('editTaskEndDate').value;
+      const projectId = document.getElementById('editTaskProject') ? document.getElementById('editTaskProject').value : '';
+      // Bu form atanan kişiyi değiştirmez; mevcut değeri koruyarak gönderiyoruz — sunucu tarafındaki
+      // UPDATE, assigned_to ve work_days alanlarını da yazdığı için bunlar eksik gelirse istek
+      // "undefined cannot be passed as argument to the database" hatasıyla başarısız olur.
+      const existing = (tasksList || []).find(t => t.id == taskId);
+      const assignedTo = existing ? existing.assigned_to : null;
+      const workDays = calculateWorkDays(new Date().toISOString().split('T')[0], endDate);
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, description, category, endDate, userRole: currentUser.role })
+          body: JSON.stringify({ title, description, category, endDate, assignedTo, workDays, projectId: projectId || null, userRole: currentUser.role })
         });
 
         if (res.ok) {
@@ -5378,6 +5419,7 @@
 
       // Grafik + ilerleme notları: aynı render mantığı (ppIdPrefix='projDet' hedefine yazar)
       renderPersonProjectModal(data);
+      renderProjectKartPlaniPicker(project);
     }
 
     async function renderPersonProjectModal(data) {
@@ -8602,6 +8644,33 @@
       if (leaderWrap) leaderWrap.classList.remove('hidden');
 
       resetTaskAssignFilter();
+      populateTaskProjectOptions();
+    }
+
+    // "Yeni Görev Atama" ve "Görev Düzenle" formlarındaki "Proje (opsiyonel)" seçiciler — tüm
+    // projeleri bir kere çekip önbellekte tutar (Proje sayfasındaki "Kart için Planla" görev
+    // seçicisi de aynı önbelleği kullanır).
+    let newTaskProjectsCache = null;
+    async function loadTaskProjectsCache() {
+      if (newTaskProjectsCache === null) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/projects`);
+          newTaskProjectsCache = await safeJson(res) || [];
+        } catch (e) { newTaskProjectsCache = []; }
+      }
+      return newTaskProjectsCache;
+    }
+    async function populateTaskProjectSelect(selectId, selectedId) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      const projects = await loadTaskProjectsCache();
+      const secili = selectedId != null ? String(selectedId) : sel.value;
+      sel.innerHTML = '<option value="">Bir projeye bağlı değil</option>'
+        + projects.map(p => `<option value="${p.id}">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</option>`).join('');
+      sel.value = secili && projects.some(p => String(p.id) === secili) ? secili : '';
+    }
+    async function populateTaskProjectOptions() {
+      await populateTaskProjectSelect('taskProject');
     }
 
     // "Yeni Görev Atama" sayfasını kapatıp ana paneli role göre eski haline döndürür
@@ -9865,19 +9934,21 @@
       const assignedTo = document.getElementById('taskAssignee').value;
       const category = document.getElementById('taskCategory').value;
       const endDate = document.getElementById('taskEndDate').value;
+      const projectId = document.getElementById('taskProject') ? document.getElementById('taskProject').value : '';
       const today = new Date().toISOString().split('T')[0];
       const workDays = calculateWorkDays(today, endDate);
 
       const res = await fetch(`${API_BASE_URL}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, assignedTo, category, endDate, workDays, createdBy: currentUser.name, userRole: currentUser.role })
+        body: JSON.stringify({ title, description, assignedTo, category, endDate, workDays, projectId: projectId || null, createdBy: currentUser.name, userRole: currentUser.role })
       });
 
       if (res.ok) {
         showToast('Görev atandı!', 'success');
         document.getElementById('taskTitle').value = '';
         document.getElementById('taskDescription').value = '';
+        if (document.getElementById('taskProject')) document.getElementById('taskProject').value = '';
         await loadTasks();
         if (typeof renderInternStatusList === 'function') renderInternStatusList();
         if (typeof renderEngineerInternStatusList === 'function') renderEngineerInternStatusList();
@@ -10220,6 +10291,8 @@
           <div><i class="fa-regular fa-calendar me-1"></i> Son Teslim: <b class="text-slate-800 dark:text-slate-200">${task.end_date || '-'}</b></div>
         </div>
 
+        ${buildPendingTarihHtml(task)}
+
         ${revisionsHtml ? `
           <div>
             <span class="text-xs font-bold text-rose-500"><i class="fa-solid fa-rotate-left me-1"></i>Revizyon Geçmişi:</span>
@@ -10539,6 +10612,65 @@
       if (modal) modal.classList.add('hidden');
     }
 
+    // AI ile üretilen bir iş planı, görevin mevcut teslim tarihinden farklı bir bitiş öneriyorsa
+    // task.pending_end_date dolu gelir (bkz. ai.js /is-plani-kaydet). Atayan kişiye (ya da yönetici
+    // rollere) onayla/reddet butonları, diğer herkese salt bilgi rozeti gösterilir.
+    function buildPendingTarihHtml(task) {
+      if (!task.pending_end_date) return '';
+      const onaylayabilir = (currentUser.name === task.created_by) || ['ADMIN', 'MANAGER', 'LEADER'].includes(currentUser.role);
+      if (!onaylayabilir) {
+        return `
+          <div class="bg-amber-500/10 border border-amber-300 dark:border-amber-700/50 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300">
+            <i class="fa-solid fa-calendar-check me-1"></i>Yeni bir iş planıyla önerilen teslim tarihi (<b>${task.pending_end_date}</b>), ${escapeHtmlProj(task.created_by || 'atayan kişi')}nin onayını bekliyor.
+          </div>`;
+      }
+      return `
+        <div class="bg-amber-500/10 border border-amber-300 dark:border-amber-700/50 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300">
+          <div class="font-bold mb-1"><i class="fa-solid fa-calendar-check me-1"></i>Yeni bir iş planı teslim tarihini değiştirmeyi öneriyor</div>
+          <div class="mb-2">Mevcut: <b>${task.end_date}</b> → Önerilen: <b>${task.pending_end_date}</b></div>
+          <div class="flex gap-2">
+            <button onclick="handlePendingTarihOnayla(${task.id})" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold py-1.5 rounded-lg">Onayla</button>
+            <button onclick="handlePendingTarihReddet(${task.id})" class="flex-1 bg-slate-400 hover:bg-slate-500 text-white text-[11px] font-semibold py-1.5 rounded-lg">Reddet</button>
+          </div>
+        </div>`;
+    }
+
+    async function handlePendingTarihOnayla(taskId) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/pending-tarih-onayla`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kullanici: currentUser.name, userRole: currentUser.role })
+        });
+        const data = await res.json();
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Onaylanamadı.'), 'error'); return; }
+        showToast('Yeni teslim tarihi onaylandı.', 'success');
+        await loadTasks();
+        openTaskDetailModal(taskId);
+      } catch (err) {
+        console.error('Tarih onaylama hatası:', err);
+        showToast('Onaylanırken bir hata oluştu.', 'error');
+      }
+    }
+
+    async function handlePendingTarihReddet(taskId) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/pending-tarih-reddet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kullanici: currentUser.name, userRole: currentUser.role })
+        });
+        const data = await res.json();
+        if (!res.ok) { showToast('Hata: ' + (data.error || 'Reddedilemedi.'), 'error'); return; }
+        showToast('Tarih değişikliği reddedildi.', 'success');
+        await loadTasks();
+        openTaskDetailModal(taskId);
+      } catch (err) {
+        console.error('Tarih reddetme hatası:', err);
+        showToast('Reddedilirken bir hata oluştu.', 'error');
+      }
+    }
+
     function renderIsPlaniSection(task) {
       const canManage = IS_PLANI_YETKILI_ROLLER.includes(currentUser.role);
       const isAssignee = task.assigned_to === currentUser.id;
@@ -10551,29 +10683,11 @@
         if (task.status === 'APPROVED' || task.status === 'COMPLETED') return '';
         const bugun = new Date().toISOString().substring(0, 10);
         const bitisVarsayilan = /^\d{4}-\d{2}-\d{2}$/.test(task.end_date || '') ? task.end_date : '';
-        const kartPlaniHtml = userIsTestTeam(currentUser) ? `
-            <div class="border border-slate-200 dark:border-slate-800 rounded-lg p-3">
-              <div class="text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1"><i class="fa-solid fa-microchip me-1"></i>Kart için Planla</div>
-              <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-2">Test ekibinin sabit 6 aşamalı kart tasarım süreci (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon).</p>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-                <select id="isPlaniKategori" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
-                  <option value="1">Küçük (3 ay)</option>
-                  <option value="2">Orta (4 ay)</option>
-                  <option value="3">Büyük (5 ay)</option>
-                  <option value="4">Çok Büyük (6 ay)</option>
-                </select>
-                <input type="date" id="isPlaniDokumanTarihi" value="${bugun}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
-                <input type="date" id="isPlaniBitisTarihi" value="${bitisVarsayilan}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
-              </div>
-              <button onclick="handleGenerateIsPlani(${task.id})" class="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
-                <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Kart Planı Oluştur
-              </button>
-            </div>
-        ` : '';
+        // Not: "Kart için Planla" (sabit 6 aşamalı şablon) artık burada değil, Proje detay
+        // sayfasında — bir projeye bağlı görevlerden hangisine uygulanacağı orada seçiliyor.
         return `
           <div class="bg-violet-500/5 border border-violet-300 dark:border-violet-900/40 rounded-xl p-4 space-y-3">
             <div class="text-xs font-bold text-violet-600 dark:text-violet-300"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Akıllı İş Planı</div>
-            ${kartPlaniHtml}
             <div class="border border-slate-200 dark:border-slate-800 rounded-lg p-3">
               <div class="text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1"><i class="fa-solid fa-sparkles me-1"></i>Genel Plan (AI)</div>
               <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-2">Yapay zekâ, görevin başlığına ve açıklamasına bakarak bu göreve özgü aşamalar üretir — herhangi bir görev için kullanılabilir.</p>
@@ -10665,36 +10779,89 @@
       `;
     }
 
-    async function handleGenerateIsPlani(taskId) {
+    // Ortak "Kart Planı" üretim/kaydetme çekirdeği — hem üret (/is-plani) hem kaydet
+    // (/is-plani-kaydet) adımını yapar. Çağıran taraf hata/başarı durumunu yönetir.
+    async function generateAndSaveKartPlani(taskId, kategori, dokumanTarihi, bitisTarihi) {
       const task = (tasksList || []).find(t => t.id == taskId);
-      if (!task) return;
-      const kategori = document.getElementById('isPlaniKategori').value;
-      const dokumanTarihi = document.getElementById('isPlaniDokumanTarihi').value;
-      const bitisTarihi = document.getElementById('isPlaniBitisTarihi').value;
-      if (!dokumanTarihi || !bitisTarihi) { showToast('Döküman ve bitiş tarihini seçiniz.', 'error'); return; }
-      if (bitisTarihi < new Date().toISOString().substring(0, 10)) { showToast('Bitiş tarihi geçmiş bir tarih olamaz.', 'error'); return; }
+      if (!task) return { ok: false, error: 'Görev bulunamadı.' };
+      if (!dokumanTarihi || !bitisTarihi) return { ok: false, error: 'Döküman ve bitiş tarihini seçiniz.' };
+      if (bitisTarihi < new Date().toISOString().substring(0, 10)) return { ok: false, error: 'Bitiş tarihi geçmiş bir tarih olamaz.' };
+
+      const res = await fetch(`${API_BASE_URL}/api/is-plani`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kartIsmi: task.title, kategori, dokumanTarihi, bitisTarihi, userRole: currentUser.role })
+      });
+      const plan = await res.json();
+      if (!res.ok) return { ok: false, error: plan.error || 'Plan oluşturulamadı.' };
+
+      const saveRes = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-kaydet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan, userRole: currentUser.role })
+      });
+      if (!saveRes.ok) { const d = await saveRes.json(); return { ok: false, error: d.error || 'Plan kaydedilemedi.' }; }
+      return { ok: true, task };
+    }
+
+    // Proje detay sayfasındaki "Kart için Planla" — o projeye bağlı, planı olmayan görevlerden
+    // seçilen birine sabit 6 aşamalı kart şablonunu uygular.
+    async function handleGenerateIsPlaniFromProject() {
+      const taskId = document.getElementById('projDetKartGorev').value;
+      if (!taskId) { showToast('Lütfen bir görev seçiniz.', 'error'); return; }
+      const kategori = document.getElementById('projDetKartKategori').value;
+      const dokumanTarihi = document.getElementById('projDetKartBaslangic').value;
+      const bitisTarihi = document.getElementById('projDetKartBitis').value;
+
+      const btn = document.getElementById('projDetKartBtn');
+      const eskiIcerik = btn ? btn.innerHTML : '';
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Plan hazırlanıyor…'; }
 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/is-plani`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ kartIsmi: task.title, kategori, dokumanTarihi, bitisTarihi, userRole: currentUser.role })
-        });
-        const plan = await res.json();
-        if (!res.ok) { showToast('Hata: ' + (plan.error || 'Plan oluşturulamadı.'), 'error'); return; }
-
-        const saveRes = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-kaydet`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plan, userRole: currentUser.role })
-        });
-        if (!saveRes.ok) { const d = await saveRes.json(); showToast('Hata: ' + (d.error || 'Plan kaydedilemedi.'), 'error'); return; }
-
+        const sonuc = await generateAndSaveKartPlani(taskId, kategori, dokumanTarihi, bitisTarihi);
+        if (!sonuc.ok) { showToast('Hata: ' + sonuc.error, 'error'); return; }
         await loadTasks();
-        openTaskDetailModal(taskId);
+        showToast(`"${sonuc.task.title}" için kart planı oluşturuldu.`, 'success');
+        if (personProjectData && personProjectData.project) renderProjectKartPlaniPicker(personProjectData.project);
+        openTaskDetailModal(Number(taskId));
       } catch (err) {
         console.error('İş planı oluşturma hatası:', err);
         showToast('İş planı oluşturulurken bir hata oluştu.', 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = eskiIcerik; }
+      }
+    }
+
+    // Proje detay sayfasında "Kart için Planla" kutusunu doldurur/gizler: sadece Test ekibi +
+    // plan oluşturma yetkisi olan roller görür; içindeki seçici, bu projeye bağlı (project_id
+    // eşleşen) ve henüz iş planı olmayan görevleri listeler.
+    function renderProjectKartPlaniPicker(project) {
+      const wrap = document.getElementById('projDetKartPlaniWrap');
+      if (!wrap) return;
+      const yetkili = userIsTestTeam(currentUser) && IS_PLANI_YETKILI_ROLLER.includes(currentUser.role);
+      wrap.classList.toggle('hidden', !yetkili);
+      if (!yetkili) return;
+
+      const secim = document.getElementById('projDetKartGorev');
+      const btn = document.getElementById('projDetKartBtn');
+      const uygunGorevler = (tasksList || []).filter(t => t.project_id == project.id && !t.is_plani);
+
+      if (uygunGorevler.length === 0) {
+        secim.innerHTML = '<option value="">Bu projeye bağlı, planı olmayan görev yok</option>';
+        secim.disabled = true;
+        if (btn) btn.disabled = true;
+        return;
+      }
+      secim.disabled = false;
+      if (btn) btn.disabled = false;
+      secim.innerHTML = uygunGorevler.map(t => `<option value="${t.id}">${escapeHtmlProj(t.title)}</option>`).join('');
+
+      const bugun = new Date().toISOString().substring(0, 10);
+      const baslangicEl = document.getElementById('projDetKartBaslangic');
+      const bitisEl = document.getElementById('projDetKartBitis');
+      if (baslangicEl && !baslangicEl.value) baslangicEl.value = bugun;
+      if (bitisEl && !bitisEl.value) {
+        bitisEl.value = /^\d{4}-\d{2}-\d{2}$/.test(project.end_date || '') ? project.end_date : '';
       }
     }
 
@@ -11800,7 +11967,10 @@
 
     const IP_BILDIRIM_IKON = {
       asama_onay: 'fa-solid fa-clipboard-check',
-      asama_red: 'fa-solid fa-rotate-left'
+      asama_red: 'fa-solid fa-rotate-left',
+      tarih_onay: 'fa-solid fa-calendar-check',
+      tarih_onaylandi: 'fa-solid fa-calendar-check',
+      tarih_reddedildi: 'fa-solid fa-calendar-xmark'
     };
     function ipBildirimIkon(tip) {
       if (tip && tip.indexOf('gecikme') === 0) return 'fa-solid fa-triangle-exclamation';

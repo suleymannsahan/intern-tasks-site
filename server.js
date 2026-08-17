@@ -184,6 +184,12 @@ async function initDb() {
     try { await db.execute(`ALTER TABLE tasks ADD COLUMN review_comment TEXT`); } catch (e) {}
     // Google Takvim etkinlik kimliği (güncelleme/silme senkronu için)
     try { await db.execute(`ALTER TABLE tasks ADD COLUMN google_event_id TEXT`); } catch (e) {}
+    // Görevi bir Projeye bağlar (opsiyonel) — ör. Proje sayfasından "Kart için Planla" ile
+    // o projenin görevlerinden birini seçebilmek için.
+    try { await db.execute(`ALTER TABLE tasks ADD COLUMN project_id INTEGER`); } catch (e) {}
+    // AI ile üretilen bir iş planı, görevin mevcut teslim tarihinden farklı bir bitiş öneriyorsa,
+    // yeni tarih burada bekler; görevi atayan kişi onaylayana kadar end_date değişmez.
+    try { await db.execute(`ALTER TABLE tasks ADD COLUMN pending_end_date TEXT`); } catch (e) {}
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS daily_logs (
@@ -1297,7 +1303,7 @@ app.put('/api/users/:id/intern-dates', async (req, res) => {
 // Görev Oluşturma
 app.post('/api/tasks', async (req, res) => {
   try {
-    const { title, description, assignedTo, category, endDate, workDays, createdBy, userRole, userId } = req.body;
+    const { title, description, assignedTo, category, endDate, workDays, createdBy, userRole, userId, projectId } = req.body;
 
     if (!['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER', 'INTERN'].includes(userRole)) {
       return res.status(403).json({ error: 'Görev atamaya yetkiniz yok!' });
@@ -1318,8 +1324,8 @@ app.post('/api/tasks', async (req, res) => {
     }
 
     const result = await db.execute({
-      sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS')`,
-      args: [title, description || '', assignedTo, category, endDate, workDays, createdBy]
+      sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status, project_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?)`,
+      args: [title, description || '', assignedTo, category, endDate, workDays, createdBy, projectId || null]
     });
 
     const userResult = await db.execute({
@@ -2358,15 +2364,15 @@ app.delete('/api/users/:id', async (req, res) => {
 app.put('/api/tasks/:id', async (req, res) => {
   try {
     const taskId = req.params.id;
-    const { title, description, assignedTo, category, endDate, workDays, userRole } = req.body;
+    const { title, description, assignedTo, category, endDate, workDays, userRole, projectId } = req.body;
 
     if (!['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(userRole)) {
       return res.status(403).json({ error: 'Bu işlemi yapmaya yetkiniz yok!' });
     }
 
     const result = await db.execute({
-      sql: `UPDATE tasks SET title = ?, description = ?, assigned_to = ?, category = ?, end_date = ?, work_days = ? WHERE id = ?`,
-      args: [title, description || '', assignedTo, category, endDate, workDays, taskId]
+      sql: `UPDATE tasks SET title = ?, description = ?, assigned_to = ?, category = ?, end_date = ?, work_days = ?, project_id = ? WHERE id = ?`,
+      args: [title, description || '', assignedTo, category, endDate, workDays, projectId || null, taskId]
     });
 
     if (result.rowsAffected === 0) return res.status(404).json({ error: 'Görev bulunamadı.' });

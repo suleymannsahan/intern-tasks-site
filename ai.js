@@ -51,6 +51,14 @@ function tarihFormatla(tarih) {
   return `${g}.${a}.${y}`;
 }
 
+// TR (GG.AA.YYYY) -> ISO (YYYY-AA-GG). Geçersiz girdide null döner.
+function trToIso(tr) {
+  const parcalar = String(tr || '').split('.');
+  if (parcalar.length !== 3) return null;
+  const [g, a, y] = parcalar;
+  return `${y}-${a}-${g}`;
+}
+
 // Kategori + döküman + bitiş tarihine göre 6 adımı böler (opsiyonel akıllı ağırlıklarla)
 function isPlaniHesapla(kategori, dokumanTarihiStr, bitisTarihiStr, agirliklar) {
   const baslangic = new Date(dokumanTarihiStr);
@@ -387,20 +395,119 @@ TOPLAM SÜRE: ${gunSayisi} gün (${dokumanTarihi} → ${bitisTarihi})
     }
   });
 
-  // 2) Planı görevin is_plani sütununa kaydet
+  // 2) Planı görevin is_plani sütununa kaydet. Planın bitiş tarihi görevin mevcut teslim
+  //    tarihinden farklıysa, yeni tarih doğrudan uygulanmaz — pending_end_date'e yazılır ve
+  //    görevi atayan kişiye onay bildirimi gider (bkz. /pending-tarih-onayla /-reddet).
   router.post('/tasks/:id/is-plani-kaydet', async (req, res) => {
     try {
       const { plan, userRole } = req.body;
+      const taskId = req.params.id;
       if (!IS_PLANI_YETKILI.includes(userRole)) {
         return res.status(403).json({ error: 'İş planı kaydetme yetkiniz yok.' });
       }
+
+      const taskRes = await db.execute({ sql: `SELECT title, end_date, created_by FROM tasks WHERE id = ?`, args: [taskId] });
+      const task = taskRes.rows[0];
+      if (!task) return res.status(404).json({ error: 'Görev bulunamadı.' });
+
       await db.execute({
         sql: `UPDATE tasks SET is_plani = ? WHERE id = ?`,
-        args: [JSON.stringify(plan), req.params.id]
+        args: [JSON.stringify(plan), taskId]
       });
-      res.json({ message: 'İş planı kaydedildi.' });
+
+      const bitisIso = trToIso(plan && plan.bitis);
+      let tarihOnayBekliyor = false;
+      if (bitisIso && bitisIso !== task.end_date) {
+        tarihOnayBekliyor = true;
+        await db.execute({ sql: `UPDATE tasks SET pending_end_date = ? WHERE id = ?`, args: [bitisIso, taskId] });
+        try {
+          const hedef = await db.execute({
+            sql: `SELECT id FROM users WHERE name = ? OR email = ? LIMIT 1`,
+            args: [task.created_by, task.created_by]
+          });
+          const hedefId = hedef.rows[0] && hedef.rows[0].id;
+          if (hedefId) {
+            const bugun = new Date().toISOString().split('T')[0];
+            await db.execute({
+              sql: `INSERT INTO asama_bildirimleri (user_id, task_id, tip, mesaj, okundu, created_at) VALUES (?, ?, ?, ?, 0, ?)`,
+              args: [hedefId, taskId, 'tarih_onay',
+                `"${task.title}" görevi için yeni bir iş planı oluşturuldu. Önerilen yeni teslim tarihi: ${plan.bitis}. Onayınızı bekliyor.`,
+                bugun]
+            });
+          }
+        } catch (e) { console.error('Tarih onay bildirimi hatası:', e.message); }
+      }
+
+      res.json({ message: 'İş planı kaydedildi.', tarihOnayBekliyor });
     } catch (error) {
       res.status(500).json({ error: 'İş planı kaydedilemedi: ' + error.message });
+    }
+  });
+
+  // 2b) Bekleyen teslim tarihini onayla: pending_end_date -> end_date, atanan kişiye bilgi bildirimi.
+  //     Sadece görevi atayan kişi ya da yönetici roller onaylayabilir (aşama onayıyla aynı yetki mantığı).
+  router.post('/tasks/:id/pending-tarih-onayla', async (req, res) => {
+    try {
+      const taskId = req.params.id;
+      const { kullanici, userRole } = req.body;
+      const taskRes = await db.execute({ sql: `SELECT * FROM tasks WHERE id = ?`, args: [taskId] });
+      const task = taskRes.rows[0];
+      if (!task || !task.pending_end_date) {
+        return res.status(404).json({ error: 'Onay bekleyen bir tarih değişikliği bulunamadı.' });
+      }
+      const yoneticiRol = ['ADMIN', 'MANAGER', 'LEADER'].includes(userRole);
+      const onaylayabilir = (kullanici && task.created_by && kullanici === task.created_by) || yoneticiRol;
+      if (!onaylayabilir) return res.status(403).json({ error: 'Bu tarih değişikliğini yalnızca görevi veren kişi onaylayabilir.' });
+
+      const yeniTarih = task.pending_end_date;
+      await db.execute({
+        sql: `UPDATE tasks SET end_date = ?, pending_end_date = NULL WHERE id = ?`,
+        args: [yeniTarih, taskId]
+      });
+
+      try {
+        const bugun = new Date().toISOString().split('T')[0];
+        await db.execute({
+          sql: `INSERT INTO asama_bildirimleri (user_id, task_id, tip, mesaj, okundu, created_at) VALUES (?, ?, ?, ?, 0, ?)`,
+          args: [task.assigned_to, taskId, 'tarih_onaylandi',
+            `"${task.title}" görevinin yeni teslim tarihi (${yeniTarih}) onaylandı.`, bugun]
+        });
+      } catch (e) { console.error('Tarih onay bilgi bildirimi hatası:', e.message); }
+
+      res.json({ message: 'Yeni teslim tarihi onaylandı.', end_date: yeniTarih });
+    } catch (error) {
+      res.status(500).json({ error: 'Onaylanamadı: ' + error.message });
+    }
+  });
+
+  // 2c) Bekleyen teslim tarihini reddet: pending_end_date temizlenir, eski end_date korunur.
+  router.post('/tasks/:id/pending-tarih-reddet', async (req, res) => {
+    try {
+      const taskId = req.params.id;
+      const { kullanici, userRole } = req.body;
+      const taskRes = await db.execute({ sql: `SELECT * FROM tasks WHERE id = ?`, args: [taskId] });
+      const task = taskRes.rows[0];
+      if (!task || !task.pending_end_date) {
+        return res.status(404).json({ error: 'Onay bekleyen bir tarih değişikliği bulunamadı.' });
+      }
+      const yoneticiRol = ['ADMIN', 'MANAGER', 'LEADER'].includes(userRole);
+      const onaylayabilir = (kullanici && task.created_by && kullanici === task.created_by) || yoneticiRol;
+      if (!onaylayabilir) return res.status(403).json({ error: 'Bu tarih değişikliğini yalnızca görevi veren kişi reddedebilir.' });
+
+      await db.execute({ sql: `UPDATE tasks SET pending_end_date = NULL WHERE id = ?`, args: [taskId] });
+
+      try {
+        const bugun = new Date().toISOString().split('T')[0];
+        await db.execute({
+          sql: `INSERT INTO asama_bildirimleri (user_id, task_id, tip, mesaj, okundu, created_at) VALUES (?, ?, ?, ?, 0, ?)`,
+          args: [task.assigned_to, taskId, 'tarih_reddedildi',
+            `"${task.title}" görevi için önerilen yeni teslim tarihi reddedildi, mevcut tarih (${task.end_date}) geçerli.`, bugun]
+        });
+      } catch (e) { console.error('Tarih red bildirimi hatası:', e.message); }
+
+      res.json({ message: 'Tarih değişikliği reddedildi.' });
+    } catch (error) {
+      res.status(500).json({ error: 'Reddedilemedi: ' + error.message });
     }
   });
 
