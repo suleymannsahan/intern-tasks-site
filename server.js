@@ -4,6 +4,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const path = require('path');
+const ExcelJS = require('exceljs');
 const gcal = require('./googleCalendar');
 const ai = require('./ai');
 
@@ -1550,6 +1551,64 @@ app.put('/api/settings', async (req, res) => {
   }
 });
 
+// Veritabanındaki tüm tabloları tek bir .xlsx dosyasına (her tablo ayrı sayfa) aktarır — Admin/İK.
+// Böylece Admin/İK, panele girmeden istediği an tüm verileri Excel'de açıp inceleyebilir.
+app.get('/api/admin/export-excel', async (req, res) => {
+  try {
+    const { userRole } = req.query;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+
+    const tablesRes = await db.execute(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Intern Panel';
+    workbook.created = new Date();
+
+    const MAX_CELL_LEN = 30000; // Excel hücre karakter sınırı (32767) altında güvenli pay
+
+    for (const tableRow of tablesRes.rows) {
+      const tableName = tableRow.name;
+      const dataRes = await db.execute(`SELECT * FROM ${tableName}`);
+      const columns = dataRes.columns || [];
+
+      const sheet = workbook.addWorksheet(tableName.substring(0, 31));
+      if (columns.length === 0) continue;
+
+      sheet.columns = columns.map(col => ({ header: col, key: col, width: Math.min(Math.max(col.length + 4, 14), 40) }));
+      sheet.getRow(1).font = { bold: true };
+      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+      for (const dataRow of dataRes.rows) {
+        const rowValues = {};
+        for (const col of columns) {
+          let val = dataRow[col];
+          // task_attachments.file_data içinde base64 dosya içeriği tutulur; olduğu gibi aktarılırsa
+          // hem dosya devasa büyür hem Excel'in 32767 karakterlik hücre sınırını aşabilir.
+          if (col === 'file_data' && typeof val === 'string') {
+            val = `[Dosya verisi - ${val.length} karakter, dışa aktarımda hariç tutuldu]`;
+          } else if (typeof val === 'string' && val.length > MAX_CELL_LEN) {
+            val = val.slice(0, MAX_CELL_LEN) + `… [kesildi, toplam ${val.length} karakter]`;
+          }
+          rowValues[col] = val === undefined ? null : val;
+        }
+        sheet.addRow(rowValues);
+      }
+    }
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="veritabani_${dateStr}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Excel dışa aktarma hatası:', error);
+    res.status(500).json({ error: 'Excel dosyası oluşturulurken hata: ' + error.message });
+  }
+});
+
 // Tüm giriş yapmış kullanıcıların erişebileceği, hassas olmayan ayarlar
 // (ör. iş günü hesabı için tatil günleri) — yetki kontrolü yok, kasıtlı olarak herkese açık.
 app.get('/api/settings/public', async (req, res) => {
@@ -2856,23 +2915,52 @@ app.put('/api/meetings/:id/review', async (req, res) => {
   }
 });
 
-// Reddedilen bir toplantı talebini kalıcı olarak siler (Admin/İK, Reddedilen Talepler listesinden)
+// Bir toplantı talebini kalıcı olarak siler.
+// - Reddedilen talepler: Admin/İK tarafından her zaman silinebilir.
+// - Bekleyen (PENDING) mühendis talepleri: inceleme yetkisi olan (MANAGER/LEADER/ADMIN/HR) ve
+//   hiyerarşi kuralını geçen kullanıcılar tarafından da silinebilir (onayla/reddet/düzenle ile birlikte).
 app.delete('/api/meetings/:id', async (req, res) => {
   try {
     const meetingId = req.params.id;
     const { userRole } = req.body;
 
-    if (!isAdmin(userRole)) {
+    if (!['MANAGER', 'LEADER', 'ADMIN', 'HR'].includes(userRole)) {
       return res.status(403).json({ error: 'Bu işlemi yapmaya yetkiniz yok!' });
     }
 
+    const reqRes = await db.execute({
+      sql: `SELECT meeting_requests.status AS status, users.role AS requester_role
+            FROM meeting_requests LEFT JOIN users ON meeting_requests.requested_by = users.id
+            WHERE meeting_requests.id = ?`,
+      args: [meetingId]
+    });
+    if (reqRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Talep bulunamadı.' });
+    }
+    const { status, requester_role } = reqRes.rows[0];
+
+    const canDeleteRejected = status === 'REJECTED' && isAdmin(userRole);
+    const canDeletePendingEngineer = status === 'PENDING' && requester_role === 'ENGINEER';
+
+    if (!canDeleteRejected && !canDeletePendingEngineer) {
+      return res.status(403).json({ error: 'Bu talebi silme yetkiniz yok.' });
+    }
+
+    if (canDeletePendingEngineer && !isAdmin(userRole)) {
+      const reqIdx = ROLE_HIERARCHY.indexOf(requester_role);
+      const myIdx = ROLE_HIERARCHY.indexOf(userRole);
+      if (reqIdx === -1 || myIdx === -1 || myIdx > reqIdx) {
+        return res.status(403).json({ error: 'Bu talebi silme yetkiniz yok.' });
+      }
+    }
+
     const result = await db.execute({
-      sql: `DELETE FROM meeting_requests WHERE id = ? AND status = 'REJECTED'`,
+      sql: `DELETE FROM meeting_requests WHERE id = ?`,
       args: [meetingId]
     });
 
     if (result.rowsAffected === 0) {
-      return res.status(404).json({ error: 'Talep bulunamadı veya yalnızca reddedilen talepler silinebilir.' });
+      return res.status(404).json({ error: 'Talep bulunamadı.' });
     }
 
     res.json({ message: 'Talep silindi.' });
