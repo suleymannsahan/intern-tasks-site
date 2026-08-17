@@ -440,6 +440,9 @@
               <span class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-bell text-cyan-500"></i> Bildirimler</span>
               <button type="button" onclick="closeNotificationsPanel()" class="text-slate-400 hover:text-slate-900 dark:hover:text-white p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-xmark"></i></button>
             </div>
+            <div id="notificationsClearAllWrap" class="hidden flex justify-end mb-1">
+              <button type="button" onclick="handleClearAllNotifications()" class="text-[10px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline">Tümünü Temizle</button>
+            </div>
             <div id="notificationsList" class="space-y-1.5 scroll-panel max-h-[60vh] pr-1"></div>
             <p id="notificationsEmptyHint" class="text-xs text-slate-400 text-center py-6">Yeni bildiriminiz yok.</p>
             <!-- İŞ PLANI BİLDİRİMLERİ (AI): aşama onay/red/gecikme uyarıları — /api/bildirimler. -->
@@ -627,25 +630,22 @@
               </button>
               <h2 class="font-bold text-lg text-slate-900 dark:text-slate-100">Görevler</h2>
             </div>
-            <div class="relative mb-4">
-              <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-              <input type="text" id="leaderTaskSearchInput" oninput="renderLeaderTasksPage()" placeholder="Görev, veren veya kişi adı ara..." class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
-            </div>
 
-            <!-- MÜDÜR / EKİP LİDERİ: kendi biriminde rol bazlı filtre -->
+            <!-- MÜDÜR / EKİP LİDERİ: kendi biriminde rol bazlı filtre (1. adım — Mühendis/Stajyer/...) -->
             <div id="leaderTasksRoleFilterWrap" class="hidden mb-4">
               <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">Role Göre Filtrele</label>
               <div id="leaderTasksRoleToggle" class="inline-flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-300 dark:border-slate-800"></div>
             </div>
 
-            <!-- MÜHENDİS: sorumlu olduğu stajyerlerin görevlerini de burada görür, bu filtre ile
-                 belirli bir stajyerin görevlerine daraltabilir -->
-            <div id="engineerInternFilterWrap" class="hidden mb-4">
-              <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">Stajyer Filtrele</label>
-              <select id="engineerInternFilterSelect" onchange="setEngineerInternFilter(this.value)" class="w-full sm:w-64 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100"></select>
+            <!-- MÜHENDİS: doğrudan "Kendim" + sorumlu olduğu stajyerler toggle olarak görünür.
+                 MÜDÜR/EKİP LİDERİ: yukarıda bir rol seçilince (2. adım), o roldeki kişiler burada
+                 toggle olarak listelenir. -->
+            <div id="leaderTasksPersonFilterWrap" class="hidden mb-4">
+              <label id="leaderTasksPersonFilterLabel" class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">Kişi Seç</label>
+              <div id="leaderTasksPersonToggle" class="inline-flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-300 dark:border-slate-800"></div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="space-y-4">
               <section>
                 <h4 class="font-bold text-xs mb-3 text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-spinner text-cyan-500"></i>Aktif Görevler <span id="leaderActiveTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">0</span></h4>
                 <div id="leaderTaskListActive" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
@@ -654,27 +654,6 @@
                 <h4 class="font-bold text-xs mb-3 text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left"></i>Geçmiş / Tamamlanan <span id="leaderPastTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">0</span></h4>
                 <div id="leaderTaskListPast" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
               </section>
-            </div>
-
-            <!-- GÖREVLERİM: kendi kendine hatırlatma amaçlı görev ekleme + kendine atanan görevler -->
-            <div class="mt-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-              <h4 class="font-bold text-sm mb-3 text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <i class="fa-solid fa-user-check text-cyan-500"></i> Görevlerim
-              </h4>
-              <form onsubmit="handleAddSelfTask(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end mb-3">
-                <div class="sm:col-span-2">
-                  <label class="block text-[10px] text-slate-500 mb-1">Görev Tanımı</label>
-                  <input type="text" id="selfTaskTitle" required placeholder="örn: Haftalık rapor hazırla" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-                </div>
-                <div>
-                  <label class="block text-[10px] text-slate-500 mb-1">Bitiş Tarihi</label>
-                  <input type="date" id="selfTaskEndDate" required class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-                </div>
-                <button type="submit" class="w-full sm:w-auto bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all">
-                  <i class="fa-solid fa-plus me-1"></i> Kendime Ekle
-                </button>
-              </form>
-              <div id="selfTaskList" class="grid grid-cols-1 sm:grid-cols-2 gap-3 scroll-panel max-h-[320px] pr-1"></div>
             </div>
           </div>
         </section>
@@ -1271,6 +1250,7 @@
             <div id="settingsExportBody" class="hidden px-5 pb-5 space-y-3">
               <p class="text-xs text-slate-500 dark:text-slate-400">Sitedeki tüm tablolar (kullanıcılar, görevler, projeler, toplantı talepleri, bildirimler vb.) her biri ayrı bir sayfada olacak şekilde tek bir Excel (.xlsx) dosyasına aktarılır. İstediğiniz zaman indirip tüm verileri kontrol edebilirsiniz.</p>
               <button type="button" onclick="handleExportDatabaseExcel()" id="exportDbExcelBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-500/20"><i class="fa-solid fa-file-arrow-down me-1.5"></i>Excel Dosyasını İndir</button>
+              <p class="text-[11px] text-slate-400 dark:text-slate-500 pt-1 border-t border-slate-200 dark:border-slate-700"><i class="fa-solid fa-circle-info me-1"></i>Tek seferlik indirmenin yanında, verilerin sürekli canlı senkron kaldığı bir Google E-Tablo da bağlanabilir (bazı hücreler oradan düzenlenip siteye anında yazılabilir). Kurulumu tek seferlik ve teknik olduğu için proje dizinindeki <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700">google-sheets-sync/KURULUM.md</code> dosyasından yapılır.</p>
             </div>
           </div>
 
@@ -2951,18 +2931,21 @@
       const listEl = document.getElementById('notificationsList');
       const emptyHint = document.getElementById('notificationsEmptyHint');
       const countEl = document.getElementById('notifBellCount');
+      const clearAllWrap = document.getElementById('notificationsClearAllWrap');
       if (!listEl || !emptyHint || !countEl) return;
 
       if (notificationsList.length === 0) {
         listEl.innerHTML = '';
         emptyHint.classList.remove('hidden');
         countEl.classList.add('hidden');
+        if (clearAllWrap) clearAllWrap.classList.add('hidden');
         return;
       }
 
       emptyHint.classList.add('hidden');
       countEl.classList.remove('hidden');
       countEl.textContent = notificationsList.length > 99 ? '99+' : String(notificationsList.length);
+      if (clearAllWrap) clearAllWrap.classList.remove('hidden');
 
       listEl.innerHTML = notificationsList.map(n => `
         <button type="button" onclick="viewNotification(${n.id})" class="w-full text-left bg-slate-50 dark:bg-slate-800/60 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 border border-slate-200 dark:border-slate-700 hover:border-cyan-400 dark:hover:border-cyan-600 rounded-xl p-3 transition-all flex items-start gap-3">
@@ -2986,6 +2969,17 @@
         await fetch(`${API_BASE_URL}/api/notifications/${id}`, { method: 'DELETE' });
       } catch (e) { console.error('Bildirim silinemedi:', e.message); }
       if (n) navigateToNotification(n);
+    }
+
+    // Tüm bildirimleri tek seferde temizler (panel üstündeki "Tümünü Temizle").
+    async function handleClearAllNotifications() {
+      if (!currentUser || !currentUser.id) return;
+      notificationsList = [];
+      renderNotificationsPanel();
+      refreshNotifBoxBadges();
+      try {
+        await fetch(`${API_BASE_URL}/api/notifications?userId=${currentUser.id}`, { method: 'DELETE' });
+      } catch (e) { console.error('Bildirimler temizlenemedi:', e.message); }
     }
 
     // Bir kutucuğa ait, o an EKRANDA GÖRÜNEN (rol bazlı bölüm gizli olmayan) butonu bulup tıklar.
@@ -5300,7 +5294,9 @@
       const pdGridEl = document.getElementById('pdGrid');
       if (pdCountersEl) pdCountersEl.classList.toggle('hidden', restrictedView);
       if (pdLogsCardEl) pdLogsCardEl.classList.toggle('hidden', restrictedView);
-      if (pdProjectsCardEl) pdProjectsCardEl.classList.toggle('hidden', restrictedView);
+      // Stajyerler genel olarak proje değil görev ataması alır — "Sorumlu Olduğu Projeler" kartı
+      // stajyer profilinde (kendi profili dahil) hiç gösterilmez.
+      if (pdProjectsCardEl) pdProjectsCardEl.classList.toggle('hidden', restrictedView || u.role === 'INTERN');
       if (pdTasksCardEl) pdTasksCardEl.classList.toggle('hidden', restrictedView);
       if (pdRightColEl) pdRightColEl.classList.toggle('hidden', restrictedView);
       if (pdGridEl) pdGridEl.classList.toggle('lg:grid-cols-1', restrictedView);
@@ -8780,6 +8776,7 @@
       const section = document.getElementById('leaderTasksPageSection');
       if (section) section.classList.remove('hidden');
       populateLeaderTasksRoleFilter();
+      populateTaskBoxPersonToggle();
       renderLeaderTasksPage();
     }
 
@@ -9031,7 +9028,7 @@
       if (home) home.classList.add('hidden');
       const section = document.getElementById('leaderTasksPageSection');
       if (section) section.classList.remove('hidden');
-      populateEngineerInternFilter();
+      populateTaskBoxPersonToggle();
       renderLeaderTasksPage();
     }
 
@@ -9436,36 +9433,78 @@
     function setLeaderTasksRoleFilter(role) {
       leaderTasksRoleFilterValue = role;
       updateLeaderTasksRoleFilterStyles();
+      populateTaskBoxPersonToggle();
       renderLeaderTasksPage();
     }
 
-    // MÜHENDİS: "Görevler" sayfasının üstünde "Kendim" (kendi görevleri) ile kendisine sorumlu
-    // mühendis olarak atanmış (engineer_id ile bağlı) her stajyeri ayrı seçenek olarak listeler;
-    // seçilen kişinin görevlerine daraltır (birleşik "Tümü" görünümü yok, sade tutuluyor).
-    let engineerInternFilterValue = '';
+    // KİŞİ SEÇİCİ (toggle buton): MÜHENDİS için doğrudan "Kendim" + sorumlu olduğu stajyerler;
+    // MÜDÜR/EKİP LİDERİ için, yukarıdaki rol filtresinden bir rol seçildiğinde o roldeki (kendi
+    // biriminde altındaki) kişiler. Seçilen kişinin görevlerine daraltır.
+    let taskBoxPersonFilterValue = '';
 
-    function populateEngineerInternFilter() {
-      const wrap = document.getElementById('engineerInternFilterWrap');
-      const select = document.getElementById('engineerInternFilterSelect');
-      if (!wrap || !select || !currentUser) return;
+    function populateTaskBoxPersonToggle() {
+      const wrap = document.getElementById('leaderTasksPersonFilterWrap');
+      const toggle = document.getElementById('leaderTasksPersonToggle');
+      const label = document.getElementById('leaderTasksPersonFilterLabel');
+      if (!wrap || !toggle || !currentUser) return;
 
-      const isEngineer = currentUser.role === 'ENGINEER';
-      wrap.classList.toggle('hidden', !isEngineer);
-      if (!isEngineer) return;
+      let people = [];
 
-      const myInterns = (usersList || [])
-        .filter(u => u.role === 'INTERN' && u.engineer_id == currentUser.id)
-        .sort((a, b) => a.name.localeCompare(b.name));
+      if (currentUser.role === 'ENGINEER') {
+        const myInterns = (usersList || [])
+          .filter(u => u.role === 'INTERN' && u.engineer_id == currentUser.id)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        people = [{ id: currentUser.id, name: 'Kendim' }, ...myInterns.map(u => ({ id: u.id, name: u.name }))];
+        if (label) label.textContent = 'Kişi Seç';
+      } else if (currentUser.role === 'MANAGER' || currentUser.role === 'LEADER') {
+        if (!leaderTasksRoleFilterValue) {
+          wrap.classList.add('hidden');
+          taskBoxPersonFilterValue = '';
+          return;
+        }
+        people = (usersList || [])
+          .filter(u => u.role === leaderTasksRoleFilterValue && u.department === currentUser.department)
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map(u => ({ id: u.id, name: u.name }));
+        if (label) label.textContent = `${ROLE_LABELS_TR[leaderTasksRoleFilterValue] || ''} Seç`;
+      } else {
+        wrap.classList.add('hidden');
+        return;
+      }
 
-      const validValues = [String(currentUser.id), ...myInterns.map(u => String(u.id))];
-      if (!validValues.includes(String(engineerInternFilterValue))) engineerInternFilterValue = currentUser.id;
+      if (people.length === 0) {
+        wrap.classList.add('hidden');
+        taskBoxPersonFilterValue = '';
+        return;
+      }
 
-      select.innerHTML = `<option value="${currentUser.id}" ${String(engineerInternFilterValue) === String(currentUser.id) ? 'selected' : ''}>Kendim</option>` +
-        myInterns.map(u => `<option value="${u.id}" ${String(u.id) === String(engineerInternFilterValue) ? 'selected' : ''}>${u.name}</option>`).join('');
+      const validValues = people.map(p => String(p.id));
+      if (!validValues.includes(String(taskBoxPersonFilterValue))) taskBoxPersonFilterValue = people[0].id;
+
+      wrap.classList.remove('hidden');
+      toggle.innerHTML = people.map(p => `
+        <button type="button" data-person="${p.id}" onclick="setTaskBoxPersonFilter('${p.id}')" class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all">${escapeHtmlProj(p.name)}</button>
+      `).join('');
+      updateTaskBoxPersonToggleStyles();
     }
 
-    function setEngineerInternFilter(internId) {
-      engineerInternFilterValue = internId;
+    function updateTaskBoxPersonToggleStyles() {
+      const toggle = document.getElementById('leaderTasksPersonToggle');
+      if (!toggle) return;
+      const activeCls = ['bg-cyan-600', 'text-white'];
+      const passiveCls = ['text-slate-500', 'dark:text-slate-400'];
+      toggle.querySelectorAll('button[data-person]').forEach(btn => {
+        if (String(btn.dataset.person) === String(taskBoxPersonFilterValue)) {
+          btn.classList.add(...activeCls); btn.classList.remove(...passiveCls);
+        } else {
+          btn.classList.remove(...activeCls); btn.classList.add(...passiveCls);
+        }
+      });
+    }
+
+    function setTaskBoxPersonFilter(personId) {
+      taskBoxPersonFilterValue = personId;
+      updateTaskBoxPersonToggleStyles();
       renderLeaderTasksPage();
     }
 
@@ -9479,32 +9518,29 @@
       activeEl.innerHTML = '';
       pastEl.innerHTML = '';
 
-      const searchVal = (document.getElementById('leaderTaskSearchInput')?.value || '').toLowerCase();
       const subRoles = getSubordinateRoles(currentUser.role);
 
       const relevant = (tasksList || []).filter(t => {
-        // Mühendis için "Görevler" listesi, üstteki "Stajyer Filtrele" seçimine göre ya kendi
-        // görevlerini ya da seçilen (kendisinden sorumlu, engineer_id ile bağlı) stajyerin
-        // görevlerini gösterir.
+        // Mühendis için "Görevler" listesi, üstteki kişi seçiciye göre ya kendi görevlerini ya da
+        // seçilen (kendisinden sorumlu, engineer_id ile bağlı) stajyerin görevlerini gösterir.
         if (currentUser.role === 'ENGINEER') {
-          const selected = engineerInternFilterValue || currentUser.id;
+          const selected = taskBoxPersonFilterValue || currentUser.id;
           return t.assigned_to == selected;
         }
 
         const arole = getAssigneeRole(t);
-        // Belirli bir rol seçiliyse sadece o roldeki (kendi biriminde altındaki) kişilerin görevleri
-        if (leaderTasksRoleFilterValue) return arole === leaderTasksRoleFilterValue;
+        // Belirli bir rol seçiliyse: altındaki kişi seçiciden biri de seçilmişse sadece o kişinin
+        // görevleri, seçilmemişse o roldeki herkesin (kendi biriminde) görevleri.
+        if (leaderTasksRoleFilterValue) {
+          if (arole !== leaderTasksRoleFilterValue) return false;
+          if (taskBoxPersonFilterValue) return t.assigned_to == taskBoxPersonFilterValue;
+          return true;
+        }
         if (t.assigned_to == currentUser.id) return true; // kendi görevleri
         return arole && subRoles.includes(arole); // altındakilerin görevleri
       });
 
-      let filtered = relevant.filter(t =>
-        t.title.toLowerCase().includes(searchVal) ||
-        (t.assignee_name && t.assignee_name.toLowerCase().includes(searchVal)) ||
-        (t.created_by && t.created_by.toLowerCase().includes(searchVal))
-      );
-
-      filtered = filtered.slice().sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
+      const filtered = relevant.slice().sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
 
       const activeTasks = filtered.filter(t => t.status !== 'APPROVED' && t.status !== 'COMPLETED');
       const pastTasks = filtered.filter(t => t.status === 'APPROVED' || t.status === 'COMPLETED');
@@ -9525,55 +9561,6 @@
       } else {
         pastTasks.forEach(t => pastEl.appendChild(createTaskCard(t, true, t.assigned_to != currentUser.id)));
       }
-
-      renderSelfTaskList();
-    }
-
-    // "Görevlerim": Müdür/Ekip Lideri'nin kendi kendine atadığı (hatırlatma amaçlı) görevler dahil,
-    // kendisine atanmış tüm görevleri listeler.
-    function renderSelfTaskList() {
-      const el = document.getElementById('selfTaskList');
-      if (!el || !currentUser) return;
-
-      const mine = (tasksList || [])
-        .filter(t => t.assigned_to == currentUser.id)
-        .slice()
-        .sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
-
-      el.innerHTML = '';
-      if (mine.length === 0) {
-        el.innerHTML = emptyStateHtml('fa-list-check', 'Henüz kendinize atadığınız bir görev yok.', 'col-span-full');
-        return;
-      }
-      mine.forEach(t => el.appendChild(createTaskCard(t, t.status === 'APPROVED' || t.status === 'COMPLETED', false)));
-    }
-
-    // "Görevlerim" hızlı ekleme formu: kendine hatırlatma amaçlı görev oluşturur
-    async function handleAddSelfTask(e) {
-      e.preventDefault();
-      const title = document.getElementById('selfTaskTitle').value;
-      const endDate = document.getElementById('selfTaskEndDate').value;
-      const today = new Date().toISOString().split('T')[0];
-      const workDays = calculateWorkDays(today, endDate);
-
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/tasks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title, description: '', assignedTo: currentUser.id, category: 'Genel',
-            endDate, workDays, createdBy: currentUser.name, userRole: currentUser.role
-          })
-        });
-        if (res.ok) {
-          document.getElementById('selfTaskTitle').value = '';
-          document.getElementById('selfTaskEndDate').value = '';
-          await loadTasks();
-        } else {
-          const data = await res.json();
-          showToast('Hata: ' + (data.error || 'Görev eklenemedi.'), 'error');
-        }
-      } catch (err) { console.error('Kendime görev ekleme hatası:', err); }
     }
 
     // Görev atanabilecek çalışan rolleri, tümü (Müdür/Ekip Lideri herhangi bir birim/rolden atayabilir)

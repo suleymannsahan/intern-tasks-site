@@ -1619,6 +1619,119 @@ app.get('/api/admin/export-excel', async (req, res) => {
   }
 });
 
+// ============================================================
+// GOOGLE E-TABLOLAR CANLI SENKRONİZASYONU
+// Bir Google E-Tablo, Apps Script üzerinden bu iki uca istek atarak veritabanıyla iki yönlü
+// senkron kalır: /pull ile tüm tabloları periyodik çeker, /push ile tek bir hücre değişikliğini
+// anında veritabanına yazar. Kimlik doğrulama, kullanıcı oturumu yerine paylaşılan bir "secret"
+// ile yapılır (Apps Script bir kullanıcı hesabı olarak istek atmaz, sunucudan sunucuya çağrıdır).
+//
+// GÜVENLİK: sadece aşağıdaki SHEET_EDITABLE_COLUMNS listesindeki tablo+sütun kombinasyonları
+// tabloya yazılabilir. id, rol, şifre, durum (status) gibi iş akışı/güvenlik açısından kritik
+// alanlar bilinçli olarak DIŞARIDA bırakıldı — bunlar sitenin kendi ekranlarından, ilgili bildirim/
+// onay mantığı çalışarak değiştirilmeli; doğrudan tabloya yazmak o mantığı atlar.
+// ============================================================
+const SHEET_SYNC_SECRET = process.env.SHEET_SYNC_SECRET;
+
+const SHEET_EDITABLE_COLUMNS = {
+  tasks: ['description', 'review_comment'],
+  daily_logs: ['note'],
+  meeting_requests: ['description', 'review_comment'],
+  companies: ['name'],
+  projects: ['note'],
+  project_progress: ['planned', 'actual', 'note'],
+  project_stages: ['note']
+};
+
+function checkSheetSyncSecret(req, res) {
+  if (!SHEET_SYNC_SECRET) {
+    res.status(500).json({ error: 'SHEET_SYNC_SECRET ortam değişkeni tanımlı değil.' });
+    return false;
+  }
+  const provided = req.method === 'GET' ? req.query.secret : req.body.secret;
+  if (!provided || provided !== SHEET_SYNC_SECRET) {
+    res.status(403).json({ error: 'Geçersiz secret.' });
+    return false;
+  }
+  return true;
+}
+
+// Apps Script'in tabloyu periyodik olarak (ör. her 5 dakikada) çekip sayfayı tazelemesi için.
+app.get('/api/sheet-sync/pull', async (req, res) => {
+  try {
+    if (!checkSheetSyncSecret(req, res)) return;
+
+    const tablesRes = await db.execute(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
+    );
+
+    const MAX_CELL_LEN = 30000;
+    const tables = {};
+
+    for (const tableRow of tablesRes.rows) {
+      const tableName = tableRow.name;
+      const dataRes = await db.execute(`SELECT * FROM ${tableName}`);
+      const columns = dataRes.columns || [];
+
+      const rows = dataRes.rows.map(dataRow => {
+        const rowValues = {};
+        for (const col of columns) {
+          let val = dataRow[col];
+          if (col === 'file_data' && typeof val === 'string') {
+            val = `[Dosya verisi - ${val.length} karakter, senkronda hariç tutuldu]`;
+          } else if (typeof val === 'string' && val.length > MAX_CELL_LEN) {
+            val = val.slice(0, MAX_CELL_LEN) + `… [kesildi, toplam ${val.length} karakter]`;
+          }
+          rowValues[col] = val === undefined ? null : val;
+        }
+        return rowValues;
+      });
+
+      tables[tableName] = { columns, editable: SHEET_EDITABLE_COLUMNS[tableName] || [], rows };
+    }
+
+    res.json({ tables });
+  } catch (error) {
+    console.error('Sheet-sync pull hatası:', error);
+    res.status(500).json({ error: 'Veri çekilirken hata: ' + error.message });
+  }
+});
+
+// Apps Script'in onEdit tetikleyicisinin, E-Tablo'da değişen tek bir hücreyi anında veritabanına
+// yazması için. Sadece SHEET_EDITABLE_COLUMNS'da izin verilen tablo+sütun kombinasyonlarını kabul eder.
+app.post('/api/sheet-sync/push', async (req, res) => {
+  try {
+    if (!checkSheetSyncSecret(req, res)) return;
+
+    const { table, id, column, value } = req.body;
+    const allowedColumns = SHEET_EDITABLE_COLUMNS[table];
+    if (!allowedColumns) {
+      return res.status(403).json({ error: `"${table}" tablosu senkron için düzenlemeye açık değil.` });
+    }
+    if (!allowedColumns.includes(column)) {
+      return res.status(403).json({ error: `"${table}.${column}" alanı düzenlemeye açık değil.` });
+    }
+    const rowId = Number(id);
+    if (!Number.isInteger(rowId) || rowId <= 0) {
+      return res.status(400).json({ error: 'Geçersiz id.' });
+    }
+
+    const result = await db.execute({
+      sql: `UPDATE ${table} SET ${column} = ? WHERE id = ?`,
+      args: [value === undefined ? null : value, rowId]
+    });
+
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: 'Kayıt bulunamadı.' });
+    }
+
+    res.json({ message: 'Güncellendi.' });
+  } catch (error) {
+    console.error('Sheet-sync push hatası:', error);
+    res.status(500).json({ error: 'Kaydedilirken hata: ' + error.message });
+  }
+});
+
 // Tüm giriş yapmış kullanıcıların erişebileceği, hassas olmayan ayarlar
 // (ör. iş günü hesabı için tatil günleri) — yetki kontrolü yok, kasıtlı olarak herkese açık.
 app.get('/api/settings/public', async (req, res) => {
