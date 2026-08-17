@@ -181,14 +181,6 @@
         animation: modalPanelIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
       }
 
-      /* Küçük açılır menüler (ör. ayarlar menüsü) */
-      @keyframes dropdownPopIn {
-        from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
-      }
-      #settingsDropdown:not(.hidden) {
-        animation: dropdownPopIn 0.15s ease-out;
-      }
     }
     /* Akıllı İş Planı — Gantt çizelgesi */
     .ip-gantt-bar { transition: width .3s ease, left .3s ease; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
@@ -423,11 +415,6 @@
       </nav>
 
       <div class="flex items-center gap-2 sm:gap-3 shrink-0">
-        <div class="text-right hidden sm:block">
-          <div id="userInfoName" class="font-bold text-sm text-slate-900 dark:text-slate-100"></div>
-          <div id="userInfoRole" class="text-[11px] font-medium text-cyan-600 dark:text-cyan-400"></div>
-        </div>
-
         <div class="relative">
           <button id="notifBellBtn" onclick="toggleNotificationsPanel()" class="relative p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-cyan-500/10 hover:text-cyan-600 dark:hover:text-cyan-400 transition-all focus:outline-none">
             <i class="fa-solid fa-bell text-lg"></i>
@@ -477,25 +464,6 @@
           </div>
         </div>
 
-        <div class="relative">
-          <button onclick="toggleSettingsDropdown()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-cyan-500/10 hover:text-cyan-600 dark:hover:text-cyan-400 transition-all focus:outline-none">
-            <i class="fa-solid fa-gear text-lg"></i>
-          </button>
-
-          <div id="settingsDropdown" class="hidden absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 z-50 backdrop-blur-xl">
-            <button onclick="openEditProfileModal(); toggleSettingsDropdown();" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 transition-all">
-              <i class="fa-solid fa-user-pen text-cyan-500"></i> Profili Düzenle
-            </button>
-            <button onclick="toggleDarkMode()" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between transition-all">
-              <span class="flex items-center gap-2.5"><i class="fa-solid fa-moon text-amber-500 dark:text-cyan-400"></i> Tema Modu</span>
-              <span id="themeText" class="text-[10px] text-slate-400">Aydınlık</span>
-            </button>
-            <div class="border-t border-slate-200 dark:border-slate-800 my-1"></div>
-            <button onclick="handleLogout()" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2.5 transition-all">
-              <i class="fa-solid fa-right-from-bracket"></i> Çıkış Yap
-            </button>
-          </div>
-        </div>
       </div>
     </header>
 
@@ -2103,6 +2071,9 @@
             <div id="rsEmail" class="hidden flex items-center gap-1.5"><i class="fa-solid fa-envelope w-3.5 shrink-0"></i><span class="truncate"></span></div>
             <div id="rsPhone" class="hidden flex items-center gap-1.5"><i class="fa-solid fa-phone w-3.5 shrink-0"></i><span></span></div>
           </div>
+          <button type="button" onclick="openEditProfileModal()" class="w-full mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-left text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-2">
+            <i class="fa-solid fa-user-pen"></i> Profili Düzenle
+          </button>
         </div>
 
         <!-- PLANLAMA: kendine not + tarih; not eklendiğinde ve tarihi yaklaşınca e-posta gider -->
@@ -2117,6 +2088,17 @@
           </form>
           <div id="personalReminderList" class="space-y-2 scroll-panel max-h-[320px] pr-1"></div>
           <p id="personalReminderEmptyHint" class="text-xs text-slate-400 text-center py-4">Henüz bir notunuz yok.</p>
+        </div>
+
+        <!-- TEMA MODU / ÇIKIŞ: eskiden ayarlar (dişli) menüsündeydi, artık her zaman burada -->
+        <div class="mt-auto space-y-1 pt-2 border-t border-slate-200 dark:border-slate-800">
+          <button type="button" onclick="toggleDarkMode()" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between transition-all">
+            <span class="flex items-center gap-2.5"><i class="fa-solid fa-moon text-amber-500 dark:text-cyan-400"></i> Tema Modu</span>
+            <span id="themeText" class="text-[10px] text-slate-400">Aydınlık</span>
+          </button>
+          <button type="button" onclick="handleLogout()" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2.5 transition-all">
+            <i class="fa-solid fa-right-from-bracket"></i> Çıkış Yap
+          </button>
         </div>
       </aside>
     </div>
@@ -2922,11 +2904,6 @@
       handleRoleChange();
     };
 
-    function toggleSettingsDropdown() {
-      const dropdown = document.getElementById('settingsDropdown');
-      dropdown.classList.toggle('hidden');
-    }
-
     // ============================================================
     // BİLDİRİM SİSTEMİ (temel): giriş yapıldığında okunmamış bildirimler
     // otomatik açılır; kapatmak sayacı sıfırlamaz; bir bildirimin içeriği
@@ -3432,7 +3409,6 @@
       if (clickedInsideChildModal) return;
 
       const dropdownConfigs = [
-        { dropdownId: 'settingsDropdown', buttonSelector: 'button[onclick="toggleSettingsDropdown()"]' },
         { dropdownId: 'notificationsPanel', buttonSelector: '#notifBellBtn' }
       ];
 
@@ -8287,9 +8263,6 @@
       // İş Planı bildirim takibini başlat (AI)
       baslatIpBildirimTakibi();
 
-      // Ad Soyad Yazdır
-      document.getElementById('userInfoName').innerText = currentUser.name;
-
       // 1. Rol Etiketini Dinamik Belirleme
       let roleLabel = 'Stajyer';
       switch (currentUser.role) {
@@ -8321,9 +8294,6 @@
           roleLabel = 'İnsan Kaynakları';
           break;
       }
-
-      // Rol bilgisini ekrana yaz
-      document.getElementById('userInfoRole').innerText = roleLabel;
 
       // (Varsa) Birim bilgisini ekrana yaz
       const deptElement = document.getElementById('userInfoDepartment');
@@ -12492,8 +12462,6 @@
       if (!modal) return;
       modal.classList.remove('hidden');
       dokDenetimSekmeSec('yeni');
-      const dropdown = document.getElementById('settingsDropdown');
-      if (dropdown) dropdown.classList.add('hidden');
     }
     function closeDokDenetimModal() {
       const modal = document.getElementById('dokDenetimModal');
