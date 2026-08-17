@@ -214,8 +214,12 @@ function createAiRouter(db, { isAdmin }) {
     return cevap;
   }
 
-  // Geçmiş gerçek verilere göre akıllı ağırlık (5+ kayıt varsa gerçek ortalama)
-  async function akilliAgirliklarHesapla(kategori) {
+  // Geçmiş gerçek verilere göre akıllı ağırlık (5+ kayıt varsa gerçek ortalama).
+  // Kategoriler artık boyut anlamı taşımayan düz etiketler (Kategori 1/2/3/4) olduğundan,
+  // geçmiş süreler kategori ayrımı yapılmadan tüm kayıtlar üzerinden birlikte hesaplanır —
+  // böylece "akıllı" ayarlama, verinin kategoriler arasında bölünüp seyrelmesi yerine daha
+  // hızlı yeterli örnek sayısına ulaşır.
+  async function akilliAgirliklarHesapla() {
     const ESIK = 5;
     const ortalamalar = {};
     for (const adim of IS_ADIMLARI) {
@@ -223,8 +227,8 @@ function createAiRouter(db, { isAdmin }) {
       try {
         const r = await db.execute({
           sql: `SELECT AVG(gercek_gun) as ort, COUNT(*) as adet
-                FROM asama_gecmisi WHERE asama_adi = ? AND kategori = ?`,
-          args: [adim.ad, kategori]
+                FROM asama_gecmisi WHERE asama_adi = ?`,
+          args: [adim.ad]
         });
         row = r.rows[0] || row;
       } catch (e) { /* tablo henüz boş/yok olabilir */ }
@@ -264,7 +268,7 @@ function createAiRouter(db, { isAdmin }) {
         return res.status(400).json({ error: 'Bitiş tarihi geçmiş bir tarih olamaz.' });
       }
 
-      const agirliklar = await akilliAgirliklarHesapla(Number(kategori));
+      const agirliklar = await akilliAgirliklarHesapla();
       const plan = isPlaniHesapla(Number(kategori), dokumanTarihi, bitisTarihi, agirliklar);
 
       const gecmisNotlari = plan.adimlar
