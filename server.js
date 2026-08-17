@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS = {
   email_task_revision: true,
   email_task_approved: true,
   email_project_assigned: true,
+  email_personal_reminder: true,
   // Kayıt onay kuralları: bu rollerden/departmanlardan biriyle kayıt olunursa admin onayı gerekir
   approval_required_roles: ['MANAGER', 'LEADER'],
   approval_required_departments: ['INSAN_KAYNAKLARI'],
@@ -466,6 +467,22 @@ async function initDb() {
         uploaded_by_id INTEGER,
         created_at TEXT NOT NULL,
         FOREIGN KEY(task_id) REFERENCES tasks(id)
+      )
+    `);
+
+    // ============================================================
+    // PLANLAMA NOTLARI: sağ paneldeki kişisel not/hatırlatma alanı. Herkes kendine, kendisinin
+    // görebileceği bir not + tarih ekler; not eklendiğinde ve tarih yaklaştığında e-posta atılır.
+    // ============================================================
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS personal_reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        note TEXT NOT NULL,
+        remind_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        notified_upcoming INTEGER DEFAULT 0,
+        FOREIGN KEY(user_id) REFERENCES users(id)
       )
     `);
 
@@ -1618,6 +1635,246 @@ app.get('/api/admin/export-excel', async (req, res) => {
     res.status(500).json({ error: 'Excel dosyası oluşturulurken hata: ' + error.message });
   }
 });
+
+// ============================================================
+// GOOGLE E-TABLOLAR CANLI SENKRONİZASYONU
+// Bir Google E-Tablo, Apps Script üzerinden bu iki uca istek atarak veritabanıyla iki yönlü
+// senkron kalır: /pull ile tüm tabloları periyodik çeker, /push ile tek bir hücre değişikliğini
+// anında veritabanına yazar. Kimlik doğrulama, kullanıcı oturumu yerine paylaşılan bir "secret"
+// ile yapılır (Apps Script bir kullanıcı hesabı olarak istek atmaz, sunucudan sunucuya çağrıdır).
+//
+// GÜVENLİK: sadece aşağıdaki SHEET_EDITABLE_COLUMNS listesindeki tablo+sütun kombinasyonları
+// tabloya yazılabilir. id, rol, şifre, durum (status) gibi iş akışı/güvenlik açısından kritik
+// alanlar bilinçli olarak DIŞARIDA bırakıldı — bunlar sitenin kendi ekranlarından, ilgili bildirim/
+// onay mantığı çalışarak değiştirilmeli; doğrudan tabloya yazmak o mantığı atlar.
+// ============================================================
+const SHEET_SYNC_SECRET = process.env.SHEET_SYNC_SECRET;
+
+const SHEET_EDITABLE_COLUMNS = {
+  tasks: ['description', 'review_comment'],
+  daily_logs: ['note'],
+  meeting_requests: ['description', 'review_comment'],
+  companies: ['name'],
+  projects: ['note'],
+  project_progress: ['planned', 'actual', 'note'],
+  project_stages: ['note']
+};
+
+function checkSheetSyncSecret(req, res) {
+  if (!SHEET_SYNC_SECRET) {
+    res.status(500).json({ error: 'SHEET_SYNC_SECRET ortam değişkeni tanımlı değil.' });
+    return false;
+  }
+  const provided = req.method === 'GET' ? req.query.secret : req.body.secret;
+  if (!provided || provided !== SHEET_SYNC_SECRET) {
+    res.status(403).json({ error: 'Geçersiz secret.' });
+    return false;
+  }
+  return true;
+}
+
+// Apps Script'in tabloyu periyodik olarak (ör. her 5 dakikada) çekip sayfayı tazelemesi için.
+app.get('/api/sheet-sync/pull', async (req, res) => {
+  try {
+    if (!checkSheetSyncSecret(req, res)) return;
+
+    const tablesRes = await db.execute(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
+    );
+
+    const MAX_CELL_LEN = 30000;
+    const tables = {};
+
+    for (const tableRow of tablesRes.rows) {
+      const tableName = tableRow.name;
+      const dataRes = await db.execute(`SELECT * FROM ${tableName}`);
+      const columns = dataRes.columns || [];
+
+      const rows = dataRes.rows.map(dataRow => {
+        const rowValues = {};
+        for (const col of columns) {
+          let val = dataRow[col];
+          if (col === 'file_data' && typeof val === 'string') {
+            val = `[Dosya verisi - ${val.length} karakter, senkronda hariç tutuldu]`;
+          } else if (typeof val === 'string' && val.length > MAX_CELL_LEN) {
+            val = val.slice(0, MAX_CELL_LEN) + `… [kesildi, toplam ${val.length} karakter]`;
+          }
+          rowValues[col] = val === undefined ? null : val;
+        }
+        return rowValues;
+      });
+
+      tables[tableName] = { columns, editable: SHEET_EDITABLE_COLUMNS[tableName] || [], rows };
+    }
+
+    res.json({ tables });
+  } catch (error) {
+    console.error('Sheet-sync pull hatası:', error);
+    res.status(500).json({ error: 'Veri çekilirken hata: ' + error.message });
+  }
+});
+
+// Apps Script'in onEdit tetikleyicisinin, E-Tablo'da değişen tek bir hücreyi anında veritabanına
+// yazması için. Sadece SHEET_EDITABLE_COLUMNS'da izin verilen tablo+sütun kombinasyonlarını kabul eder.
+app.post('/api/sheet-sync/push', async (req, res) => {
+  try {
+    if (!checkSheetSyncSecret(req, res)) return;
+
+    const { table, id, column, value } = req.body;
+    const allowedColumns = SHEET_EDITABLE_COLUMNS[table];
+    if (!allowedColumns) {
+      return res.status(403).json({ error: `"${table}" tablosu senkron için düzenlemeye açık değil.` });
+    }
+    if (!allowedColumns.includes(column)) {
+      return res.status(403).json({ error: `"${table}.${column}" alanı düzenlemeye açık değil.` });
+    }
+    const rowId = Number(id);
+    if (!Number.isInteger(rowId) || rowId <= 0) {
+      return res.status(400).json({ error: 'Geçersiz id.' });
+    }
+
+    const result = await db.execute({
+      sql: `UPDATE ${table} SET ${column} = ? WHERE id = ?`,
+      args: [value === undefined ? null : value, rowId]
+    });
+
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: 'Kayıt bulunamadı.' });
+    }
+
+    res.json({ message: 'Güncellendi.' });
+  } catch (error) {
+    console.error('Sheet-sync push hatası:', error);
+    res.status(500).json({ error: 'Kaydedilirken hata: ' + error.message });
+  }
+});
+
+// ============================================================
+// PLANLAMA NOTLARI (sağ panel): herkes kendine bir not + "ne zaman yapılacak" tarihi ekler.
+// Sadece notu ekleyen kişi kendi notlarını görür/siler (userId ile filtrelenir).
+// ============================================================
+
+// remind_at ("YYYY-MM-DDTHH:MM", datetime-local formatı) değerini e-postada okunur hale getirir
+function formatReminderDate(remindAt) {
+  if (!remindAt) return '-';
+  const [datePart, timePart] = String(remindAt).split('T');
+  const [y, m, d] = (datePart || '').split('-');
+  return y && m && d ? `${d}.${m}.${y}${timePart ? ' ' + timePart : ''}` : remindAt;
+}
+
+// Gerçek olmayan (sistem tarafından otomatik üretilmiş) e-postalara mail atmaz
+function isRealEmail(email) {
+  return !!email && !/@system\.local$/i.test(email);
+}
+
+app.post('/api/personal-reminders', async (req, res) => {
+  try {
+    const { userId, note, remindAt } = req.body;
+    if (!userId || !note || !note.trim() || !remindAt) {
+      return res.status(400).json({ error: 'Not ve tarih zorunludur.' });
+    }
+
+    const createdAt = new Date().toISOString();
+    const result = await db.execute({
+      sql: `INSERT INTO personal_reminders (user_id, note, remind_at, created_at) VALUES (?, ?, ?, ?)`,
+      args: [userId, note.trim(), remindAt, createdAt]
+    });
+
+    // Not eklendiğinde anında bilgilendirme e-postası — asıl işlemi bloklamasın diye ayrı try/catch
+    try {
+      if (SETTINGS_CACHE.email_personal_reminder) {
+        const uRes = await db.execute({ sql: `SELECT name, email FROM users WHERE id = ?`, args: [userId] });
+        const u = uRes.rows[0];
+        if (u && isRealEmail(u.email)) {
+          await sendDetailsEmail(
+            u.email, u.name,
+            'Yeni Bir Not Eklediniz',
+            'Planlama Notunuz Kaydedildi',
+            'Kendinize aşağıdaki notu düştünüz. Belirttiğiniz tarih yaklaştığında tekrar hatırlatılacaktır.',
+            [['Not', note.trim()], ['Tarih', formatReminderDate(remindAt)]],
+            'Panele Git'
+          );
+        }
+      }
+    } catch (mailErr) { console.error('Planlama notu e-postası hatası:', mailErr.message); }
+
+    res.json({ id: Number(result.lastInsertRowid), message: 'Not eklendi.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Not eklenirken hata: ' + error.message });
+  }
+});
+
+app.get('/api/personal-reminders', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
+    const result = await db.execute({
+      sql: `SELECT * FROM personal_reminders WHERE user_id = ? ORDER BY remind_at ASC`,
+      args: [userId]
+    });
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/personal-reminders/:id', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
+    const result = await db.execute({
+      sql: `DELETE FROM personal_reminders WHERE id = ? AND user_id = ?`,
+      args: [req.params.id, userId]
+    });
+    if (result.rowsAffected === 0) return res.status(404).json({ error: 'Not bulunamadı.' });
+    res.json({ message: 'Not silindi.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Notun zamanı yaklaşınca (24 saat kala) tek seferlik hatırlatma e-postası gönderir. "tick" her
+// çalıştığında henüz bildirilmemiş (notified_upcoming=0) ve süresi 24 saat içine girmiş notları
+// bulur, e-postayı dener, sonucu ne olursa olsun notified_upcoming=1 yaparak tekrar denemeyi önler
+// (aksi halde gerçek olmayan e-postalı kullanıcılar için sonsuz döngü oluşurdu).
+let _personalReminderBasladi = false;
+function startPersonalReminderScheduler() {
+  if (_personalReminderBasladi) return;
+  _personalReminderBasladi = true;
+  const tick = async () => {
+    try {
+      const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+      const dueRes = await db.execute({
+        sql: `SELECT personal_reminders.id, personal_reminders.note, personal_reminders.remind_at,
+                     users.name AS user_name, users.email AS user_email
+              FROM personal_reminders LEFT JOIN users ON personal_reminders.user_id = users.id
+              WHERE personal_reminders.notified_upcoming = 0 AND personal_reminders.remind_at <= ?`,
+        args: [in24h]
+      });
+
+      for (const r of dueRes.rows) {
+        if (SETTINGS_CACHE.email_personal_reminder && isRealEmail(r.user_email)) {
+          try {
+            await sendDetailsEmail(
+              r.user_email, r.user_name,
+              'Notunuzun Zamanı Yaklaşıyor',
+              'Planlama Hatırlatması',
+              'Kendinize bıraktığınız bir notun zamanı yaklaşıyor, unutmayın!',
+              [['Not', r.note], ['Tarih', formatReminderDate(r.remind_at)]],
+              'Panele Git'
+            );
+          } catch (mailErr) { console.error('Hatırlatma e-postası hatası:', mailErr.message); }
+        }
+        await db.execute({ sql: `UPDATE personal_reminders SET notified_upcoming = 1 WHERE id = ?`, args: [r.id] });
+      }
+    } catch (e) { console.error('Planlama hatırlatma zamanlayıcı hatası:', e.message); }
+  };
+  setTimeout(tick, 30000);
+  setInterval(tick, 30 * 60 * 1000); // 30 dakikada bir kontrol
+  console.log('📝 Planlama notu hatırlatma zamanlayıcısı aktif.');
+}
+// Planlama notları: zamanı 24 saat içine giren notlar için tek seferlik hatırlatma e-postası.
+startPersonalReminderScheduler();
 
 // Tüm giriş yapmış kullanıcıların erişebileceği, hassas olmayan ayarlar
 // (ör. iş günü hesabı için tatil günleri) — yetki kontrolü yok, kasıtlı olarak herkese açık.

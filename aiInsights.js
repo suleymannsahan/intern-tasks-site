@@ -264,17 +264,10 @@ function createInsightsRouter(db, { isAdmin }) {
 async function riskBildirimleriYaz(db, riskler) {
   const bugunStr = bugunISO();
   for (const r of riskler) {
-    // Alıcılar: görevi veren + atanan + atananın birimindeki gözcüler (INTERN hariç) — gecikme mantığıyla aynı
+    // Alıcılar sadece görevi veren + atanan kişidir — tüm birime yayın YAPILMAZ, aksi halde
+    // ilgisi olmayan herkes başkasının iş planı bildirimini görür.
     const aliciIdSet = new Set();
-    if (r.atananId) {
-      aliciIdSet.add(r.atananId);
-      const aRes = await db.execute({ sql: `SELECT department FROM users WHERE id = ? LIMIT 1`, args: [r.atananId] });
-      const birim = aRes.rows[0] && aRes.rows[0].department;
-      if (birim) {
-        const gozRes = await db.execute({ sql: `SELECT id FROM users WHERE department = ? AND role != 'INTERN'`, args: [birim] });
-        for (const g of gozRes.rows) aliciIdSet.add(g.id);
-      }
-    }
+    if (r.atananId) aliciIdSet.add(r.atananId);
     // Görevi verene de haber ver
     const tRes = await db.execute({ sql: `SELECT created_by FROM tasks WHERE id = ? LIMIT 1`, args: [r.taskId] });
     const verenAd = tRes.rows[0] && tRes.rows[0].created_by;
