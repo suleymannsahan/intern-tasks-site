@@ -10546,6 +10546,9 @@
 
       if (!task.is_plani) {
         if (!canManage) return '';
+        // Geçmiş/Tamamlanan görevler (Onaylandı/Onay Bekliyor) için plan oluşturma seçeneği
+        // sunulmaz — bitmiş bir işe artık ileriye dönük bir iş planı çıkarmanın anlamı yok.
+        if (task.status === 'APPROVED' || task.status === 'COMPLETED') return '';
         const bugun = new Date().toISOString().substring(0, 10);
         const bitisVarsayilan = /^\d{4}-\d{2}-\d{2}$/.test(task.end_date || '') ? task.end_date : '';
         const kartPlaniHtml = userIsTestTeam(currentUser) ? `
