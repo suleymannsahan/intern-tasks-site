@@ -1728,6 +1728,21 @@
                   <div id="engineerUpcomingProjectsList" class="space-y-2 scroll-panel max-h-[220px] pr-1"></div>
                 </div>
               </div>
+
+              <div class="bg-white dark:bg-slate-800 border border-rose-200 dark:border-rose-900/40 rounded-2xl p-4 shadow-sm space-y-4">
+                <div>
+                  <h4 class="font-bold text-sm text-rose-600 dark:text-rose-400 flex items-center gap-2 mb-3">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Geciken Görevler
+                  </h4>
+                  <div id="engineerOverdueTasksList" class="space-y-2 scroll-panel max-h-[220px] pr-1"></div>
+                </div>
+                <div>
+                  <h4 class="font-bold text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2 mb-3">
+                    <i class="fa-solid fa-hourglass-half"></i> Yaklaşan Görevler
+                  </h4>
+                  <div id="engineerUpcomingTasksList" class="space-y-2 scroll-panel max-h-[220px] pr-1"></div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -8158,6 +8173,7 @@
         if (engineerHomeSection) engineerHomeSection.classList.remove('hidden');
         if (typeof renderLeaderWeekMeetings === 'function') renderLeaderWeekMeetings('engineerWeekMeetingsList');
         if (typeof loadEngineerOwnedProjects === 'function') loadEngineerOwnedProjects();
+        if (typeof renderEngineerTaskReminder === 'function') renderEngineerTaskReminder();
 
         if (typeof checkDailyLogWarning === 'function') checkDailyLogWarning();
 
@@ -8538,6 +8554,7 @@
         if (typeof renderMainTaskList === 'function') renderMainTaskList();
         if (typeof renderLeaderTasksPage === 'function') renderLeaderTasksPage();
         if (typeof renderInternTaskReminder === 'function') renderInternTaskReminder();
+        if (typeof renderEngineerTaskReminder === 'function') renderEngineerTaskReminder();
         updateTasksBadge();
       } catch (err) { console.error("Görevler alınamadı:", err); }
     }
@@ -9200,12 +9217,13 @@
       }
     }
 
-    // Stajyer ana ekranı sağ panel: kendisine atanan, henüz tamamlanmamış görevlerden teslim
-    // tarihi geçmiş olanlar (Geciken Görevler) ve teslim tarihine 3 günden az kalanlar
-    // (Yaklaşan Görevler) ayrı ayrı listelenir.
-    function renderInternTaskReminder() {
-      const overdueEl = document.getElementById('internOverdueTasksList');
-      const upcomingEl = document.getElementById('internUpcomingTasksList');
+    // Ana ekran sağ panel (Stajyer/Mühendis ortak): kendisine atanan, henüz tamamlanmamış
+    // görevlerden teslim tarihi geçmiş olanlar (Geciken Görevler) ve teslim tarihine 3 günden
+    // az kalanlar (Yaklaşan Görevler) ayrı ayrı listelenir. overdueElId/upcomingElId ile hangi
+    // rolün panelinin dolduruluğu belirlenir; ilgili elementler DOM'da yoksa sessizce çıkar.
+    function renderTaskReminderPanel(overdueElId, upcomingElId) {
+      const overdueEl = document.getElementById(overdueElId);
+      const upcomingEl = document.getElementById(upcomingElId);
       if (!overdueEl || !upcomingEl || !currentUser) return;
 
       const today = new Date().toISOString().substring(0, 10);
@@ -9230,6 +9248,14 @@
       upcomingEl.innerHTML = upcoming.length === 0
         ? emptyStateHtml('fa-list-check', 'Yaklaşan görev yok.')
         : upcoming.map(t => cardHtml(t, `${t.days_left} gün kaldı`)).join('');
+    }
+
+    function renderInternTaskReminder() {
+      renderTaskReminderPanel('internOverdueTasksList', 'internUpcomingTasksList');
+    }
+
+    function renderEngineerTaskReminder() {
+      renderTaskReminderPanel('engineerOverdueTasksList', 'engineerUpcomingTasksList');
     }
 
     // MÜDÜR: "Görevler" sayfasında kendi biriminde rol bazlı filtreleme. Seçili rol state'i.
