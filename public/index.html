@@ -8039,10 +8039,8 @@
         deptElement.innerText = `${currentUser.department} Birimi`;
       }
 
-      // Doküman Denetimi kutucuğu: sadece Test ekibi üyelerine görünür
-      // (Elektronik birimi + "Test" alt alanı — bkz. server.js department_subareas seed'i), rol fark etmeksizin (Admin dahil).
-      const isTestTeamMember = !!currentUser && currentUser.department === 'ELEKTRONIK' && currentUser.sub_area === 'Test';
-      document.querySelectorAll('[data-doc-audit-tile]').forEach(el => el.classList.toggle('hidden', !isTestTeamMember));
+      // Doküman Denetimi kutucuğu: sadece Test ekibi üyelerine görünür, rol fark etmeksizin (Admin dahil).
+      document.querySelectorAll('[data-doc-audit-tile]').forEach(el => el.classList.toggle('hidden', !userIsTestTeam(currentUser)));
 
       // 2. Yetki Seviyelerini Tanımlama
       const role = currentUser.role;
@@ -10352,6 +10350,12 @@
     // Oluşturma/güncelleme/sıfırlama: ADMIN, MANAGER, LEADER, ENGINEER. Aşama tamamlama: göreve
     // atanan kişi. Aşama onaylama/reddetme: görevi veren kişi ya da yönetici rolleri.
     // ============================================================
+    // Test ekibi üyeliği: Elektronik birimi + "Test" alt alanı (server.js department_subareas seed'i
+    // ile aynı etiket). Doküman Denetimi kutucuğu ve "Kart için Planla" seçeneği bu kontrolü paylaşır.
+    function userIsTestTeam(user) {
+      return !!user && user.department === 'ELEKTRONIK' && user.sub_area === 'Test';
+    }
+
     const IS_PLANI_YETKILI_ROLLER = ['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'];
     const IS_PLANI_DURUM_ETIKET = {
       bekliyor: { label: 'Bekliyor', cls: 'bg-slate-500/10 text-slate-500 border-slate-500/30' },
@@ -10450,23 +10454,40 @@
         if (!canManage) return '';
         const bugun = new Date().toISOString().substring(0, 10);
         const bitisVarsayilan = /^\d{4}-\d{2}-\d{2}$/.test(task.end_date || '') ? task.end_date : '';
-        return `
-          <div class="bg-violet-500/5 border border-violet-300 dark:border-violet-900/40 rounded-xl p-4">
-            <div class="text-xs font-bold text-violet-600 dark:text-violet-300 mb-2"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Akıllı İş Planı</div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3">Bu görev için yapay zekâ destekli 6 aşamalı bir iş planı oluşturabilirsiniz (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon).</p>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-              <select id="isPlaniKategori" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
-                <option value="1">Küçük (3 ay)</option>
-                <option value="2">Orta (4 ay)</option>
-                <option value="3">Büyük (5 ay)</option>
-                <option value="4">Çok Büyük (6 ay)</option>
-              </select>
-              <input type="date" id="isPlaniDokumanTarihi" value="${bugun}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
-              <input type="date" id="isPlaniBitisTarihi" value="${bitisVarsayilan}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+        const kartPlaniHtml = userIsTestTeam(currentUser) ? `
+            <div class="border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+              <div class="text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1"><i class="fa-solid fa-microchip me-1"></i>Kart için Planla</div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-2">Test ekibinin sabit 6 aşamalı kart tasarım süreci (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon).</p>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+                <select id="isPlaniKategori" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+                  <option value="1">Küçük (3 ay)</option>
+                  <option value="2">Orta (4 ay)</option>
+                  <option value="3">Büyük (5 ay)</option>
+                  <option value="4">Çok Büyük (6 ay)</option>
+                </select>
+                <input type="date" id="isPlaniDokumanTarihi" value="${bugun}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+                <input type="date" id="isPlaniBitisTarihi" value="${bitisVarsayilan}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              </div>
+              <button onclick="handleGenerateIsPlani(${task.id})" class="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
+                <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Kart Planı Oluştur
+              </button>
             </div>
-            <button onclick="handleGenerateIsPlani(${task.id})" class="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
-              <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Plan Oluştur
-            </button>
+        ` : '';
+        return `
+          <div class="bg-violet-500/5 border border-violet-300 dark:border-violet-900/40 rounded-xl p-4 space-y-3">
+            <div class="text-xs font-bold text-violet-600 dark:text-violet-300"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>Akıllı İş Planı</div>
+            ${kartPlaniHtml}
+            <div class="border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+              <div class="text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1"><i class="fa-solid fa-sparkles me-1"></i>Genel Plan (AI)</div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-2">Yapay zekâ, görevin başlığına ve açıklamasına bakarak bu göreve özgü aşamalar üretir — herhangi bir görev için kullanılabilir.</p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                <input type="date" id="isPlaniGenelBaslangic" value="${bugun}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+                <input type="date" id="isPlaniGenelBitis" value="${bitisVarsayilan}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              </div>
+              <button id="isPlaniGenelBtn" onclick="handleGenerateIsPlaniGenel(${task.id})" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
+                <i class="fa-solid fa-sparkles me-1"></i> AI ile Plan Oluştur
+              </button>
+            </div>
           </div>
         `;
       }
@@ -10576,6 +10597,44 @@
       } catch (err) {
         console.error('İş planı oluşturma hatası:', err);
         showToast('İş planı oluşturulurken bir hata oluştu.', 'error');
+      }
+    }
+
+    // Genel Plan (AI): sabit şablona bağlı kalmadan, görevin başlığı+açıklamasına göre
+    // yapay zekânın kendi belirlediği sayı/isimde aşamalardan oluşan bir iş planı üretir.
+    async function handleGenerateIsPlaniGenel(taskId) {
+      const task = (tasksList || []).find(t => t.id == taskId);
+      if (!task) return;
+      const dokumanTarihi = document.getElementById('isPlaniGenelBaslangic').value;
+      const bitisTarihi = document.getElementById('isPlaniGenelBitis').value;
+      if (!dokumanTarihi || !bitisTarihi) { showToast('Başlangıç ve bitiş tarihini seçiniz.', 'error'); return; }
+
+      const btn = document.getElementById('isPlaniGenelBtn');
+      const eskiIcerik = btn ? btn.innerHTML : '';
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Yapay zekâ plan hazırlıyor…'; }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/is-plani-genel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId, dokumanTarihi, bitisTarihi, userRole: currentUser.role })
+        });
+        const plan = await res.json();
+        if (!res.ok) { showToast('Hata: ' + (plan.error || 'Plan oluşturulamadı.'), 'error'); return; }
+
+        const saveRes = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/is-plani-kaydet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan, userRole: currentUser.role })
+        });
+        if (!saveRes.ok) { const d = await saveRes.json(); showToast('Hata: ' + (d.error || 'Plan kaydedilemedi.'), 'error'); return; }
+
+        await loadTasks();
+        openTaskDetailModal(taskId);
+      } catch (err) {
+        console.error('Genel iş planı oluşturma hatası:', err);
+        showToast('İş planı oluşturulurken bir hata oluştu.', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = eskiIcerik; }
       }
     }
 

@@ -58,7 +58,9 @@ function isPlaniHesapla(kategori, dokumanTarihiStr, bitisTarihiStr, agirliklar) 
 
   const toplamGun = Math.max(1, Math.round((bitis - baslangic) / (1000 * 60 * 60 * 24)));
 
-  const kullanilacak = (agirliklar && agirliklar.length === IS_ADIMLARI.length)
+  // agirliklar sabit 6 aşamalı kart şablonu için ya da (Genel Plan'da) AI'ın ürettiği
+  // değişken sayıda aşama için gelebilir — uzunluğu IS_ADIMLARI'ya eşit olmak zorunda değil.
+  const kullanilacak = (agirliklar && agirliklar.length > 0)
     ? agirliklar
     : IS_ADIMLARI.map(a => ({ ad: a.ad, yuzde: a.yuzde }));
 
@@ -308,6 +310,77 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
     }
   });
 
+  // 1b) Genel Plan (AI): sabit 6 aşamalı kart şablonuna bağlı kalmadan, görevin başlığı ve
+  //     açıklamasına bakarak yapay zekânın kendi belirlediği (3-8) sayı/isimde aşamalardan
+  //     oluşan bir iş planı üretir. Herhangi bir görev için kullanılabilir.
+  router.post('/is-plani-genel', async (req, res) => {
+    try {
+      const { taskId, dokumanTarihi, bitisTarihi, userRole } = req.body;
+
+      if (!IS_PLANI_YETKILI.includes(userRole)) {
+        return res.status(403).json({ error: 'İş planı oluşturma yetkiniz yok.' });
+      }
+      if (!taskId || !dokumanTarihi || !bitisTarihi) {
+        return res.status(400).json({ error: 'Görev, başlangıç ve bitiş tarihi gereklidir.' });
+      }
+
+      const taskResult = await db.execute({ sql: `SELECT title, description FROM tasks WHERE id = ?`, args: [taskId] });
+      const task = taskResult.rows[0];
+      if (!task) return res.status(404).json({ error: 'Görev bulunamadı.' });
+
+      const gunSayisi = Math.max(1, Math.round((new Date(bitisTarihi) - new Date(dokumanTarihi)) / (1000 * 60 * 60 * 24)));
+
+      const prompt = `Sen bir proje planlama asistanısın. Aşağıdaki göreve özgü, mantıklı sırayla 3 ile 8 arasında aşamadan oluşan bir iş planı çıkar. Aşamaları, sabit bir şablona değil, bu görevin gerçek içeriğine göre belirle.
+
+GÖREV BAŞLIĞI: "${task.title}"
+GÖREV AÇIKLAMASI: "${task.description || 'Açıklama girilmemiş.'}"
+TOPLAM SÜRE: ${gunSayisi} gün (${dokumanTarihi} → ${bitisTarihi})
+
+ÇOK ÖNEMLİ KURALLAR:
+- SADECE Türkçe yaz. Çince, İngilizce veya başka bir dil kullanma.
+- Aşama isimleri kısa (en fazla 4 kelime) ve bu göreve özgü olsun ("Aşama 1" gibi genel isimler kullanma).
+- Her aşamaya, ne yapılacağını anlatan en fazla 15 kelimelik bir açıklama yaz.
+- "yuzde" alanlarının toplamı tam 100 olmalı.
+- Markdown, kod bloğu veya JSON dışında hiçbir şey yazma. SADECE şu formatta bir JSON dizisi döndür:
+[{"ad": "...", "yuzde": 0, "aciklama": "..."}, ...]`;
+
+      let adimlarHam = null;
+      const MAX_DENEME = 3;
+      for (let deneme = 0; deneme < MAX_DENEME; deneme++) {
+        try {
+          const ekUyari = deneme === 0 ? ''
+            : '\n\nUYARI: Önceki yanıt geçersizdi. SADECE geçerli bir JSON dizisi döndür, başka hiçbir metin ekleme. "yuzde" alanları toplamda 100 etmeli ve tüm metinler Türkçe olmalı.';
+          const metin = await mistralChat([{ role: 'user', content: prompt + ekUyari }], 0.4);
+          const temiz = metin.replace(/```json|```/g, '').trim();
+          const parsed = JSON.parse(temiz);
+          if (!Array.isArray(parsed) || parsed.length < 2) continue;
+          const gecerli = parsed.every(a => a && typeof a.ad === 'string' && a.ad.trim() && Number.isFinite(Number(a.yuzde)));
+          if (!gecerli) continue;
+          const bozukVar = parsed.some(a => yabanciKarakterVar(a.ad) || yabanciKarakterVar(a.aciklama || ''));
+          if (bozukVar) continue;
+          adimlarHam = parsed.slice(0, 8).map(a => ({ ad: String(a.ad).trim(), yuzde: Math.max(1, Number(a.yuzde)), aciklama: String(a.aciklama || '').trim() }));
+          break;
+        } catch (aiErr) {
+          console.error('Genel iş planı AI hatası:', aiErr.message);
+        }
+      }
+
+      if (!adimlarHam) {
+        return res.status(502).json({ error: 'Yapay zekâ bu görev için geçerli bir plan üretemedi. Lütfen tekrar deneyin.' });
+      }
+
+      const toplamYuzde = adimlarHam.reduce((t, a) => t + a.yuzde, 0);
+      const agirliklar = adimlarHam.map(a => ({ ad: a.ad, yuzde: (a.yuzde / toplamYuzde) * 100, aciklama: a.aciklama, kaynak: 'ai' }));
+
+      const plan = isPlaniHesapla(null, dokumanTarihi, bitisTarihi, agirliklar);
+      plan.adimlar = plan.adimlar.map((adim, i) => ({ ...adim, aciklama: agirliklar[i].aciklama || '' }));
+
+      res.json({ kartIsmi: task.title, kategori: null, mod: 'genel', ...plan });
+    } catch (error) {
+      res.status(500).json({ error: 'Genel iş planı üretilemedi: ' + error.message });
+    }
+  });
+
   // 2) Planı görevin is_plani sütununa kaydet
   router.post('/tasks/:id/is-plani-kaydet', async (req, res) => {
     try {
@@ -384,15 +457,14 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
       }
 
       const kalanToplamGun = Math.max(1, Math.round((bitis - baslangic) / (1000 * 60 * 60 * 24)));
-      const kalanYuzdeToplam = kalanlar.reduce((t, a) => {
-        const def = IS_ADIMLARI.find(x => x.ad === a.ad);
-        return t + (def ? def.yuzde : 0);
-      }, 0) || 1;
+      // Ağırlık olarak aşamanın kendi (plandaki) gün sayısı kullanılır — sabit IS_ADIMLARI
+      // adı eşleşmesine bağlı değildir, bu yüzden Genel Plan'ın (AI) serbest isimli
+      // aşamalarında da doğru orantılı dağıtım yapar.
+      const kalanYuzdeToplam = kalanlar.reduce((t, a) => t + (Number(a.gun) || 0), 0) || 1;
 
       let imlec = new Date(baslangic);
       const yeniKalanlar = kalanlar.map(a => {
-        const def = IS_ADIMLARI.find(x => x.ad === a.ad);
-        const oran = def ? def.yuzde : 0;
+        const oran = Number(a.gun) || 0;
         const gun = Math.round(kalanToplamGun * oran / kalanYuzdeToplam);
         const bas = new Date(imlec);
         const bit = new Date(imlec);

@@ -1593,14 +1593,13 @@ function isPlaniYenidenHesapla(plan, yeniBitisISO) {
   if (bitis <= baslangic) return null;
 
   const kalanToplamGun = Math.max(1, Math.round((bitis - baslangic) / 86400000));
-  const kalanYuzdeToplam = kalanlar.reduce((t, a) => {
-    const def = IS_ADIMLARI.find(x => x.ad === a.ad); return t + (def ? def.yuzde : 0);
-  }, 0) || 1;
+  // Ağırlık olarak aşamanın kendi (plandaki) gün sayısı kullanılır — bkz. ai.js'teki
+  // /is-plani-guncelle mantığındaki aynı düzeltme (Genel Plan'ın serbest isimli aşamaları için).
+  const kalanYuzdeToplam = kalanlar.reduce((t, a) => t + (Number(a.gun) || 0), 0) || 1;
 
   let imlec = new Date(baslangic);
   const yeniKalanlar = kalanlar.map(a => {
-    const def = IS_ADIMLARI.find(x => x.ad === a.ad);
-    const gun = Math.round(kalanToplamGun * (def ? def.yuzde : 0) / kalanYuzdeToplam);
+    const gun = Math.round(kalanToplamGun * (Number(a.gun) || 0) / kalanYuzdeToplam);
     const bas = new Date(imlec); const bit = new Date(imlec); bit.setDate(bit.getDate() + gun);
     imlec = new Date(bit);
     return { ...a, baslangic: fmt(bas), bitis: fmt(bit), gun };
