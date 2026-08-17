@@ -759,20 +759,14 @@ TOPLAM SÜRE: ${gunSayisi} gün (${dokumanTarihi} → ${bitisTarihi})
           });
           if (uRes.rows[0]) aliciIdSet.add(uRes.rows[0].id);
         }
-        let atananBirim = null;
+        // Alıcılar sadece görevi verenle atanan kişidir — tüm birime yayın YAPILMAZ, aksi halde
+        // ilgisi olmayan herkes başkasının iş planı bildirimini görür.
         if (task.assigned_to) {
           const aRes = await db.execute({
-            sql: `SELECT id, department FROM users WHERE id = ? LIMIT 1`,
+            sql: `SELECT id FROM users WHERE id = ? LIMIT 1`,
             args: [task.assigned_to]
           });
-          if (aRes.rows[0]) { aliciIdSet.add(aRes.rows[0].id); atananBirim = aRes.rows[0].department; }
-        }
-        if (atananBirim) {
-          const gozRes = await db.execute({
-            sql: `SELECT id FROM users WHERE department = ? AND role != 'INTERN'`,
-            args: [atananBirim]
-          });
-          for (const r of gozRes.rows) aliciIdSet.add(r.id);
+          if (aRes.rows[0]) aliciIdSet.add(aRes.rows[0].id);
         }
         if (aliciIdSet.size === 0) continue;
 

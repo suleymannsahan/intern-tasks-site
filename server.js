@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS = {
   email_task_revision: true,
   email_task_approved: true,
   email_project_assigned: true,
+  email_personal_reminder: true,
   // Kayıt onay kuralları: bu rollerden/departmanlardan biriyle kayıt olunursa admin onayı gerekir
   approval_required_roles: ['MANAGER', 'LEADER'],
   approval_required_departments: ['INSAN_KAYNAKLARI'],
@@ -466,6 +467,22 @@ async function initDb() {
         uploaded_by_id INTEGER,
         created_at TEXT NOT NULL,
         FOREIGN KEY(task_id) REFERENCES tasks(id)
+      )
+    `);
+
+    // ============================================================
+    // PLANLAMA NOTLARI: sağ paneldeki kişisel not/hatırlatma alanı. Herkes kendine, kendisinin
+    // görebileceği bir not + tarih ekler; not eklendiğinde ve tarih yaklaştığında e-posta atılır.
+    // ============================================================
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS personal_reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        note TEXT NOT NULL,
+        remind_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        notified_upcoming INTEGER DEFAULT 0,
+        FOREIGN KEY(user_id) REFERENCES users(id)
       )
     `);
 
@@ -1731,6 +1748,133 @@ app.post('/api/sheet-sync/push', async (req, res) => {
     res.status(500).json({ error: 'Kaydedilirken hata: ' + error.message });
   }
 });
+
+// ============================================================
+// PLANLAMA NOTLARI (sağ panel): herkes kendine bir not + "ne zaman yapılacak" tarihi ekler.
+// Sadece notu ekleyen kişi kendi notlarını görür/siler (userId ile filtrelenir).
+// ============================================================
+
+// remind_at ("YYYY-MM-DDTHH:MM", datetime-local formatı) değerini e-postada okunur hale getirir
+function formatReminderDate(remindAt) {
+  if (!remindAt) return '-';
+  const [datePart, timePart] = String(remindAt).split('T');
+  const [y, m, d] = (datePart || '').split('-');
+  return y && m && d ? `${d}.${m}.${y}${timePart ? ' ' + timePart : ''}` : remindAt;
+}
+
+// Gerçek olmayan (sistem tarafından otomatik üretilmiş) e-postalara mail atmaz
+function isRealEmail(email) {
+  return !!email && !/@system\.local$/i.test(email);
+}
+
+app.post('/api/personal-reminders', async (req, res) => {
+  try {
+    const { userId, note, remindAt } = req.body;
+    if (!userId || !note || !note.trim() || !remindAt) {
+      return res.status(400).json({ error: 'Not ve tarih zorunludur.' });
+    }
+
+    const createdAt = new Date().toISOString();
+    const result = await db.execute({
+      sql: `INSERT INTO personal_reminders (user_id, note, remind_at, created_at) VALUES (?, ?, ?, ?)`,
+      args: [userId, note.trim(), remindAt, createdAt]
+    });
+
+    // Not eklendiğinde anında bilgilendirme e-postası — asıl işlemi bloklamasın diye ayrı try/catch
+    try {
+      if (SETTINGS_CACHE.email_personal_reminder) {
+        const uRes = await db.execute({ sql: `SELECT name, email FROM users WHERE id = ?`, args: [userId] });
+        const u = uRes.rows[0];
+        if (u && isRealEmail(u.email)) {
+          await sendDetailsEmail(
+            u.email, u.name,
+            'Yeni Bir Not Eklediniz',
+            'Planlama Notunuz Kaydedildi',
+            'Kendinize aşağıdaki notu düştünüz. Belirttiğiniz tarih yaklaştığında tekrar hatırlatılacaktır.',
+            [['Not', note.trim()], ['Tarih', formatReminderDate(remindAt)]],
+            'Panele Git'
+          );
+        }
+      }
+    } catch (mailErr) { console.error('Planlama notu e-postası hatası:', mailErr.message); }
+
+    res.json({ id: Number(result.lastInsertRowid), message: 'Not eklendi.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Not eklenirken hata: ' + error.message });
+  }
+});
+
+app.get('/api/personal-reminders', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
+    const result = await db.execute({
+      sql: `SELECT * FROM personal_reminders WHERE user_id = ? ORDER BY remind_at ASC`,
+      args: [userId]
+    });
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/personal-reminders/:id', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId gerekli.' });
+    const result = await db.execute({
+      sql: `DELETE FROM personal_reminders WHERE id = ? AND user_id = ?`,
+      args: [req.params.id, userId]
+    });
+    if (result.rowsAffected === 0) return res.status(404).json({ error: 'Not bulunamadı.' });
+    res.json({ message: 'Not silindi.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Notun zamanı yaklaşınca (24 saat kala) tek seferlik hatırlatma e-postası gönderir. "tick" her
+// çalıştığında henüz bildirilmemiş (notified_upcoming=0) ve süresi 24 saat içine girmiş notları
+// bulur, e-postayı dener, sonucu ne olursa olsun notified_upcoming=1 yaparak tekrar denemeyi önler
+// (aksi halde gerçek olmayan e-postalı kullanıcılar için sonsuz döngü oluşurdu).
+let _personalReminderBasladi = false;
+function startPersonalReminderScheduler() {
+  if (_personalReminderBasladi) return;
+  _personalReminderBasladi = true;
+  const tick = async () => {
+    try {
+      const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+      const dueRes = await db.execute({
+        sql: `SELECT personal_reminders.id, personal_reminders.note, personal_reminders.remind_at,
+                     users.name AS user_name, users.email AS user_email
+              FROM personal_reminders LEFT JOIN users ON personal_reminders.user_id = users.id
+              WHERE personal_reminders.notified_upcoming = 0 AND personal_reminders.remind_at <= ?`,
+        args: [in24h]
+      });
+
+      for (const r of dueRes.rows) {
+        if (SETTINGS_CACHE.email_personal_reminder && isRealEmail(r.user_email)) {
+          try {
+            await sendDetailsEmail(
+              r.user_email, r.user_name,
+              'Notunuzun Zamanı Yaklaşıyor',
+              'Planlama Hatırlatması',
+              'Kendinize bıraktığınız bir notun zamanı yaklaşıyor, unutmayın!',
+              [['Not', r.note], ['Tarih', formatReminderDate(r.remind_at)]],
+              'Panele Git'
+            );
+          } catch (mailErr) { console.error('Hatırlatma e-postası hatası:', mailErr.message); }
+        }
+        await db.execute({ sql: `UPDATE personal_reminders SET notified_upcoming = 1 WHERE id = ?`, args: [r.id] });
+      }
+    } catch (e) { console.error('Planlama hatırlatma zamanlayıcı hatası:', e.message); }
+  };
+  setTimeout(tick, 30000);
+  setInterval(tick, 30 * 60 * 1000); // 30 dakikada bir kontrol
+  console.log('📝 Planlama notu hatırlatma zamanlayıcısı aktif.');
+}
+// Planlama notları: zamanı 24 saat içine giren notlar için tek seferlik hatırlatma e-postası.
+startPersonalReminderScheduler();
 
 // Tüm giriş yapmış kullanıcıların erişebileceği, hassas olmayan ayarlar
 // (ör. iş günü hesabı için tatil günleri) — yetki kontrolü yok, kasıtlı olarak herkese açık.

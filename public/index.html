@@ -504,8 +504,10 @@
       <div id="sidebarOverlay" onclick="toggleSidebar()" class="hidden md:hidden fixed inset-0 bg-slate-950/50 z-30"></div>
 
       <!-- SOL SIDEBAR: mobilde (md altı) sabit konumlu, ekranın soluna kayan bir çekmece; masaüstünde
-           (md ve üstü) normal akışta, mevcut margin-collapse yöntemiyle açılıp kapanabilen panel. -->
-      <aside id="leftSidebar" class="fixed md:static inset-y-0 left-0 z-40 md:z-auto w-80 max-w-[85vw] md:max-w-none -translate-x-full md:translate-x-0 bg-white dark:bg-slate-900 md:bg-white/90 md:dark:bg-slate-900/90 border-r border-slate-200 dark:border-slate-800 p-5 space-y-4 overflow-y-auto transition-all duration-300 ease-in-out shrink-0 backdrop-blur-md">
+           (md ve üstü) normal akışta, margin-collapse yöntemiyle açılıp kapanabilen panel.
+           Her iki görünümde de VARSAYILAN KAPALI gelir (-translate-x-full / -ml-80); üstteki
+           hamburger butonuyla (toggleSidebar()) istenildiğinde açılır. -->
+      <aside id="leftSidebar" class="fixed md:static inset-y-0 left-0 z-40 md:z-auto w-80 max-w-[85vw] md:max-w-none -translate-x-full md:translate-x-0 -ml-80 bg-white dark:bg-slate-900 md:bg-white/90 md:dark:bg-slate-900/90 border-r border-slate-200 dark:border-slate-800 p-5 space-y-4 overflow-y-auto transition-all duration-300 ease-in-out shrink-0 backdrop-blur-md">
         <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
           <h3 class="font-bold text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400 flex items-center gap-2">
             <i class="fa-solid fa-users-gear"></i> Ekip Rehberi
@@ -1147,6 +1149,9 @@
               </label>
               <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
                 <input type="checkbox" id="setting_email_project_assigned" class="accent-cyan-600 w-4 h-4"> Proje atandığında e-posta gönder
+              </label>
+              <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" id="setting_email_personal_reminder" class="accent-cyan-600 w-4 h-4"> Planlama notu eklendiğinde / tarihi yaklaşınca e-posta gönder
               </label>
             </div>
           </div>
@@ -2079,6 +2084,41 @@
 
         </div>
       </main>
+
+      <!-- SAĞ PANEL: kendi bilgilerim + planlama notları. Tüm roller için aynı, sabit görünür
+           (sol sidebar'ın aksine açılır/kapanır değil). Küçük ekranlarda yer sıkışmaması için
+           sadece geniş ekranlarda (lg+) gösterilir. -->
+      <aside id="rightSidebar" class="hidden lg:flex lg:flex-col w-80 shrink-0 bg-white dark:bg-slate-900 md:bg-white/90 md:dark:bg-slate-900/90 border-l border-slate-200 dark:border-slate-800 p-5 space-y-5 overflow-y-auto">
+        <!-- KENDİ BİLGİLERİM -->
+        <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
+          <div class="flex items-center gap-3">
+            <div id="rsAvatar" class="h-11 w-11 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-bold text-lg shrink-0"></div>
+            <div class="min-w-0">
+              <div id="rsName" class="font-bold text-sm text-slate-900 dark:text-slate-100 truncate"></div>
+              <div id="rsRole" class="text-[11px] font-medium text-cyan-600 dark:text-cyan-400"></div>
+            </div>
+          </div>
+          <div class="mt-3 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <div id="rsDept" class="hidden flex items-center gap-1.5"><i class="fa-solid fa-building w-3.5 shrink-0"></i><span></span></div>
+            <div id="rsEmail" class="hidden flex items-center gap-1.5"><i class="fa-solid fa-envelope w-3.5 shrink-0"></i><span class="truncate"></span></div>
+            <div id="rsPhone" class="hidden flex items-center gap-1.5"><i class="fa-solid fa-phone w-3.5 shrink-0"></i><span></span></div>
+          </div>
+        </div>
+
+        <!-- PLANLAMA: kendine not + tarih; not eklendiğinde ve tarihi yaklaşınca e-posta gider -->
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
+          <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2 mb-3">
+            <i class="fa-solid fa-note-sticky text-amber-500"></i> Planlama
+          </h4>
+          <form onsubmit="handleAddPersonalReminder(event)" class="space-y-2 mb-3">
+            <textarea id="personalReminderNote" required rows="2" placeholder="Kendinize bir not düşün..." class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500 resize-none"></textarea>
+            <input type="datetime-local" id="personalReminderDate" required class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+            <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold py-1.5 rounded-lg transition-all"><i class="fa-solid fa-plus me-1"></i>Not Ekle</button>
+          </form>
+          <div id="personalReminderList" class="space-y-2 scroll-panel max-h-[320px] pr-1"></div>
+          <p id="personalReminderEmptyHint" class="text-xs text-slate-400 text-center py-4">Henüz bir notunuz yok.</p>
+        </div>
+      </aside>
     </div>
   </div>
 
@@ -6648,6 +6688,7 @@
         document.getElementById('setting_email_task_revision').checked = !!data.email_task_revision;
         document.getElementById('setting_email_task_approved').checked = !!data.email_task_approved;
         document.getElementById('setting_email_project_assigned').checked = !!data.email_project_assigned;
+        document.getElementById('setting_email_personal_reminder').checked = data.email_personal_reminder !== false;
 
         const approvalRoles = data.approval_required_roles || [];
         document.querySelectorAll('.setting-approval-role').forEach(cb => { cb.checked = approvalRoles.includes(cb.value); });
@@ -6708,6 +6749,7 @@
         email_task_revision: document.getElementById('setting_email_task_revision').checked,
         email_task_approved: document.getElementById('setting_email_task_approved').checked,
         email_project_assigned: document.getElementById('setting_email_project_assigned').checked,
+        email_personal_reminder: document.getElementById('setting_email_personal_reminder').checked,
         approval_required_roles: Array.from(document.querySelectorAll('.setting-approval-role:checked')).map(cb => cb.value),
         approval_required_departments: Array.from(document.querySelectorAll('.setting-approval-dept:checked')).map(cb => cb.value),
         site_name: document.getElementById('setting_site_name').value.trim(),
@@ -8104,6 +8146,136 @@
       if (aiChatViewBox) aiChatViewBox.classList.remove('hidden');
     }
 
+    // ============================================================
+    // SAĞ PANEL: Kendi Bilgilerim + Planlama (herkese açık, kendine özel not/hatırlatma sistemi)
+    // ============================================================
+
+    // Sağ panelin üstündeki "Kendi Bilgilerim" kartını doldurur.
+    function renderSelfInfoCard(roleLabel) {
+      if (!currentUser) return;
+      const avatarEl = document.getElementById('rsAvatar');
+      const nameEl = document.getElementById('rsName');
+      const roleEl = document.getElementById('rsRole');
+      if (!avatarEl || !nameEl || !roleEl) return;
+
+      avatarEl.innerText = (currentUser.name || '?').trim().charAt(0).toUpperCase();
+      nameEl.innerText = currentUser.name || '-';
+      roleEl.innerText = roleLabel || ROLE_LABELS_TR[currentUser.role] || currentUser.role || '';
+
+      const deptRow = document.getElementById('rsDept');
+      if (deptRow) {
+        if (currentUser.department) {
+          deptRow.querySelector('span').innerText = DEPARTMENT_LABELS[currentUser.department] || currentUser.department;
+          deptRow.classList.remove('hidden');
+        } else {
+          deptRow.classList.add('hidden');
+        }
+      }
+      const emailRow = document.getElementById('rsEmail');
+      if (emailRow) {
+        const emailOk = currentUser.email && !/@system\.local$/i.test(currentUser.email);
+        if (emailOk) {
+          emailRow.querySelector('span').innerText = currentUser.email;
+          emailRow.classList.remove('hidden');
+        } else {
+          emailRow.classList.add('hidden');
+        }
+      }
+      const phoneRow = document.getElementById('rsPhone');
+      if (phoneRow) {
+        if (currentUser.phone) {
+          phoneRow.querySelector('span').innerText = currentUser.phone;
+          phoneRow.classList.remove('hidden');
+        } else {
+          phoneRow.classList.add('hidden');
+        }
+      }
+    }
+
+    let personalRemindersList = [];
+
+    async function loadPersonalReminders() {
+      if (!currentUser || !currentUser.id) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/personal-reminders?userId=${currentUser.id}`);
+        personalRemindersList = await safeJson(res) || [];
+      } catch (e) { personalRemindersList = []; }
+      renderPersonalReminderList();
+    }
+
+    // "YYYY-MM-DDTHH:MM" (datetime-local) değerini "GG.AA.YYYY SS:DD" olarak gösterir
+    function formatPersonalReminderDate(remindAt) {
+      if (!remindAt) return '-';
+      const [datePart, timePart] = String(remindAt).split('T');
+      const [y, m, d] = (datePart || '').split('-');
+      return y && m && d ? `${d}.${m}.${y}${timePart ? ' · ' + timePart : ''}` : remindAt;
+    }
+
+    function renderPersonalReminderList() {
+      const listEl = document.getElementById('personalReminderList');
+      const emptyHint = document.getElementById('personalReminderEmptyHint');
+      if (!listEl || !emptyHint) return;
+
+      if (personalRemindersList.length === 0) {
+        listEl.innerHTML = '';
+        emptyHint.classList.remove('hidden');
+        return;
+      }
+      emptyHint.classList.add('hidden');
+
+      listEl.innerHTML = personalRemindersList.map(r => `
+        <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5">
+          <div class="flex items-start justify-between gap-2">
+            <p class="text-xs text-slate-700 dark:text-slate-300 flex-1 break-words">${escapeHtmlProj(r.note)}</p>
+            <button type="button" onclick="handleDeletePersonalReminder(${r.id})" title="Sil" class="text-slate-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1"><i class="fa-regular fa-clock me-1"></i>${formatPersonalReminderDate(r.remind_at)}</div>
+        </div>
+      `).join('');
+    }
+
+    async function handleAddPersonalReminder(e) {
+      e.preventDefault();
+      const noteEl = document.getElementById('personalReminderNote');
+      const dateEl = document.getElementById('personalReminderDate');
+      const note = noteEl.value.trim();
+      const remindAt = dateEl.value;
+      if (!note || !remindAt) return;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/personal-reminders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, note, remindAt })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { showToast((data && data.error) || 'Not eklenemedi.', 'error'); return; }
+        noteEl.value = '';
+        dateEl.value = '';
+        showToast('Not eklendi.', 'success');
+        await loadPersonalReminders();
+      } catch (err) {
+        console.error('Planlama notu ekleme hatası:', err);
+        showToast('Not eklenirken hata oluştu.', 'error');
+      }
+    }
+
+    async function handleDeletePersonalReminder(id) {
+      if (!(await showConfirm('Bu notu silmek istediğinizden emin misiniz?'))) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/personal-reminders/${id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { showToast((data && data.error) || 'Not silinemedi.', 'error'); return; }
+        await loadPersonalReminders();
+      } catch (err) {
+        console.error('Planlama notu silme hatası:', err);
+      }
+    }
+
     async function showDashboard() {
       // Ekran geçişleri
       document.getElementById('authContainer').classList.add('hidden');
@@ -8158,6 +8330,10 @@
       if (deptElement && currentUser.department) {
         deptElement.innerText = `${currentUser.department} Birimi`;
       }
+
+      // Sağ panel: kendi bilgilerim + planlama notları (tüm roller)
+      renderSelfInfoCard(roleLabel);
+      loadPersonalReminders();
 
       // Doküman Denetimi kutucuğu: sadece Test ekibi üyelerine görünür, rol fark etmeksizin (Admin dahil).
       document.querySelectorAll('[data-doc-audit-tile]').forEach(el => el.classList.toggle('hidden', !userIsTestTeam(currentUser)));
