@@ -2346,6 +2346,17 @@
     </div>
   </div>
 
+  <!-- Akıllı İş Planı — büyütülmüş Gantt modalı (aşama adlarının kırpılmadığı görünüm) -->
+  <div id="ganttZoomModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-[80]" onclick="if(event.target===this) closeGanttZoomModal();">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto p-5">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h3 id="ganttZoomTitle" class="font-bold text-sm text-violet-600 dark:text-violet-300 flex items-center gap-2 min-w-0"><i class="fa-solid fa-wand-magic-sparkles shrink-0"></i> <span class="truncate">Akıllı İş Planı</span></h3>
+        <button type="button" onclick="closeGanttZoomModal()" class="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="ganttZoomContent"></div>
+    </div>
+  </div>
+
   <!-- Revize Yorum Modalı -->
   <div id="revisionModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
     <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
@@ -10459,7 +10470,9 @@
     // Akıllı İş Planı — aşamaları tarih aralıklarına göre renkli Gantt çubuklarıyla çizer.
     // Not: renkler orijinalinden biraz koyulaştırıldı (700 tonu) — barların üzerindeki beyaz
     // yazı, daha açık tonlarda (ör. amber-300) WCAG kontrast eşiğinin altında kalıyordu.
-    function ipGanttCiz(adimlar) {
+    // detayli=true (büyütülmüş modal görünümü): aşama adı, dar/kısa aşamalarda barın içine
+    // sığmayıp kırpılabildiği için barın ÜSTÜNE ayrı bir satır olarak yazılır — hep tam okunur.
+    function ipGanttCiz(adimlar, detayli) {
       if (!adimlar || !adimlar.length) return '';
       const parseTR = (s) => { const q = String(s || '').split('.').map(Number); return new Date(q[2], (q[1] || 1) - 1, q[0] || 1); };
       const bas0 = parseTR(adimlar[0].baslangic);
@@ -10481,15 +10494,49 @@
         const aktif = i === guncelIndex;
         const solukCls = (bitti || aktif) ? '' : 'ip-gantt-soluk';
         const aktifCls = aktif ? 'ip-gantt-active' : '';
-        const bittiIk = bitti ? '<i class="fa-solid fa-check text-white text-[9px] me-1"></i>' : '';
+        const bittiIk = bitti ? '<i class="fa-solid fa-check text-emerald-500 text-[10px] me-1"></i>' : '';
+
+        if (detayli) {
+          return `
+            <div class="mb-2.5">
+              <div class="flex items-center justify-between gap-2 text-xs mb-1">
+                <span class="font-semibold text-slate-700 dark:text-slate-200">${bittiIk}${i + 1}. ${a.ad}</span>
+                <span class="text-[10px] text-slate-400 shrink-0">${a.baslangic} → ${a.bitis} (${a.gun || 0} gün)</span>
+              </div>
+              <div class="relative h-5 rounded-md bg-slate-100 dark:bg-slate-800/50">
+                <div class="ip-gantt-bar ${solukCls} ${aktifCls} absolute top-0 h-full rounded-md" style="left:${sol}%; width:${gen}%; background:${RENKLER[i % RENKLER.length]};"></div>
+              </div>
+            </div>`;
+        }
+        const bittiIkBeyaz = bitti ? '<i class="fa-solid fa-check text-white text-[9px] me-1"></i>' : '';
         return `
             <div class="relative h-7 rounded-md bg-slate-100 dark:bg-slate-800/50">
               <div class="ip-gantt-bar ${solukCls} ${aktifCls} absolute top-0 h-full rounded-md flex items-center justify-center px-1.5" style="left:${sol}%; width:${gen}%; background:${RENKLER[i % RENKLER.length]};" title="${a.ad}: ${a.baslangic} - ${a.bitis} (${a.gun || 0} gün)">
-                <span class="text-[10px] font-semibold text-white truncate">${bittiIk}${a.ad}</span>
+                <span class="text-[10px] font-semibold text-white truncate">${bittiIkBeyaz}${a.ad}</span>
               </div>
             </div>`;
       }).join('');
       return `<div class="mb-3 space-y-1.5">${satirlar}</div>`;
+    }
+
+    // Gantt'ın küçük önizlemesine tıklanınca, aşama adlarının kırpılmadığı büyük/okunur
+    // bir modal içinde aynı planı yeniden çizer.
+    function openGanttZoomModal(taskId) {
+      const task = (tasksList || []).find(t => t.id == taskId);
+      if (!task || !task.is_plani) return;
+      let plan;
+      try { plan = JSON.parse(task.is_plani); } catch (e) { return; }
+      const titleEl = document.getElementById('ganttZoomTitle');
+      if (titleEl) titleEl.innerText = task.title || 'Akıllı İş Planı';
+      const contentEl = document.getElementById('ganttZoomContent');
+      if (contentEl) contentEl.innerHTML = ipGanttCiz(plan.adimlar || [], true);
+      const modal = document.getElementById('ganttZoomModal');
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeGanttZoomModal() {
+      const modal = document.getElementById('ganttZoomModal');
+      if (modal) modal.classList.add('hidden');
     }
 
     function renderIsPlaniSection(task) {
@@ -10609,7 +10656,7 @@
               </div>
             ` : ''}
           </div>
-          ${ipGanttCiz(adimlar)}
+          <div class="cursor-zoom-in" onclick="openGanttZoomModal(${task.id})" title="Büyütmek için tıklayın">${ipGanttCiz(adimlar)}</div>
           <div class="space-y-2">${stagesHtml}</div>
         </div>
       `;
@@ -10622,6 +10669,7 @@
       const dokumanTarihi = document.getElementById('isPlaniDokumanTarihi').value;
       const bitisTarihi = document.getElementById('isPlaniBitisTarihi').value;
       if (!dokumanTarihi || !bitisTarihi) { showToast('Döküman ve bitiş tarihini seçiniz.', 'error'); return; }
+      if (bitisTarihi < new Date().toISOString().substring(0, 10)) { showToast('Bitiş tarihi geçmiş bir tarih olamaz.', 'error'); return; }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/is-plani`, {
@@ -10655,6 +10703,7 @@
       const dokumanTarihi = document.getElementById('isPlaniGenelBaslangic').value;
       const bitisTarihi = document.getElementById('isPlaniGenelBitis').value;
       if (!dokumanTarihi || !bitisTarihi) { showToast('Başlangıç ve bitiş tarihini seçiniz.', 'error'); return; }
+      if (bitisTarihi < new Date().toISOString().substring(0, 10)) { showToast('Bitiş tarihi geçmiş bir tarih olamaz.', 'error'); return; }
 
       const btn = document.getElementById('isPlaniGenelBtn');
       const eskiIcerik = btn ? btn.innerHTML : '';

@@ -252,6 +252,9 @@ function createAiRouter(db, { isAdmin }) {
       if (!kartIsmi || !kategori || !dokumanTarihi || !bitisTarihi) {
         return res.status(400).json({ error: 'Kart ismi, kategori, döküman ve bitiş tarihi gereklidir.' });
       }
+      if (bitisTarihi < nowTurkeyLocal().substring(0, 10)) {
+        return res.status(400).json({ error: 'Bitiş tarihi geçmiş bir tarih olamaz.' });
+      }
 
       const agirliklar = await akilliAgirliklarHesapla(Number(kategori));
       const plan = isPlaniHesapla(Number(kategori), dokumanTarihi, bitisTarihi, agirliklar);
@@ -322,6 +325,9 @@ ${plan.adimlar.map(a => `${a.ad}: <açıklama>`).join('\n')}`;
       }
       if (!taskId || !dokumanTarihi || !bitisTarihi) {
         return res.status(400).json({ error: 'Görev, başlangıç ve bitiş tarihi gereklidir.' });
+      }
+      if (bitisTarihi < nowTurkeyLocal().substring(0, 10)) {
+        return res.status(400).json({ error: 'Bitiş tarihi geçmiş bir tarih olamaz.' });
       }
 
       const taskResult = await db.execute({ sql: `SELECT title, description FROM tasks WHERE id = ?`, args: [taskId] });
