@@ -106,6 +106,31 @@ function agentNowTurkeyLocal() {
   return new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
 }
 
+// public/index.html içindeki calculateWorkDays ile AYNI mantık: hafta sonu ve resmi tatiller
+// hariç iş günü sayar. Ajan üzerinden görev oluşturulurken work_days'i modele bırakmak yerine
+// burada, tıpkı manuel formda olduğu gibi bitiş tarihinden otomatik hesaplamak için kullanılır.
+async function calismaGunuHesapla(db, bitisTarihi) {
+  if (!bitisTarihi) return 0;
+  let holidays = [];
+  try {
+    const r = await db.execute({ sql: `SELECT value FROM system_settings WHERE key = 'holidays'`, args: [] });
+    if (r.rows[0]) holidays = JSON.parse(r.rows[0].value) || [];
+  } catch (e) { holidays = []; }
+  const holidaySet = new Set(holidays);
+
+  let count = 0;
+  const bugun = new Date(new Date().toISOString().split('T')[0]);
+  const bitis = new Date(bitisTarihi);
+  let cur = new Date(bugun);
+  while (cur <= bitis) {
+    const gun = cur.getDay();
+    const dateStr = cur.toISOString().substring(0, 10);
+    if (gun !== 0 && gun !== 6 && !holidaySet.has(dateStr)) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
 // server.js'teki createNotification/notifyUsers ile aynı tabloya yazar. Hatayı yutar ki
 // asıl işlem (toplantı oluşturma) bildirim yüzünden bozulmasın. db, dış kapsamdan gelir.
 function makeAgentNotifyUsers(db) {
@@ -139,7 +164,8 @@ GENEL KURALLAR:
 - Bir işlem yapman istendiğinde uygun aracı çağır; veriyi UYDURMA.
 - Bir görevi güncellemeden/atamadan önce doğru görevi bulduğundan emin ol; şüphedeysen kullanıcıya sor.
 - TOPLANTI: Kullanıcı "toplantı oluştur / X ile toplantı ayarla / şunları toplantıya çağır" derse toplanti_olustur aracını kullan. Belirli bir kişiyi (ör. "Ayberk") çağırman istenirse ÖNCE is_yuku_ozeti aracını çağırıp o ismin kullaniciId değerini bul, sonra toplanti_olustur'u hedefKullaniciIds ile çağır. Konu belirtilmemişse kullanıcıya kısaca konuyu sor. Kişinin ismi listede yoksa uydurma; bulunamadığını söyle. Toplantı oluşturma bir onay kartıyla kullanıcıya doğrulatılır, sen sadece aracı çağır.
-- GÖREV OLUŞTURMA: "yeni görev aç / X kişisine görev ver" denince gorev_olustur aracını kullan. Kişi ID'sini bilmiyorsan önce is_yuku_ozeti ile bul. İsim listede yoksa uydurma.
+- GÖREV OLUŞTURMA: "yeni görev aç / X kişisine görev ver" denince gorev_olustur aracını kullan. Kişi ID'sini bilmiyorsan önce is_yuku_ozeti ile bul. İsim listede yoksa uydurma. Kategori ve bitiş tarihini kullanıcıdan mutlaka al; bitiş tarihi olmadan aracı ÇAĞIRMA, önce sor.
+- KİŞİYE GÖRE GÖREV SORGUSU: "X'in görevleri neler / X'te ne var" denince gorevleri_listele aracını atananIsim parametresiyle (kişinin adı) çağır — aramaMetni'ni bunun için KULLANMA (o yalnızca görev başlığında arar). is_yuku_ozeti yalnızca SAYI verir, görev listesi/başlığı vermez; "kaç görevi var" gibi sayısal sorularda onu, "hangi görevleri var / neler" gibi liste sorularında gorevleri_listele+atananIsim'i kullan.
 - GÖREV TAMAMLAMA: "şu görevi tamamladım/bitirdim" denince gorev_tamamla aracını kullan. Hangi görev olduğu belirsizse önce gorevleri_listele ile doğru görevi bul.
 - GÖREV İNCELEME: "şu görevi onayla" ya da "revize iste/geri gönder" denince gorev_incele aracını (islem: ONAYLA veya REVIZE) kullan. Revize isteniyorsa mutlaka bir açıklama iste; açıklama yoksa kullanıcıya sor.
 - TOPLANTI ONAYI: "şu toplantı talebini onayla/reddet" denince toplanti_incele aracını (islem: ONAYLA veya REDDET) kullan. Hangi talep olduğu belirsizse önce toplantilari_listele ile bekleyen talepleri göster ve doğru toplantiId'yi bul.
@@ -178,12 +204,13 @@ const ARAC_TANIMLARI = {
       type: 'function',
       function: {
         name: 'gorevleri_listele',
-        description: 'Kullanıcının görebildiği görevleri listeler. Duruma göre filtrelenebilir.',
+        description: 'Kullanıcının görebildiği görevleri listeler. Duruma, görev başlığına ve/veya atanan kişinin adına göre filtrelenebilir.',
         parameters: {
           type: 'object',
           properties: {
             durum: { type: 'string', enum: GECERLI_DURUMLAR, description: 'İsteğe bağlı durum filtresi.' },
-            aramaMetni: { type: 'string', description: 'Başlıkta geçen isteğe bağlı arama metni.' }
+            aramaMetni: { type: 'string', description: 'Görev BAŞLIĞINDA geçen isteğe bağlı arama metni (kişi adı için kullanma, atananIsim kullan).' },
+            atananIsim: { type: 'string', description: 'Görevin atandığı KİŞİNİN adı (isteğe bağlı, tam veya kısmi ad).' }
           }
         }
       }
@@ -374,18 +401,17 @@ const ARAC_TANIMLARI = {
       type: 'function',
       function: {
         name: 'gorev_olustur',
-        description: 'Sıfırdan yeni bir görev oluşturur ve bir kişiye atar. Kullanıcı "yeni görev aç", "X kişisine görev ver", "şu işi ata" dediğinde kullan. Kime atanacağını bilmiyorsan önce is_yuku_ozeti aracıyla kişilerin kullaniciId değerlerini öğren. Stajyer (INTERN) yalnızca kendine görev ekleyebilir.',
+        description: 'Sıfırdan yeni bir görev oluşturur ve bir kişiye atar. Kullanıcı "yeni görev aç", "X kişisine görev ver", "şu işi ata" dediğinde kullan. Kime atanacağını bilmiyorsan önce is_yuku_ozeti aracıyla kişilerin kullaniciId değerlerini öğren. Stajyer (INTERN) yalnızca kendine görev ekleyebilir. İş günü sayısı BURADA VERİLMEZ, sunucu bitiş tarihinden otomatik hesaplar.',
         parameters: {
           type: 'object',
           properties: {
             baslik: { type: 'string', description: 'Görev başlığı (zorunlu).' },
             atananKullaniciId: { type: 'integer', description: 'Görevin atanacağı kullanıcının kimliği (zorunlu).' },
             aciklama: { type: 'string', description: 'Görev açıklaması (isteğe bağlı).' },
-            kategori: { type: 'string', description: 'Görev kategorisi (isteğe bağlı).' },
-            bitisTarihi: { type: 'string', description: 'YYYY-MM-DD biçiminde son teslim tarihi (isteğe bağlı).' },
-            calismaGunu: { type: 'integer', description: 'Tahmini iş günü sayısı (isteğe bağlı).' }
+            kategori: { type: 'string', enum: ['Yazılım', 'Donanım', 'Ağ & Sistem', 'Test / Dokümantasyon', 'Genel'], description: 'Görev kategorisi. Kullanıcı belirtmediyse "Genel" kullan.' },
+            bitisTarihi: { type: 'string', description: 'YYYY-MM-DD biçiminde son teslim tarihi (zorunlu). Kullanıcı vermediyse aracı çağırmadan önce sor.' }
           },
-          required: ['baslik', 'atananKullaniciId']
+          required: ['baslik', 'atananKullaniciId', 'bitisTarihi']
         }
       }
     }
@@ -703,6 +729,7 @@ function createAgentRouter(db, { isAdmin }) {
     const { conditions, args } = gorunurlukKosulu(user.role, user.department, user.userId);
     if (a.durum && GECERLI_DURUMLAR.includes(a.durum)) { conditions.push(`tasks.status = ?`); args.push(a.durum); }
     if (a.aramaMetni) { conditions.push(`tasks.title LIKE ?`); args.push('%' + a.aramaMetni + '%'); }
+    if (a.atananIsim) { conditions.push(`users.name LIKE ?`); args.push('%' + a.atananIsim + '%'); }
     if (conditions.length) sql += ` WHERE ` + conditions.join(' AND ');
     sql += ` ORDER BY tasks.id DESC LIMIT 60`;
     const r = await db.execute({ sql, args });
@@ -1031,7 +1058,7 @@ function createAgentRouter(db, { isAdmin }) {
         return res.json({ reply: zamanAsimi });
       } catch (toolHata) {
         // Tool yolu başarısız (ör. Mistral araç formatı/servis hatası) → araçsız düz cevaba düş
-        console.error('Ajan tool yolu hatası, düz sohbete düşülüyor:', toolHata.message);
+        console.error(`Ajan tool yolu hatası (userId=${userId}, mesaj="${String(message).slice(0, 100)}"), düz sohbete düşülüyor:`, toolHata.stack || toolHata.message);
         const duzMesajlar = messages.filter(m => m.role === 'system' || m.role === 'user' || (m.role === 'assistant' && !m.tool_calls));
         const cevap = await duzSohbet(duzMesajlar);
         const nihaiCevap = cevap || 'Şu an araç tabanlı işlemlerde bir sorun var, ama buradayım. Sorunuzu tekrar yazar mısınız?';
@@ -1208,8 +1235,8 @@ function createAgentRouter(db, { isAdmin }) {
         if (role === 'INTERN' && Number(args.atananKullaniciId) !== Number(userId)) {
           return res.status(403).json({ error: 'Sadece kendinize görev ekleyebilirsiniz.' });
         }
-        if (args.bitisTarihi && !/^\d{4}-\d{2}-\d{2}$/.test(String(args.bitisTarihi))) {
-          return res.status(400).json({ error: 'Bitiş tarihi YYYY-AA-GG biçiminde olmalı.' });
+        if (!args.bitisTarihi || !/^\d{4}-\d{2}-\d{2}$/.test(String(args.bitisTarihi))) {
+          return res.status(400).json({ error: 'Bitiş tarihi zorunludur ve YYYY-AA-GG biçiminde olmalı.' });
         }
         // Atanan kişi: görev alabilecek rolde ve onaylı olmalı (server.js ASSIGNABLE_ROLES)
         const ac = await db.execute({ sql: `SELECT role, status, name, department FROM users WHERE id = ?`, args: [args.atananKullaniciId] });
@@ -1221,11 +1248,13 @@ function createAgentRouter(db, { isAdmin }) {
         if (!isAdmin(role) && role !== 'INTERN' && department && hedef.department && hedef.department !== department) {
           return res.status(403).json({ error: 'Bu kişi sizin biriminizde değil.' });
         }
+        // work_days manuel formdaki gibi bitiş tarihinden otomatik hesaplanır; modelden istenmez.
+        const hesaplananCalismaGunu = await calismaGunuHesapla(db, args.bitisTarihi);
         const ins = await db.execute({
           sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS')`,
-          args: [String(args.baslik).trim(), args.aciklama || '', args.atananKullaniciId, args.kategori || null,
-                 args.bitisTarihi || null, Number.isInteger(Number(args.calismaGunu)) ? Number(args.calismaGunu) : null, name || 'Asistan']
+          args: [String(args.baslik).trim(), args.aciklama || '', args.atananKullaniciId, args.kategori || 'Genel',
+                 args.bitisTarihi, hesaplananCalismaGunu, name || 'Asistan']
         });
         const yeniGorevId = Number(ins.lastInsertRowid);
         // Atanan kişiye bildirim
