@@ -11913,12 +11913,130 @@
     function toggleAiChatWidget() {
       const panel = document.getElementById('aiChatPanel');
       if (!panel) return;
+      const aciliyor = panel.classList.contains('hidden');
       panel.classList.toggle('hidden');
-      if (!panel.classList.contains('hidden')) {
+      if (aciliyor) {
+        positionAiChatPanel();
         const input = document.getElementById('aiChatInput');
         if (input) input.focus();
       }
     }
+
+    // Paneli, sürüklenebilir BEYES yuvarlağının o anki konumuna göre açar — yuvarlak ekranın
+    // neresine taşınmışsa panel de ekrandan taşmadan onun yakınında (öncelik üstünde) belirir.
+    function positionAiChatPanel() {
+      const btn = document.getElementById('aiChatWidgetBtn');
+      const panel = document.getElementById('aiChatPanel');
+      if (!btn || !panel) return;
+      const btnRect = btn.getBoundingClientRect();
+      const panelW = panel.offsetWidth, panelH = panel.offsetHeight;
+      const kenar = 12;
+
+      let top = btnRect.top - panelH - kenar;
+      if (top < kenar) top = btnRect.bottom + kenar;
+      top = Math.max(kenar, Math.min(top, window.innerHeight - panelH - kenar));
+
+      let left = btnRect.right - panelW;
+      left = Math.max(kenar, Math.min(left, window.innerWidth - panelW - kenar));
+
+      panel.style.left = left + 'px';
+      panel.style.top = top + 'px';
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+    }
+
+    // BEYES Asistan yuvarlağını fare/dokunmatikle ekranın her yerine sürüklenebilir yapar.
+    // Konum localStorage'da tutulur, bir sonraki oturumda aynı yerden açılır. Panel açıkken
+    // sürüklenirse panel de yeni konuma göre yeniden yerleşir.
+    (function initAiChatDrag() {
+      const STORAGE_KEY = 'aiChatBtnPos';
+      let surukleniyor = false, tasindi = false, suppressClick = false;
+      let basX = 0, basY = 0, basLeft = 0, basTop = 0;
+
+      function clamp(v, min, max) { return Math.min(Math.max(v, min), max); }
+
+      function konumUygula(btn, left, top) {
+        const w = btn.offsetWidth || 56, h = btn.offsetHeight || 56;
+        left = clamp(left, 8, window.innerWidth - w - 8);
+        top = clamp(top, 8, window.innerHeight - h - 8);
+        btn.style.left = left + 'px';
+        btn.style.top = top + 'px';
+        btn.style.right = 'auto';
+        btn.style.bottom = 'auto';
+      }
+
+      function konumGeriYukle(btn) {
+        try {
+          const kayit = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+          if (kayit && Number.isFinite(kayit.left) && Number.isFinite(kayit.top)) {
+            konumUygula(btn, kayit.left, kayit.top);
+            return;
+          }
+        } catch (e) {}
+        const w = btn.offsetWidth || 56, h = btn.offsetHeight || 56;
+        konumUygula(btn, window.innerWidth - w - 20, window.innerHeight - h - 20);
+      }
+
+      function noktaAl(e) { return e.touches ? e.touches[0] : e; }
+
+      function baslat(e) {
+        const btn = document.getElementById('aiChatWidgetBtn');
+        if (!btn || btn.classList.contains('hidden')) return;
+        surukleniyor = true; tasindi = false;
+        const rect = btn.getBoundingClientRect();
+        const p = noktaAl(e);
+        basX = p.clientX; basY = p.clientY;
+        basLeft = rect.left; basTop = rect.top;
+        document.addEventListener('mousemove', tasi);
+        document.addEventListener('mouseup', birak);
+        document.addEventListener('touchmove', tasi, { passive: false });
+        document.addEventListener('touchend', birak);
+      }
+
+      function tasi(e) {
+        if (!surukleniyor) return;
+        const btn = document.getElementById('aiChatWidgetBtn');
+        const p = noktaAl(e);
+        const dx = p.clientX - basX, dy = p.clientY - basY;
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) tasindi = true;
+        if (!tasindi) return;
+        if (e.cancelable) e.preventDefault();
+        konumUygula(btn, basLeft + dx, basTop + dy);
+        const panel = document.getElementById('aiChatPanel');
+        if (panel && !panel.classList.contains('hidden')) positionAiChatPanel();
+      }
+
+      function birak() {
+        surukleniyor = false;
+        document.removeEventListener('mousemove', tasi);
+        document.removeEventListener('mouseup', birak);
+        document.removeEventListener('touchmove', tasi);
+        document.removeEventListener('touchend', birak);
+        if (tasindi) {
+          const btn = document.getElementById('aiChatWidgetBtn');
+          const rect = btn.getBoundingClientRect();
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left: rect.left, top: rect.top })); } catch (e) {}
+          // Sürükleme bitince tarayıcının otomatik ürettiği "click" olayı paneli açmasın.
+          suppressClick = true;
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const btn = document.getElementById('aiChatWidgetBtn');
+        if (!btn) return;
+        konumGeriYukle(btn);
+        btn.addEventListener('mousedown', baslat);
+        btn.addEventListener('touchstart', baslat, { passive: true });
+        btn.addEventListener('click', (e) => {
+          if (suppressClick) { suppressClick = false; e.preventDefault(); e.stopImmediatePropagation(); }
+        }, true);
+        window.addEventListener('resize', () => {
+          konumUygula(btn, btn.getBoundingClientRect().left, btn.getBoundingClientRect().top);
+          const panel = document.getElementById('aiChatPanel');
+          if (panel && !panel.classList.contains('hidden')) positionAiChatPanel();
+        });
+      });
+    })();
 
     function appendAiChatBubble(role, text) {
       const box = document.getElementById('aiChatMessages');
@@ -12593,12 +12711,13 @@
 
   </script>
 
-  <!-- BEYES Asistan: sabit konumlu AI sohbet balonu (giriş yapılınca görünür olur) -->
-  <button id="aiChatWidgetBtn" onclick="toggleAiChatWidget()" class="hidden fixed bottom-5 right-5 z-[70] w-14 h-14 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl flex items-center justify-center hover:scale-105 transition-transform p-2" title="BEYES Asistan">
-    <img src="Y_logo.png" alt="BEYES" class="max-h-8 w-auto object-contain">
+  <!-- BEYES Asistan: sabit konumlu AI sohbet balonu (giriş yapılınca görünür olur). Ekranın
+       her yerine sürüklenebilir (bkz. initAiChatDrag) — konum localStorage'da tutulur. -->
+  <button id="aiChatWidgetBtn" onclick="toggleAiChatWidget()" class="hidden fixed bottom-5 right-5 z-[70] w-14 h-14 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl flex items-center justify-center hover:scale-105 transition-transform p-2 cursor-grab active:cursor-grabbing touch-none" title="BEYES Asistan (sürükleyerek taşıyabilirsiniz)">
+    <img src="Y_logo.png" alt="BEYES" class="max-h-8 w-auto object-contain pointer-events-none">
   </button>
 
-  <div id="aiChatPanel" class="hidden fixed bottom-24 right-5 z-[70] w-80 sm:w-96 max-w-[92vw] h-[28rem] max-h-[75vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+  <div id="aiChatPanel" class="hidden fixed bottom-24 right-5 z-[70] w-96 sm:w-[28rem] max-w-[94vw] h-[34rem] max-h-[82vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
     <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-cyan-600 to-violet-600 text-white">
       <div class="flex items-center gap-2 text-sm font-bold"><span class="inline-flex items-center justify-center h-6 w-6 rounded-md bg-white shrink-0"><img src="Y_logo.png" alt="BEYES" class="max-h-4 w-auto object-contain"></span> BEYES Asistan</div>
       <div class="flex items-center gap-3">
