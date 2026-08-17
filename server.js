@@ -190,6 +190,10 @@ async function initDb() {
     // AI ile üretilen bir iş planı, görevin mevcut teslim tarihinden farklı bir bitiş öneriyorsa,
     // yeni tarih burada bekler; görevi atayan kişi onaylayana kadar end_date değişmez.
     try { await db.execute(`ALTER TABLE tasks ADD COLUMN pending_end_date TEXT`); } catch (e) {}
+    // Proje sayfasından "Kart için Planla" ile otomatik oluşturulan, sadece iş planını taşımak
+    // için var olan görevler: normal "Görevler" listelerinde/sayımlarında hiç görünmez, sadece
+    // ilgili Proje detay sayfasında (GET /api/tasks?planTaskForProject=) gösterilir.
+    try { await db.execute(`ALTER TABLE tasks ADD COLUMN is_kart_plani_task INTEGER DEFAULT 0`); } catch (e) {}
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS daily_logs (
@@ -1303,7 +1307,7 @@ app.put('/api/users/:id/intern-dates', async (req, res) => {
 // Görev Oluşturma
 app.post('/api/tasks', async (req, res) => {
   try {
-    const { title, description, assignedTo, category, endDate, workDays, createdBy, userRole, userId, projectId } = req.body;
+    const { title, description, assignedTo, category, endDate, workDays, createdBy, userRole, userId, projectId, isKartPlaniTask } = req.body;
 
     if (!['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER', 'INTERN'].includes(userRole)) {
       return res.status(403).json({ error: 'Görev atamaya yetkiniz yok!' });
@@ -1324,9 +1328,17 @@ app.post('/api/tasks', async (req, res) => {
     }
 
     const result = await db.execute({
-      sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status, project_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?)`,
-      args: [title, description || '', assignedTo, category, endDate, workDays, createdBy, projectId || null]
+      sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status, project_id, is_kart_plani_task) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?)`,
+      args: [title, description || '', assignedTo, category, endDate, workDays, createdBy, projectId || null, isKartPlaniTask ? 1 : 0]
     });
+    const newTaskId = Number(result.lastInsertRowid);
+
+    // Kart Planı görevleri sadece bir Proje sayfasındaki iş planını taşımak için var — normal bir
+    // görev ataması gibi e-posta/bildirim/takvim etkinliği tetiklemez (kullanıcı zaten kendi
+    // tıklamasıyla oluşturdu).
+    if (isKartPlaniTask) {
+      return res.json({ id: newTaskId, message: 'Kart planı görevi oluşturuldu.' });
+    }
 
     const userResult = await db.execute({
       sql: `SELECT name, email FROM users WHERE id = ?`,
@@ -1351,8 +1363,6 @@ app.post('/api/tasks', async (req, res) => {
         'Görevi İncele'
       );
     }
-
-    const newTaskId = Number(result.lastInsertRowid);
 
     // Google Takvim senkronu (kullanıcı takvimini bağladıysa). Yanıtı bekletmemek için await sonrası.
     syncTaskToGoogle(newTaskId).catch(e => console.error('Task sync:', e.message));
@@ -1563,7 +1573,7 @@ app.get('/api/settings/public', async (req, res) => {
 // Görev Getirme Endpoint'ini Admin İçin Güncelleme
 app.get('/api/tasks', async (req, res) => {
   try {
-    const { userId, role, department } = req.query;
+    const { userId, role, department, planTaskForProject } = req.query;
 
     let sql = `
       SELECT tasks.*, users.name as assignee_name,
@@ -1576,14 +1586,24 @@ app.get('/api/tasks', async (req, res) => {
     let conditions = [];
     let args = [];
 
-    // ADMIN tüm görevleri görebilir; INTERN sadece kendisine atananları görür;
-    // diğer roller (Müdür, Ekip Lideri, Mühendis, Teknisyen) sadece kendi biriminin görevlerini görür.
-    if (role === 'INTERN') {
-      conditions.push(`tasks.assigned_to = ?`);
-      args.push(userId);
-    } else if (!isAdmin(role) && department) {
-      conditions.push(`users.department = ?`);
-      args.push(department);
+    // Dar amaçlı özel sorgu: bir Projenin "Kart için Planla" ile oluşturulmuş, sadece o projeye
+    // özel plan görevini getirir — normal rol/birim filtresine tabi değildir, tekil kullanım içindir.
+    if (planTaskForProject) {
+      conditions.push(`tasks.project_id = ? AND tasks.is_kart_plani_task = 1`);
+      args.push(planTaskForProject);
+    } else {
+      // Kart Planı görevleri normal listelerde/sayımlarda hiç görünmez (bkz. yukarıdaki özel dal).
+      conditions.push(`(tasks.is_kart_plani_task IS NULL OR tasks.is_kart_plani_task = 0)`);
+
+      // ADMIN tüm görevleri görebilir; INTERN sadece kendisine atananları görür;
+      // diğer roller (Müdür, Ekip Lideri, Mühendis, Teknisyen) sadece kendi biriminin görevlerini görür.
+      if (role === 'INTERN') {
+        conditions.push(`tasks.assigned_to = ?`);
+        args.push(userId);
+      } else if (!isAdmin(role) && department) {
+        conditions.push(`users.department = ?`);
+        args.push(department);
+      }
     }
 
     if (conditions.length > 0) {

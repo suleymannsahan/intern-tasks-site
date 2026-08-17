@@ -1648,23 +1648,28 @@
             <div id="projDetNoteRow" class="hidden mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300"></div>
           </div>
 
-          <!-- Sadece Test ekibi + plan oluşturma yetkisi olanlara görünür (bkz. renderProjectKartPlaniPicker) -->
-          <div id="projDetKartPlaniWrap" class="hidden bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-900/40 rounded-2xl p-5 shadow-sm space-y-3">
-            <div class="text-xs font-bold text-violet-600 dark:text-violet-300 flex items-center gap-2"><i class="fa-solid fa-microchip"></i> Kart için Planla</div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400">Test ekibinin sabit 6 aşamalı kart tasarım süreci (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon) — bu projeye bağlı, size atanan yeni bir görev olarak oluşturulur.</p>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <select id="projDetKartKategori" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
-                <option value="1">Kategori 1</option>
-                <option value="2">Kategori 2</option>
-                <option value="3">Kategori 3</option>
-                <option value="4">Kategori 4</option>
-              </select>
-              <input type="date" id="projDetKartBaslangic" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
-              <input type="date" id="projDetKartBitis" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+          <!-- Sadece Test ekibi + plan oluşturma yetkisi olanlara görünür (bkz. loadAndRenderProjectKartPlani).
+               Kart Planı bu proje için zaten oluşturulmuşsa projDetKartPlaniForm gizlenir, yerine
+               projDetKartPlaniView içinde Gantt/aşama görünümü (renderIsPlaniPlanView) gösterilir. -->
+          <div id="projDetKartPlaniWrap" class="hidden space-y-4">
+            <div id="projDetKartPlaniForm" class="bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-900/40 rounded-2xl p-5 shadow-sm space-y-3">
+              <div class="text-xs font-bold text-violet-600 dark:text-violet-300 flex items-center gap-2"><i class="fa-solid fa-microchip"></i> Kart için Planla</div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">Test ekibinin sabit 6 aşamalı kart tasarım süreci (Şematik İnceleme, KTTD, BDK, Visio, Sequence, Entegrasyon) — bu projeye bağlı, size atanan yeni bir görev olarak oluşturulur.</p>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select id="projDetKartKategori" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs">
+                  <option value="1">Kategori 1</option>
+                  <option value="2">Kategori 2</option>
+                  <option value="3">Kategori 3</option>
+                  <option value="4">Kategori 4</option>
+                </select>
+                <input type="date" id="projDetKartBaslangic" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+                <input type="date" id="projDetKartBitis" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs" />
+              </div>
+              <button id="projDetKartBtn" onclick="handleGenerateIsPlaniFromProject()" class="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
+                <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Kart Planı Oluştur
+              </button>
             </div>
-            <button id="projDetKartBtn" onclick="handleGenerateIsPlaniFromProject()" class="w-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold py-2 rounded-xl transition-all">
-              <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Kart Planı Oluştur
-            </button>
+            <div id="projDetKartPlaniView"></div>
           </div>
 
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm space-y-4">
@@ -5386,6 +5391,7 @@
       const returnSec = document.getElementById(projectDetailReturnTo);
       if (returnSec) returnSec.classList.remove('hidden');
       if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
+      currentProjectPlanTaskId = null;
       scrollMainTo(0, true);
     }
 
@@ -5418,7 +5424,7 @@
 
       // Grafik + ilerleme notları: aynı render mantığı (ppIdPrefix='projDet' hedefine yazar)
       renderPersonProjectModal(data);
-      renderProjectKartPlaniPicker(project);
+      loadAndRenderProjectKartPlani(project);
     }
 
     async function renderPersonProjectModal(data) {
@@ -10512,16 +10518,32 @@
       return Math.max(1, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
     }
 
+    // İş Planı görevleri iki bağlamdan yönetilebilir: normal Görev detayı modalı, ya da (Kart
+    // Planı görevleri için) Proje detay sayfasına gömülü görünüm — bu görevler normal "Görevler"
+    // listesinde hiç görünmediğinden kendi modalları da yok. Bir aksiyon (onayla/tamamla/sıfırla/
+    // tarih onayı vb.) bitince hangi bağlamdan tetiklendiyse oraya geri dönülür.
+    let currentProjectPlanTaskId = null;
+    function reopenIsPlaniContext(taskId) {
+      const projectSec = document.getElementById('projectDetailSection');
+      const projeSayfasindaGosteriliyor = projectSec && !projectSec.classList.contains('hidden')
+        && currentProjectPlanTaskId != null && String(currentProjectPlanTaskId) === String(taskId);
+      if (projeSayfasindaGosteriliyor && personProjectData && personProjectData.project) {
+        loadAndRenderProjectKartPlani(personProjectData.project);
+      } else {
+        openTaskDetailModal(taskId);
+      }
+    }
+
     // Panel içi "Aşamayı Tamamladım" tarih formu açık olan aşama: { taskId, asamaIndex }
     let ipTamamla = null;
     function ipTamamlaAc(taskId, asamaIndex) {
       ipTamamla = { taskId, asamaIndex };
-      openTaskDetailModal(taskId);
+      reopenIsPlaniContext(taskId);
     }
     function ipTamamlaVazgec() {
       const tid = ipTamamla && ipTamamla.taskId;
       ipTamamla = null;
-      if (tid != null) openTaskDetailModal(tid);
+      if (tid != null) reopenIsPlaniContext(tid);
     }
     async function ipTamamlaKaydet(taskId, asamaIndex) {
       const inp = document.getElementById('ipTamamlaTarih_' + asamaIndex);
@@ -10645,7 +10667,7 @@
         if (!res.ok) { showToast('Hata: ' + (data.error || 'Onaylanamadı.'), 'error'); return; }
         showToast('Yeni teslim tarihi onaylandı.', 'success');
         await loadTasks();
-        openTaskDetailModal(taskId);
+        reopenIsPlaniContext(taskId);
       } catch (err) {
         console.error('Tarih onaylama hatası:', err);
         showToast('Onaylanırken bir hata oluştu.', 'error');
@@ -10663,7 +10685,7 @@
         if (!res.ok) { showToast('Hata: ' + (data.error || 'Reddedilemedi.'), 'error'); return; }
         showToast('Tarih değişikliği reddedildi.', 'success');
         await loadTasks();
-        openTaskDetailModal(taskId);
+        reopenIsPlaniContext(taskId);
       } catch (err) {
         console.error('Tarih reddetme hatası:', err);
         showToast('Reddedilirken bir hata oluştu.', 'error');
@@ -10701,6 +10723,17 @@
           </div>
         `;
       }
+
+      return renderIsPlaniPlanView(task);
+    }
+
+    // Bir iş planı olan görevin Gantt + aşama listesini çizer. Hem Görev detayı modalındaki
+    // renderIsPlaniSection'dan, hem de Proje sayfasındaki Kart Planı gösteriminden (bkz.
+    // loadAndRenderProjectKartPlani) ortak kullanılır — bu görev normal "Görevler" listesinde
+    // hiç görünmese bile aynı Gantt/aşama onay/tamamlama arayüzü çalışır.
+    function renderIsPlaniPlanView(task) {
+      const canManage = IS_PLANI_YETKILI_ROLLER.includes(currentUser.role);
+      const isAssignee = task.assigned_to === currentUser.id;
 
       let plan;
       try { plan = JSON.parse(task.is_plani); } catch (e) { return ''; }
@@ -10806,6 +10839,15 @@
     // Proje detay sayfasındaki "Kart için Planla" — bir görev seçtirmez; tıklanınca bu projeye
     // bağlı, size atanan yeni bir görev otomatik oluşturur ve sabit 6 aşamalı kart şablonunu
     // doğrudan o göreve uygular.
+    // tasksList normalde Kart Planı görevlerini içermez (sunucu GET /api/tasks'ta hariç tutar) —
+    // bu görevleri Proje sayfası için ayrıca fetch edip listeye ekleyebilmek amacıyla ufak bir
+    // upsert yardımcısı: varsa günceller, yoksa ekler.
+    function mergeTaskIntoList(task) {
+      if (!task) return;
+      const idx = (tasksList || []).findIndex(t => t.id == task.id);
+      if (idx >= 0) tasksList[idx] = task; else tasksList.push(task);
+    }
+
     async function handleGenerateIsPlaniFromProject() {
       if (!personProjectData || !personProjectData.project) return;
       const project = personProjectData.project;
@@ -10827,20 +10869,25 @@
           body: JSON.stringify({
             title: gorevAdi, description: `"${project.company_name || ''} — ${project.name}" projesi için kart tasarım planı.`,
             assignedTo: currentUser.id, category: 'Donanım', endDate: bitisTarihi, workDays,
-            projectId: project.id, createdBy: currentUser.name, userRole: currentUser.role, userId: currentUser.id
+            projectId: project.id, isKartPlaniTask: true, createdBy: currentUser.name, userRole: currentUser.role, userId: currentUser.id
           })
         });
         const taskData = await taskRes.json();
         if (!taskRes.ok) { showToast('Hata: ' + (taskData.error || 'Görev oluşturulamadı.'), 'error'); return; }
         const yeniTaskId = taskData.id;
 
-        await loadTasks();
-        const sonuc = await generateAndSaveKartPlani(yeniTaskId, kategori, dokumanTarihi, bitisTarihi);
-        if (!sonuc.ok) { showToast('Görev oluşturuldu ama plan üretilemedi: ' + sonuc.error, 'error'); await loadTasks(); return; }
+        // Bu görev GET /api/tasks'ın normal listesinde yer almadığından, generateAndSaveKartPlani'nin
+        // tasksList üzerinden bulabilmesi için önce tekil olarak çekip listeye ekliyoruz.
+        const yeniTaskRes = await fetch(`${API_BASE_URL}/api/tasks?planTaskForProject=${project.id}`);
+        const yeniTaskRows = await safeJson(yeniTaskRes) || [];
+        const yeniTask = yeniTaskRows.find(t => t.id == yeniTaskId);
+        if (yeniTask) mergeTaskIntoList(yeniTask);
 
-        await loadTasks();
-        showToast(`"${gorevAdi}" görevi ve kart planı oluşturuldu.`, 'success');
-        openTaskDetailModal(Number(yeniTaskId));
+        const sonuc = await generateAndSaveKartPlani(yeniTaskId, kategori, dokumanTarihi, bitisTarihi);
+        if (!sonuc.ok) { showToast('Görev oluşturuldu ama plan üretilemedi: ' + sonuc.error, 'error'); await loadAndRenderProjectKartPlani(project); return; }
+
+        showToast(`"${gorevAdi}" kart planı oluşturuldu.`, 'success');
+        await loadAndRenderProjectKartPlani(project);
       } catch (err) {
         console.error('İş planı oluşturma hatası:', err);
         showToast('İş planı oluşturulurken bir hata oluştu.', 'error');
@@ -10849,14 +10896,38 @@
       }
     }
 
-    // Proje detay sayfasında "Kart için Planla" kutusunu gösterir/gizler — sadece Test ekibi +
-    // plan oluşturma yetkisi olan roller görür. Tarih alanlarına proje bitişini varsayılan yapar.
-    function renderProjectKartPlaniPicker(project) {
+    // Proje detay sayfasındaki "Kart için Planla" kutusunu doldurur — sadece Test ekibi + plan
+    // oluşturma yetkisi olan roller görür. Bu projeye ait bir Kart Planı görevi zaten varsa
+    // (bkz. is_kart_plani_task), oluşturma formu yerine doğrudan Gantt/aşama görünümü (aynı
+    // renderIsPlaniPlanView, Görev detayı modalıyla ortak) gösterilir.
+    async function loadAndRenderProjectKartPlani(project) {
       const wrap = document.getElementById('projDetKartPlaniWrap');
       if (!wrap) return;
       const yetkili = userIsTestTeam(currentUser) && IS_PLANI_YETKILI_ROLLER.includes(currentUser.role);
       wrap.classList.toggle('hidden', !yetkili);
-      if (!yetkili) return;
+      if (!yetkili) { currentProjectPlanTaskId = null; return; }
+
+      const formEl = document.getElementById('projDetKartPlaniForm');
+      const viewEl = document.getElementById('projDetKartPlaniView');
+
+      let planTask = null;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tasks?planTaskForProject=${project.id}`);
+        const rows = await safeJson(res) || [];
+        planTask = rows.find(t => t.is_plani) || rows[0] || null;
+      } catch (e) { planTask = null; }
+
+      if (planTask) {
+        mergeTaskIntoList(planTask);
+        currentProjectPlanTaskId = planTask.id;
+        if (formEl) formEl.classList.add('hidden');
+        if (viewEl) { viewEl.classList.remove('hidden'); viewEl.innerHTML = renderIsPlaniPlanView(planTask); }
+        return;
+      }
+
+      currentProjectPlanTaskId = null;
+      if (viewEl) { viewEl.classList.add('hidden'); viewEl.innerHTML = ''; }
+      if (formEl) formEl.classList.remove('hidden');
 
       const bugun = new Date().toISOString().substring(0, 10);
       const baslangicEl = document.getElementById('projDetKartBaslangic');
@@ -10920,7 +10991,7 @@
         const data = await res.json();
         if (!res.ok) { showToast('Hata: ' + (data.error || 'İşlem yapılamadı.'), 'error'); return; }
         await loadTasks();
-        openTaskDetailModal(taskId);
+        reopenIsPlaniContext(taskId);
       } catch (err) {
         console.error('Aşama durumu hatası:', err);
         showToast('Aşama durumu güncellenirken bir hata oluştu.', 'error');
@@ -10937,7 +11008,7 @@
         });
         if (!res.ok) { const d = await res.json(); showToast('Hata: ' + (d.error || 'Sıfırlanamadı.'), 'error'); return; }
         await loadTasks();
-        openTaskDetailModal(taskId);
+        reopenIsPlaniContext(taskId);
       } catch (err) {
         console.error('İş planı sıfırlama hatası:', err);
       }
@@ -10955,7 +11026,7 @@
         const data = await res.json();
         if (!res.ok) { showToast('Hata: ' + (data.error || 'Güncellenemedi.'), 'error'); return; }
         await loadTasks();
-        openTaskDetailModal(taskId);
+        reopenIsPlaniContext(taskId);
       } catch (err) {
         console.error('İş planı güncelleme hatası:', err);
       }
