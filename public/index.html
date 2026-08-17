@@ -1262,6 +1262,18 @@
             </div>
           </div>
 
+          <!-- G. VERİTABANINI EXCEL'E AKTAR -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleSettingsPanel('settingsExport')" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-file-excel text-cyan-500"></i>Veritabanını Excel'e Aktar</h4>
+              <i id="settingsExportChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="settingsExportBody" class="hidden px-5 pb-5 space-y-3">
+              <p class="text-xs text-slate-500 dark:text-slate-400">Sitedeki tüm tablolar (kullanıcılar, görevler, projeler, toplantı talepleri, bildirimler vb.) her biri ayrı bir sayfada olacak şekilde tek bir Excel (.xlsx) dosyasına aktarılır. İstediğiniz zaman indirip tüm verileri kontrol edebilirsiniz.</p>
+              <button type="button" onclick="handleExportDatabaseExcel()" id="exportDbExcelBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-500/20"><i class="fa-solid fa-file-arrow-down me-1.5"></i>Excel Dosyasını İndir</button>
+            </div>
+          </div>
+
           <div class="flex justify-end">
             <button type="button" onclick="handleSaveSystemSettings()" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-cyan-500/20"><i class="fa-solid fa-floppy-disk me-1.5"></i>Tüm Ayarları Kaydet</button>
           </div>
@@ -6178,6 +6190,10 @@
         ? m.target_roles.split(',').map(r => ROLE_LABELS_TR[r.trim()] || r.trim()).join(', ')
         : '';
       const showReview = canReviewMeeting(m);
+      // Bekleyen mühendis talepleri, onaylama/reddetme/düzenleme yetkisi olan herkes tarafından
+      // aynı anda silinebilir de (Düzenle butonunun yanına eklenir).
+      const showPendingEngineerDelete = showReview && m.requester_role === 'ENGINEER';
+      // Reddedilen talepler ise ayrıca Admin/İK tarafından her zaman silinebilir.
       const showDelete = m.status === 'REJECTED' && (currentUser.role === 'ADMIN' || currentUser.role === 'HR');
       return `
       <div class="bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
@@ -6197,6 +6213,7 @@
             <button onclick="reviewMeetingRequest(${m.id}, 'APPROVED')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-1.5 rounded-xl transition-all shadow-md">Onayla</button>
             <button onclick="reviewMeetingRequest(${m.id}, 'REJECTED')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold py-1.5 rounded-xl transition-all shadow-md">Reddet</button>
             <button onclick="openEditMeetingModal(${m.id})" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all" title="İçeriği Düzenle"><i class="fa-solid fa-pen"></i></button>
+            ${showPendingEngineerDelete ? `<button onclick="handleDeleteMeetingRequest(${m.id})" class="bg-slate-200 dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all" title="Talebi Sil"><i class="fa-solid fa-trash-can"></i></button>` : ''}
           </div>
         ` : ''}
         ${showDelete ? `
@@ -6208,9 +6225,9 @@
     `;
     }
 
-    // Reddedilen bir toplantı talebini kalıcı olarak siler (yalnızca Admin/İK)
+    // Bir toplantı talebini kalıcı olarak siler (reddedilen talep: Admin/İK; bekleyen mühendis talebi: inceleme yetkisi olan kullanıcı)
     async function handleDeleteMeetingRequest(meetingId) {
-      if (!(await showConfirm('Bu reddedilen talebi kalıcı olarak silmek istediğinizden emin misiniz?'))) return;
+      if (!(await showConfirm('Bu talebi kalıcı olarak silmek istediğinizden emin misiniz?'))) return;
       try {
         const res = await fetch(`${API_BASE_URL}/api/meetings/${meetingId}`, {
           method: 'DELETE',
@@ -6719,6 +6736,40 @@
         HOLIDAYS_CACHE = [...settingsHolidaysWorking];
       } catch (e) {
         showToast('Hata: ' + e.message, 'error');
+      }
+    }
+
+    // Veritabanındaki tüm tabloları (her biri ayrı sayfa olacak şekilde) tek bir Excel dosyası
+    // olarak indirir — Admin/İK istediği an tüm verileri buradan kontrol edebilsin diye.
+    async function handleExportDatabaseExcel() {
+      const btn = document.getElementById('exportDbExcelBtn');
+      const originalHtml = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1.5"></i>Hazırlanıyor...';
+      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/admin/export-excel?userRole=${encodeURIComponent(currentUser.role)}`);
+        if (!res.ok) {
+          const data = await safeJson(res);
+          showToast((data && data.error) || 'Excel dosyası oluşturulamadı.', 'error');
+          return;
+        }
+        const blob = await res.blob();
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `veritabani_${dateStr}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+        showToast('Excel dosyası indirildi.', 'success');
+      } catch (err) {
+        console.error('Excel dışa aktarma hatası:', err);
+        showToast('Excel dosyası indirilirken hata oluştu.', 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
       }
     }
 
