@@ -22,16 +22,41 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
-    /* Giriş sonrası tanıtım videosu: başlık belirir, "aşağı kaydırın" ipucu gerçek bir fare
-       tekerleği gibi (yuvarlak gövde içinde aşağı kayan nokta) hareket eder */
+    /* Giriş sonrası tanıtım videosu: başlık belirir; video scroll ile ilerledikçe altta
+       özellik tanıtım metni segmentler halinde yumuşak geçişle (crossfade) değişir. */
     @keyframes introFadeIn {
       from { opacity: 0; transform: translateY(16px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    @keyframes scrollWheel {
-      0% { transform: translateY(0); opacity: 1; }
-      70% { transform: translateY(14px); opacity: 0; }
-      100% { transform: translateY(0); opacity: 0; }
+    /* Sayfa/panel geçiş animasyonu: her *Section id'li kök konteyner "hidden" sınıfından
+       çıkıp (display:none -> görünür) tekrar render edildiğinde tarayıcı bu animasyonu
+       otomatik olarak baştan çalıştırır — tek tek her openXPage() fonksiyonuna dokunmadan,
+       tüm sayfa geçişlerine tutarlı bir fade+kayma efekti kazandırır. */
+    [id$="Section"]:not(.hidden) {
+      animation: pageSectionEnter 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes pageSectionEnter {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      [id$="Section"]:not(.hidden) { animation: none; }
+    }
+    /* Skeleton loader: içerik yüklenirken düz "Yükleniyor..." metni yerine nabız gibi atan
+       gri bloklar gösterir (gerçek içeriğin yaklaşık şeklini taklit eder). */
+    .skeleton-block {
+      background: linear-gradient(90deg, rgba(148,163,184,0.15) 25%, rgba(148,163,184,0.3) 37%, rgba(148,163,184,0.15) 63%);
+      background-size: 400% 100%;
+      animation: skeletonShimmer 1.4s ease-in-out infinite;
+      border-radius: 0.5rem;
+    }
+    .dark .skeleton-block {
+      background: linear-gradient(90deg, rgba(51,65,85,0.4) 25%, rgba(71,85,105,0.6) 37%, rgba(51,65,85,0.4) 63%);
+      background-size: 400% 100%;
+    }
+    @keyframes skeletonShimmer {
+      0% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
     }
     input[type="date"]::-webkit-calendar-picker-indicator {
       filter: invert(0.8);
@@ -320,11 +345,13 @@
     </div>
   </div>
 
-  <!-- GİRİŞ SONRASI TANITIM VİDEOSU: Apple tarzı, tam ekran, kullanıcı aşağı kaydırana kadar
-       loop oynar; kaydırınca (veya ipucuna tıklanınca) ana panele geçilir. -->
-  <div id="introVideoScreen" class="hidden relative w-full h-[180vh] bg-black">
+  <!-- GİRİŞ SONRASI TANITIM VİDEOSU: Apple tarzı, tam ekran; video otomatik oynamaz,
+       kullanıcı aşağı kaydırdıkça oynama pozisyonu (currentTime) kaydırma miktarıyla
+       birebir eşlenir (scroll-scrub) ve altta sırayla özellik tanıtım kartları belirir.
+       Video sonuna gelinince (veya "Geç" butonuna tıklanınca) ana panele geçilir. -->
+  <div id="introVideoScreen" class="hidden relative w-full h-[400vh] bg-black">
     <div class="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center">
-      <video id="introVideo" class="absolute inset-0 w-full h-full object-cover" autoplay muted loop playsinline>
+      <video id="introVideo" class="absolute inset-0 w-full h-full object-cover" muted playsinline preload="auto">
         <source src="login-bg-3.mp4" type="video/mp4">
       </video>
       <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-black/70"></div>
@@ -334,11 +361,23 @@
         <p id="introWelcomeText" class="mt-2 text-sm sm:text-base text-slate-200 drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"></p>
       </div>
 
-      <button type="button" id="introScrollHint" onclick="finishPostLoginIntro()" class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2.5 text-white/90 hover:text-white transition-colors">
-        <span class="text-xs sm:text-sm font-medium tracking-wide">Aşağı kaydırın</span>
-        <span class="w-6 h-10 sm:w-7 sm:h-11 rounded-full border-2 border-white/80 flex justify-center pt-2">
-          <span class="w-1 h-2 sm:h-2.5 bg-white/90 rounded-full" style="animation: scrollWheel 1.6s ease-in-out infinite;"></span>
-        </span>
+      <!-- Scroll pozisyonuna göre (video segmentine göre) değişen özellik tanıtım kartı -->
+      <div id="introFeatureText" class="absolute bottom-10 sm:bottom-14 left-1/2 -translate-x-1/2 z-10 text-center px-6 max-w-xs sm:max-w-sm transition-opacity duration-300 ease-out">
+        <div id="introFeatureIcon" class="mx-auto mb-2.5 h-10 w-10 rounded-full bg-white/10 border border-white/25 flex items-center justify-center text-white text-sm backdrop-blur-sm shadow-lg">
+          <i class="fa-solid fa-list-check"></i>
+        </div>
+        <h3 id="introFeatureTitle" class="text-white text-base sm:text-lg font-bold drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"></h3>
+        <p id="introFeatureDesc" class="text-slate-200 text-xs sm:text-sm mt-1 leading-snug drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"></p>
+        <div class="flex items-center justify-center gap-1.5 mt-4">
+          <span id="introFeatureDot0" class="h-1.5 w-1.5 rounded-full bg-white/40 transition-all"></span>
+          <span id="introFeatureDot1" class="h-1.5 w-1.5 rounded-full bg-white/40 transition-all"></span>
+          <span id="introFeatureDot2" class="h-1.5 w-1.5 rounded-full bg-white/40 transition-all"></span>
+          <span id="introFeatureDot3" class="h-1.5 w-1.5 rounded-full bg-white/40 transition-all"></span>
+        </div>
+      </div>
+
+      <button type="button" onclick="finishPostLoginIntro()" class="absolute top-5 right-5 z-10 text-[11px] sm:text-xs font-semibold text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-full border border-white/20 hover:border-white/50">
+        Geç <i class="fa-solid fa-chevron-right text-[9px] ms-0.5"></i>
       </button>
     </div>
   </div>
@@ -1886,7 +1925,7 @@
                 <div id="attendanceStatusIcon" class="h-11 w-11 rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-400 flex items-center justify-center text-lg"><i class="fa-solid fa-clock"></i></div>
                 <div>
                   <div class="text-xs text-slate-400">Bugünkü Durum</div>
-                  <div id="attendanceStatusText" class="text-sm font-bold text-slate-800 dark:text-slate-100">Yükleniyor...</div>
+                  <div id="attendanceStatusText" class="text-sm font-bold text-slate-800 dark:text-slate-100"><span class="inline-block h-4 w-20 skeleton-block align-middle"></span></div>
                 </div>
               </div>
               <div class="flex items-center gap-2">
@@ -3978,7 +4017,7 @@
         : overdueVisible.map(p => cardHtml(p, `${Math.abs(p.days_left)} gün geçti`)).join('');
 
       upcomingEl.innerHTML = upcomingVisible.length === 0
-        ? `<p class="text-xs text-slate-400">Yaklaşan proje yok.</p>`
+        ? emptyStateHtml('fa-diagram-project', 'Yaklaşan proje yok.')
         : upcomingVisible.map(p => cardHtml(p, `${p.days_left} gün kaldı`)).join('');
     }
 
@@ -3997,7 +4036,7 @@
         return;
       }
       const filtered = (projects || []).filter(p => p.company_id === projSelectedCompany);
-      if (filtered.length === 0) { el.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Bu firmaya ait proje yok.</p>`; return; }
+      if (filtered.length === 0) { el.innerHTML = emptyStateHtml('fa-diagram-project', 'Bu firmaya ait proje yok.'); return; }
       // Müdür kendi biriminin TÜM projelerini görür (en acilden en az acile);
       // Admin (çok departmanlı, potansiyel olarak uzun liste) ilk 10 ile sınırlı kalır.
       const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
@@ -4057,15 +4096,15 @@
       if (!listEl || !rankEl) return;
 
       if (engineerOwnedProjects.length === 0) {
-        listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Sorumlu olduğunuz proje yok.</p>`;
-        rankEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Sorumlu olduğunuz proje yok.</p>`;
+        listEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz proje yok.');
+        rankEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz proje yok.');
         return;
       }
 
       listEl.innerHTML = engineerOwnedProjects.map(p => {
         const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
         const daysCls = p.days_left < 0 ? 'text-rose-500' : p.days_left <= 3 ? 'text-amber-500' : 'text-emerald-500';
-        return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-3 transition-all">
+        return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
           <div class="flex items-center justify-between gap-2">
             <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
             <span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>
@@ -4132,7 +4171,7 @@
         : overdue.slice(0, 8).map(p => cardHtml(p, `${Math.abs(p.days_left)} gün geçti`)).join('');
 
       upcomingEl.innerHTML = upcoming.length === 0
-        ? `<p class="text-xs text-slate-400">Yaklaşan proje yok.</p>`
+        ? emptyStateHtml('fa-diagram-project', 'Yaklaşan proje yok.')
         : upcoming.slice(0, 8).map(p => cardHtml(p, `${p.days_left} gün kaldı`)).join('');
     }
 
@@ -4162,10 +4201,10 @@
 
     async function renderStageTemplateList() {
       const container = document.getElementById('stageTemplateListContainer');
-      container.innerHTML = `<p class="text-xs text-slate-400">Yükleniyor...</p>`;
+      container.innerHTML = skeletonListHtml(2);
       const templates = await loadStageTemplatesCache(true);
       if (!templates || templates.length === 0) {
-        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Henüz şablon yok.</p>`;
+        container.innerHTML = emptyStateHtml('fa-layer-group', 'Henüz şablon yok.');
         return;
       }
       container.innerHTML = templates.map(t => `
@@ -4393,7 +4432,7 @@
         if (isManagerView) url += `&department=${encodeURIComponent(currentUser.department)}`;
         const res = await fetch(url);
         const projects = await safeJson(res);
-        if (!projects.length) { el.innerHTML = `<p class="text-xs text-slate-400">Bu firmaya ait proje yok.</p>`; return; }
+        if (!projects.length) { el.innerHTML = emptyStateHtml('fa-diagram-project', 'Bu firmaya ait proje yok.'); return; }
         el.innerHTML = projects.map(p => `
           <div onclick="openProjectDetailPage(${p.id}, 'adminPanelSection')" class="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-2.5 cursor-pointer transition-all">
             <div class="min-w-0">
@@ -4539,6 +4578,31 @@
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
+    // Skeleton loader yardımcıları: "Yükleniyor..." düz metni yerine nabız gibi atan gri
+    // bloklar üretir (.skeleton-block animasyonu <style> içinde tanımlı).
+    function skeletonBar(width = 'w-32', height = 'h-4') {
+      return `<span class="inline-block ${height} ${width} skeleton-block align-middle"></span>`;
+    }
+    function skeletonListHtml(count = 3) {
+      let html = '';
+      for (let i = 0; i < count; i++) {
+        html += `
+          <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+            <div class="h-9 w-9 rounded-lg skeleton-block shrink-0"></div>
+            <div class="flex-1 min-w-0 space-y-1.5">
+              <div class="h-3 w-2/3 skeleton-block"></div>
+              <div class="h-2.5 w-1/3 skeleton-block"></div>
+            </div>
+          </div>`;
+      }
+      return html;
+    }
+
+    // Boş durum (empty state) yardımcısı: düz gri metin yerine ikon + metin birlikte gösterir.
+    function emptyStateHtml(icon, text, extraClass = '') {
+      return `<div class="text-center py-3 ${extraClass}"><i class="fa-solid ${icon} text-xl text-slate-300 dark:text-slate-600 mb-1.5"></i><p class="text-xs text-slate-400">${text}</p></div>`;
+    }
+
     // Basit toast bildirim
     function showToast(message, type = 'info') {
       let holder = document.getElementById('toastHolder');
@@ -4548,15 +4612,16 @@
         holder.className = 'fixed bottom-5 right-5 z-[100] flex flex-col gap-2 items-end';
         document.body.appendChild(holder);
       }
-      const colors = {
-        success: 'bg-emerald-600 border-emerald-500',
-        error: 'bg-rose-600 border-rose-500',
-        info: 'bg-slate-800 border-slate-600'
+      const accents = {
+        success: { bar: 'bg-emerald-500', icon: 'text-emerald-500' },
+        error: { bar: 'bg-rose-500', icon: 'text-rose-500' },
+        info: { bar: 'bg-cyan-500', icon: 'text-cyan-500' }
       };
       const icons = { success: 'fa-circle-check', error: 'fa-circle-exclamation', info: 'fa-circle-info' };
+      const a = accents[type] || accents.info;
       const t = document.createElement('div');
-      t.className = `${colors[type] || colors.info} text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-2xl border flex items-center gap-2.5 max-w-xs transition-all duration-300 translate-x-4 opacity-0`;
-      t.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${escapeHtmlProj(message)}</span>`;
+      t.className = `relative overflow-hidden bg-white/85 dark:bg-slate-900/80 backdrop-blur-md text-slate-800 dark:text-slate-100 text-sm font-semibold pl-4 pr-4 py-2.5 rounded-xl shadow-2xl border border-white/40 dark:border-slate-700/60 flex items-center gap-2.5 max-w-xs transition-all duration-300 translate-x-4 opacity-0`;
+      t.innerHTML = `<span class="absolute left-0 top-0 bottom-0 w-1 ${a.bar}"></span><i class="fa-solid ${icons[type] || icons.info} ${a.icon}"></i><span>${escapeHtmlProj(message)}</span>`;
       holder.appendChild(t);
       requestAnimationFrame(() => { t.classList.remove('translate-x-4', 'opacity-0'); });
       setTimeout(() => {
@@ -4941,7 +5006,7 @@
       scrollMainTo(0, true);
 
       // Yükleniyor durumları
-      document.getElementById('pdName').innerText = 'Yükleniyor...';
+      document.getElementById('pdName').innerHTML = skeletonBar('w-48', 'h-6');
       document.getElementById('pdPersonalInfo').innerHTML = '';
       document.getElementById('pdProjects').innerHTML = '';
       document.getElementById('pdTasks').innerHTML = '';
@@ -5089,7 +5154,7 @@
         projEl.innerHTML = projects.map(p => {
           const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
           const daysCls = p.days_left < 0 ? 'text-rose-500' : p.days_left <= 3 ? 'text-amber-500' : 'text-emerald-500';
-          return `<button type="button" onclick="openPersonProjectInline(${p.id}, ${u.id})" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 rounded-lg p-3 transition-all">
+          return `<button type="button" onclick="openPersonProjectInline(${p.id}, ${u.id})" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
             <div class="flex items-center justify-between gap-2">
               <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
               <span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>
@@ -5112,7 +5177,7 @@
       const personTasks = (tasksList || []).filter(t => t.assigned_to == u.id)
         .slice().sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
       if (personTasks.length === 0) {
-        taskEl.innerHTML = `<p class="text-xs text-slate-400 py-2">Bu kişide görev yok.</p>`;
+        taskEl.innerHTML = emptyStateHtml('fa-list-check', 'Bu kişide görev yok.');
       } else {
         const isManagerView = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && u.id != currentUser.id;
         personTasks.forEach(t => {
@@ -5125,7 +5190,7 @@
       // Günlük loglar
       const logEl = document.getElementById('pdLogs');
       if (logs.length === 0) {
-        logEl.innerHTML = `<p class="text-xs text-slate-400 py-2">Günlük not yok.</p>`;
+        logEl.innerHTML = emptyStateHtml('fa-note-sticky', 'Günlük not yok.');
       } else {
         logEl.innerHTML = logs.map(l => `
           <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5">
@@ -5234,7 +5299,7 @@
       detailSec.classList.remove('hidden');
       scrollMainTo(0, true);
 
-      document.getElementById('projDetTitle').innerText = 'Yükleniyor...';
+      document.getElementById('projDetTitle').innerHTML = skeletonBar('w-48', 'h-6');
       document.getElementById('projDetMeta').innerHTML = '';
       document.getElementById('projDetBadges').innerHTML = '';
       document.getElementById('projDetNoteRow').classList.add('hidden');
@@ -5315,6 +5380,11 @@
       const canvas = document.getElementById(idp + 'Chart');
       const ctx = canvas.getContext('2d');
       if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
+      // Çizginin altına hafif bir gradient dolgu (yukarıdan aşağı saydamlaşan cyan) —
+      // düz "transparent" dolguya göre grafiği çok daha zengin/premium gösterir.
+      const chartFill = ctx.createLinearGradient(0, 0, 0, 220);
+      chartFill.addColorStop(0, 'rgba(6, 182, 212, 0.35)');
+      chartFill.addColorStop(1, 'rgba(6, 182, 212, 0)');
       personProjectChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -5322,7 +5392,7 @@
           // aynı günde birden fazla giriş yapılsa bile üst üste binmeden ayrı ayrı gösterilir.
           labels: sorted.map((p, i) => `${i + 1}. Giriş`),
           datasets: [
-            { label: 'Gerçekleşen %', data: sorted.map(p => Number(p.actual)), borderColor: '#06b6d4', backgroundColor: 'transparent', tension: 0.3 }
+            { label: 'Gerçekleşen %', data: sorted.map(p => Number(p.actual)), borderColor: '#06b6d4', backgroundColor: chartFill, fill: true, tension: 0.3, pointBackgroundColor: '#06b6d4', pointBorderColor: '#fff', pointBorderWidth: 1.5, pointRadius: 4, pointHoverRadius: 6 }
           ]
         },
         options: {
@@ -5340,7 +5410,7 @@
       const isAdminViewer = currentUser.role === 'ADMIN' || currentUser.role === 'HR';
       const logsEl = document.getElementById(idp + 'Logs');
       if (sorted.length === 0) {
-        logsEl.innerHTML = `<p class="text-xs text-slate-400">Henüz ilerleme kaydı yok.</p>`;
+        logsEl.innerHTML = emptyStateHtml('fa-chart-line', 'Henüz ilerleme kaydı yok.');
       } else {
         logsEl.innerHTML = sorted.slice().reverse().map(p => {
           if (isAdminViewer && ppEditingId == p.id) {
@@ -5849,6 +5919,9 @@
         return running;
       });
 
+      const personProgressFill = ctx.createLinearGradient(0, 0, 0, 220);
+      personProgressFill.addColorStop(0, 'rgba(6, 182, 212, 0.35)');
+      personProgressFill.addColorStop(1, 'rgba(6, 182, 212, 0)');
       personProgressChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -5857,7 +5930,7 @@
             label: 'Kümülatif Log Girişi',
             data: dataPoints,
             borderColor: '#06b6d4',
-            backgroundColor: '#06b6d420',
+            backgroundColor: personProgressFill,
             tension: 0.3,
             fill: true,
             pointRadius: 3
@@ -5973,7 +6046,7 @@
           });
 
         if (thisWeek.length === 0) {
-          el.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Bu hafta toplantı yok.</p>`;
+          el.innerHTML = emptyStateHtml('fa-calendar-days', 'Bu hafta toplantı yok.');
           return;
         }
         const statusLabels = { APPROVED: 'Onaylı', PENDING: 'Bekliyor' };
@@ -6110,11 +6183,11 @@
 
         pendingList.innerHTML = pending.length > 0
           ? pending.map(renderMeetingCard).join('')
-          : `<p class="text-xs text-slate-400 text-center py-4">Bekleyen talep bulunmuyor.</p>`;
+          : emptyStateHtml('fa-inbox', 'Bekleyen talep bulunmuyor.');
 
         rejectedList.innerHTML = rejected.length > 0
           ? rejected.map(renderMeetingCard).join('')
-          : `<p class="text-xs text-slate-400 text-center py-4">Reddedilen talep bulunmuyor.</p>`;
+          : emptyStateHtml('fa-inbox', 'Reddedilen talep bulunmuyor.');
       } catch (err) {
         console.error("Toplantı talepleri alınamadı:", err);
         const errHtml = `<p class="text-xs text-rose-500 text-center py-4">Veriler yüklenirken hata oluştu.</p>`;
@@ -6413,7 +6486,7 @@
         .slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
 
       if (people.length === 0) {
-        grid.innerHTML = `<p class="text-xs text-slate-400 text-center py-6 col-span-full">Bu rolde kullanıcı bulunmuyor.</p>`;
+        grid.innerHTML = emptyStateHtml('fa-users', 'Bu rolde kullanıcı bulunmuyor.', 'col-span-full');
         return;
       }
 
@@ -6515,7 +6588,7 @@
       if (!el) return;
       const sorted = [...settingsHolidaysWorking].sort();
       if (sorted.length === 0) {
-        el.innerHTML = `<p class="text-xs text-slate-400">Henüz tatil günü eklenmedi.</p>`;
+        el.innerHTML = emptyStateHtml('fa-umbrella-beach', 'Henüz tatil günü eklenmedi.');
         return;
       }
       el.innerHTML = sorted.map(d => `
@@ -6977,7 +7050,7 @@
         updateUserMgmtBadge(users.length);
 
         if (users.length === 0) {
-          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">Kayıtlı kullanıcı yok.</p>`;
+          container.innerHTML = emptyStateHtml('fa-users', 'Kayıtlı kullanıcı yok.');
           return;
         }
 
@@ -7631,9 +7704,20 @@
       }
     }
 
-    // Giriş sonrası tanıtım videosu: authContainer'ı gizler, tam ekran videoyu gösterir ve
-    // kullanıcı aşağı kaydırana (veya ipucuna tıklayana) kadar dashboard'u AÇMADAN bekler.
+    // Giriş sonrası tanıtım videosu: authContainer'ı gizler, tam ekran videoyu gösterir.
+    // Video otomatik oynamaz — kullanıcı aşağı kaydırdıkça video.currentTime, kaydırma
+    // oranıyla (scrollY / kaydırılabilir toplam mesafe) birebir eşlenir. Video sonuna
+    // ulaşılınca (veya ipucuna tıklanınca) dashboard AÇILIR.
     let finishPostLoginIntroFn = null;
+
+    // Tanıtım videosu boyunca scroll pozisyonuna göre sırayla gösterilen özellik kartları.
+    const INTRO_FEATURES = [
+      { icon: 'fa-list-check', title: 'Görevlerinizi Takip Edin', desc: 'Size atanan görevleri anlık olarak görüntüleyin, güncelleyin ve tamamlayın.' },
+      { icon: 'fa-diagram-project', title: 'Proje Gidişatını İzleyin', desc: 'Firmalara ait projelerin ilerleme durumunu tek ekrandan takip edin.' },
+      { icon: 'fa-bell', title: 'Anlık Bildirimler', desc: 'Görev, toplantı ve onay süreçlerinden anında haberdar olun.' },
+      { icon: 'fa-layer-group', title: 'Hepsi Tek Panelde', desc: 'Ekip, görev ve proje yönetimini tek bir sistemde birleştirin.' }
+    ];
+
     function startPostLoginIntro() {
       return new Promise((resolve) => {
         const introEl = document.getElementById('introVideoScreen');
@@ -7647,32 +7731,110 @@
         const welcomeEl = document.getElementById('introWelcomeText');
         if (welcomeEl) welcomeEl.innerText = currentUser && currentUser.name ? `Hoş geldin, ${currentUser.name}` : '';
 
-        const video = document.getElementById('introVideo');
-        if (video) {
-          video.currentTime = 0;
-          video.play().catch(() => {});
-        }
+        // Özellik kartını (ikon/başlık/açıklama) günceller; segment değişince kısa bir
+        // crossfade (opaklık geçişi) uygular, aynı segment içinde tekrar yazmaz.
+        const featureTextEl = document.getElementById('introFeatureText');
+        const featureIconEl = document.getElementById('introFeatureIcon');
+        const featureTitleEl = document.getElementById('introFeatureTitle');
+        const featureDescEl = document.getElementById('introFeatureDesc');
+        let lastFeatureIndex = -1;
+        const renderFeature = (index) => {
+          const f = INTRO_FEATURES[index];
+          if (!f) return;
+          if (featureIconEl) featureIconEl.innerHTML = `<i class="fa-solid ${f.icon}"></i>`;
+          if (featureTitleEl) featureTitleEl.innerText = f.title;
+          if (featureDescEl) featureDescEl.innerText = f.desc;
+          for (let i = 0; i < INTRO_FEATURES.length; i++) {
+            const dot = document.getElementById(`introFeatureDot${i}`);
+            if (dot) dot.className = i === index ? 'h-1.5 w-5 rounded-full bg-white transition-all' : 'h-1.5 w-1.5 rounded-full bg-white/40 transition-all';
+          }
+        };
+        const updateFeatureText = (progress) => {
+          const index = Math.min(INTRO_FEATURES.length - 1, Math.floor(progress * INTRO_FEATURES.length));
+          if (index === lastFeatureIndex) return;
+          lastFeatureIndex = index;
+          if (featureTextEl) {
+            featureTextEl.style.opacity = '0';
+            setTimeout(() => {
+              renderFeature(index);
+              featureTextEl.style.opacity = '1';
+            }, 180);
+          } else {
+            renderFeature(index);
+          }
+        };
+        renderFeature(0);
 
+        const video = document.getElementById('introVideo');
         let finished = false;
+        let rafId = null;
+        // Tarayıcı bir seek'i bitirmeden yenisi istenirse seek kuyruğu birikip video
+        // kasar/donar; bu yüzden her an sadece TEK bir seek isteği beklemede tutulur —
+        // 'seeked' olayı gelmeden yeni currentTime yazılmaz, sadece en güncel hedef saklanır.
+        let seekPending = false;
+        let pendingProgress = null;
+        let lastAppliedProgress = -1;
+
         const finish = () => {
           if (finished) return;
           finished = true;
           window.removeEventListener('scroll', onScroll);
+          if (video) video.removeEventListener('seeked', onSeeked);
+          if (rafId !== null) cancelAnimationFrame(rafId);
           introEl.classList.add('hidden');
           if (video) video.pause();
           window.scrollTo(0, 0);
           finishPostLoginIntroFn = null;
           resolve();
         };
-        const onScroll = () => {
-          if (window.scrollY > window.innerHeight * 0.7) finish();
+
+        const applyProgress = (progress) => {
+          if (finished || !video || !video.duration || isNaN(video.duration)) return;
+          if (Math.abs(progress - lastAppliedProgress) < 0.003) return;
+          if (seekPending) { pendingProgress = progress; return; }
+          lastAppliedProgress = progress;
+          seekPending = true;
+          video.currentTime = progress * video.duration;
+          if (progress >= 0.98) finish();
         };
+
+        const onSeeked = () => {
+          seekPending = false;
+          if (pendingProgress !== null) {
+            const next = pendingProgress;
+            pendingProgress = null;
+            applyProgress(next);
+          }
+        };
+
+        // Kaydırma oranını videonun süresine eşleyip currentTime'ı günceller (scroll-scrub).
+        const scrubVideo = () => {
+          rafId = null;
+          if (finished) return;
+          const maxScroll = introEl.offsetHeight - window.innerHeight;
+          if (maxScroll <= 0) return;
+          const progress = Math.min(1, Math.max(0, window.scrollY / maxScroll));
+          updateFeatureText(progress);
+          applyProgress(progress);
+        };
+
+        const onScroll = () => {
+          if (rafId === null) rafId = requestAnimationFrame(scrubVideo);
+        };
+
+        if (video) {
+          video.pause();
+          video.currentTime = 0;
+          video.addEventListener('seeked', onSeeked);
+          video.addEventListener('loadedmetadata', scrubVideo, { once: true });
+        }
+
         window.addEventListener('scroll', onScroll, { passive: true });
         finishPostLoginIntroFn = finish;
       });
     }
 
-    // "Aşağı kaydırın" ipucuna tıklanınca da (kaydırmadan) tanıtım ekranı tamamlanır
+    // "Geç" butonuna tıklanınca da (kaydırmadan) tanıtım ekranı tamamlanır
     function finishPostLoginIntro() {
       if (typeof finishPostLoginIntroFn === 'function') finishPostLoginIntroFn();
     }
@@ -8963,7 +9125,7 @@
         const res = await fetch(`${API_BASE_URL}/api/attendance/mine?internId=${currentUser.id}`);
         const rows = await safeJson(res) || [];
         if (!Array.isArray(rows) || rows.length === 0) {
-          listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-3">Henüz kayıt yok.</p>`;
+          listEl.innerHTML = emptyStateHtml('fa-clock', 'Henüz kayıt yok.');
           return;
         }
         listEl.innerHTML = rows.map(r => {
@@ -9008,7 +9170,7 @@
         const res = await fetch(`${API_BASE_URL}/api/attendance/team?engineerId=${currentUser.id}`);
         const rows = await safeJson(res) || [];
         if (!Array.isArray(rows) || rows.length === 0) {
-          listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-3">Henüz kayıt yok.</p>`;
+          listEl.innerHTML = emptyStateHtml('fa-clock', 'Henüz kayıt yok.');
           return;
         }
         listEl.innerHTML = rows.map(r => {
@@ -9063,7 +9225,7 @@
         : overdue.map(t => cardHtml(t, `${Math.abs(t.days_left)} gün geçti`)).join('');
 
       upcomingEl.innerHTML = upcoming.length === 0
-        ? `<p class="text-xs text-slate-400">Yaklaşan görev yok.</p>`
+        ? emptyStateHtml('fa-list-check', 'Yaklaşan görev yok.')
         : upcoming.map(t => cardHtml(t, `${t.days_left} gün kaldı`)).join('');
     }
 
@@ -9215,7 +9377,7 @@
 
       el.innerHTML = '';
       if (mine.length === 0) {
-        el.innerHTML = `<p class="text-xs text-slate-400 col-span-full text-center py-4">Henüz kendinize atadığınız bir görev yok.</p>`;
+        el.innerHTML = emptyStateHtml('fa-list-check', 'Henüz kendinize atadığınız bir görev yok.', 'col-span-full');
         return;
       }
       mine.forEach(t => el.appendChild(createTaskCard(t, t.status === 'APPROVED' || t.status === 'COMPLETED', false)));
@@ -10980,7 +11142,7 @@
       titleEl.innerText = `${d} ${CAL_MONTH_NAMES[m - 1]} ${y}`;
 
       if (dayEvents.length === 0) {
-        bodyEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Bu güne ait kayıt yok.</p>`;
+        bodyEl.innerHTML = emptyStateHtml('fa-calendar-day', 'Bu güne ait kayıt yok.');
       } else {
         bodyEl.innerHTML = dayEvents.map(ev => {
           const isTask = ev.type === 'task';
@@ -11211,7 +11373,7 @@
     async function renderAiSohbetListesi() {
       const list = document.getElementById('aiSohbetListView');
       if (!list || !currentUser) return;
-      list.innerHTML = '<div class="text-center text-[11px] text-slate-400 py-4">Yükleniyor...</div>';
+      list.innerHTML = skeletonListHtml(3);
       try {
         const res = await fetch(`${API_BASE_URL}/api/agent/conversations?userId=${currentUser.id}`);
         const data = await res.json();
@@ -11623,7 +11785,7 @@
     async function renderDokYeniReferansSecimi() {
       const el = document.getElementById('dokYeniReferansSecimi');
       if (!el) return;
-      el.innerHTML = '<span class="text-[11px] text-slate-400">Yükleniyor...</span>';
+      el.innerHTML = skeletonBar('w-24', 'h-3.5');
       try {
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`);
         const data = await res.json();
@@ -11819,7 +11981,7 @@
     async function renderDokReferanslar() {
       const list = document.getElementById('dokReferansListe');
       if (!list) return;
-      list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">Yükleniyor...</div>';
+      list.innerHTML = skeletonListHtml(3);
       try {
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`);
         const data = await res.json();
@@ -11906,7 +12068,7 @@
     async function renderDokGecmis() {
       const list = document.getElementById('dokGecmisListe');
       if (!list) return;
-      list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">Yükleniyor...</div>';
+      list.innerHTML = skeletonListHtml(3);
       try {
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendirmeler`);
         const data = await res.json();
@@ -11942,7 +12104,7 @@
       if (!kutu) return;
       if (!kutu.classList.contains('hidden')) { kutu.classList.add('hidden'); return; }
       kutu.classList.remove('hidden');
-      kutu.innerHTML = '<div class="text-center text-xs text-slate-400 py-3">Yükleniyor...</div>';
+      kutu.innerHTML = skeletonListHtml(2);
       try {
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/degerlendirmeler/${id}`);
         const data = await res.json();
