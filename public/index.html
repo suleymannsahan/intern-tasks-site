@@ -3151,12 +3151,13 @@
       if (chevron) chevron.classList.toggle('rotate-180');
     }
 
-    function toggleMeetingsModal() {
+    async function toggleMeetingsModal() {
       const modal = document.getElementById('meetingsModal');
       // Sayfa modunda açıldıysa (Ekip Lideri/Müdür kutucuğu): kapatınca ana ekrana dön
       if (modal && modal.dataset.asPage === '1') {
         restoreModalOverlay('meetingsModal');
-        if (typeof showDashboard === 'function') showDashboard();
+        if (typeof showDashboard === 'function') await showDashboard();
+        requestAnimationFrame(() => scrollMainTo(preNavScrollY, false));
         return;
       }
       modal.classList.toggle('hidden');
@@ -3325,12 +3326,13 @@
       peopleWrap.classList.remove('hidden');
     }
 
-    function toggleTasksDropdown() {
+    async function toggleTasksDropdown() {
       const dropdown = document.getElementById('tasksDropdown');
       // Sayfa modunda açıldıysa (Admin kutucuğu): kapatınca ana ekrana dön
       if (dropdown && dropdown.dataset.asPage === '1') {
         restoreModalOverlay('tasksDropdown');
-        if (typeof showDashboard === 'function') showDashboard();
+        if (typeof showDashboard === 'function') await showDashboard();
+        requestAnimationFrame(() => scrollMainTo(preNavScrollY, false));
         return;
       }
       dropdown.classList.toggle('hidden');
@@ -3341,11 +3343,12 @@
       }
     }
 
-    function togglePendingDropdown() {
+    async function togglePendingDropdown() {
       const dropdown = document.getElementById('pendingDropdown');
       if (dropdown && dropdown.dataset.asPage === '1') {
         restoreModalOverlay('pendingDropdown');
-        if (typeof showDashboard === 'function') showDashboard();
+        if (typeof showDashboard === 'function') await showDashboard();
+        requestAnimationFrame(() => scrollMainTo(preNavScrollY, false));
         return;
       }
       dropdown.classList.toggle('hidden');
@@ -3354,11 +3357,12 @@
       }
     }
 
-    function toggleUserMgmtDropdown() {
+    async function toggleUserMgmtDropdown() {
       const dropdown = document.getElementById('userMgmtDropdown');
       if (dropdown && dropdown.dataset.asPage === '1') {
         restoreModalOverlay('userMgmtDropdown');
-        if (typeof showDashboard === 'function') showDashboard();
+        if (typeof showDashboard === 'function') await showDashboard();
+        requestAnimationFrame(() => scrollMainTo(preNavScrollY, false));
         return;
       }
       dropdown.classList.toggle('hidden');
@@ -11531,13 +11535,14 @@
     let calendarEvents = [];                // { date:'YYYY-MM-DD', type:'task'|'meeting', title, meta, status }
     const CAL_MONTH_NAMES = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 
-    function toggleCalendarModal() {
+    async function toggleCalendarModal() {
       const modal = document.getElementById('calendarModal');
       if (!modal) return;
       // Sayfa modunda açıldıysa (Ekip Lideri/Müdür kutucuğu): kapatınca ana ekrana dön
       if (modal.dataset.asPage === '1') {
         restoreModalOverlay('calendarModal');
-        if (typeof showDashboard === 'function') showDashboard();
+        if (typeof showDashboard === 'function') await showDashboard();
+        requestAnimationFrame(() => scrollMainTo(preNavScrollY, false));
         return;
       }
       modal.classList.toggle('hidden');
