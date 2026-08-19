@@ -2868,6 +2868,38 @@
       : 'https://intern-tasks-pannel.onrender.com';
 
     let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
+
+    // ============================================================
+    // OTURUM ZAMAN AŞIMI: giriş yapıldıktan sonra oturum en fazla 1 saat açık kalır — süre
+    // dolunca kullanıcı otomatik çıkış yapılır ve tekrar giriş yapması istenir. Süre giriş
+    // anında sabitlenir (siteyi kullanmak süreyi uzatmaz — sayfa yenilense/kapansa bile aynı
+    // saatte dolar), localStorage'da tutulduğu için sekme kapatılıp açılsa da geçerliliğini korur.
+    // ============================================================
+    const SESSION_DURATION_MS = 60 * 60 * 1000; // 1 saat
+
+    function startSessionExpiry() {
+      localStorage.setItem('sessionExpiresAt', String(Date.now() + SESSION_DURATION_MS));
+    }
+    function clearSessionExpiry() {
+      localStorage.removeItem('sessionExpiresAt');
+    }
+    function isSessionExpired() {
+      const expiresAt = Number(localStorage.getItem('sessionExpiresAt'));
+      return !expiresAt || Date.now() >= expiresAt;
+    }
+
+    // Sekme açıkken 1 saatlik süre dolarsa (sayfa yenilenmeden) otomatik çıkış yapabilmek için
+    // periyodik kontrol. Süre dolmadıysa hiçbir şey yapmaz.
+    let sessionExpiryInterval = null;
+    function startSessionExpiryWatcher() {
+      if (sessionExpiryInterval) clearInterval(sessionExpiryInterval);
+      sessionExpiryInterval = setInterval(() => {
+        if (currentUser && isSessionExpired()) {
+          handleLogout();
+          showToast('Oturumunuzun süresi doldu, lütfen tekrar giriş yapın.', 'error');
+        }
+      }, 30000);
+    }
     let usersList = [];
     // Kullanıcı Yönetimi'nin son çektiği tam kullanıcı listesi (telefon, alt alan, lider türü, staj
     // tarihleri, sorumlu mühendis dahil) — "Düzenle" modalı fetch beklemeden buradan doldurulur.
@@ -3449,11 +3481,23 @@
     document.addEventListener('DOMContentLoaded', async () => {
       const savedUser = localStorage.getItem('currentUser');
       if (savedUser) {
+        // 1 saatlik oturum süresi dolmuşsa geri yükleme yapılmaz, kullanıcı giriş ekranında kalır.
+        // currentUser burada belleğe de sıfırlanır — aksi halde window.onload'daki ayrı geri yükleme
+        // yolu (satır ~2947), localStorage temizlense bile bellekteki eski değeri görüp paneli açardı.
+        if (isSessionExpired()) {
+          currentUser = null;
+          localStorage.removeItem('currentUser');
+          clearSessionExpiry();
+          if (typeof showToast === 'function') showToast('Oturumunuzun süresi doldu, lütfen tekrar giriş yapın.', 'error');
+          return;
+        }
+
         currentUser = JSON.parse(savedUser);
-        
+
         // Paneli göster ve role göre yönlendir (showDashboard bitmeden handleUserNavigation çalışmasın)
         if (typeof showDashboard === 'function') await showDashboard();
         if (typeof handleUserNavigation === 'function') handleUserNavigation(currentUser);
+        startSessionExpiryWatcher();
       }
     });
 
@@ -7953,6 +7997,8 @@
         if (res.ok) {
           currentUser = data;
           localStorage.setItem('currentUser', JSON.stringify(currentUser));
+          startSessionExpiry();
+          startSessionExpiryWatcher();
 
           // 0. Giriş sonrası tanıtım videosu (kullanıcı aşağı kaydırana/ipucuna tıklayana kadar loop oynar)
           await startPostLoginIntro();
@@ -8232,6 +8278,8 @@
     function handleLogout() {
       currentUser = null;
       localStorage.removeItem('currentUser');
+      clearSessionExpiry();
+      if (sessionExpiryInterval) { clearInterval(sessionExpiryInterval); sessionExpiryInterval = null; }
       document.getElementById('dashboardContainer').classList.add('hidden');
       document.getElementById('authContainer').classList.remove('hidden');
       notificationsList = [];
