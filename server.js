@@ -101,6 +101,19 @@ async function initDbMigration() {
       console.log(`ℹ️ ${col.name} sütun kontrolü: ${err.message}`);
     }
   }
+
+  // Giriş sonrası tanıtım videosu: kullanıcı hesabına ilk kez giriş yaptığında (kayıt sonrası) bir
+  // kez oynar, sonraki girişlerde tekrar gösterilmez (bkz. POST /api/login). Sütun YENİ eklendiyse
+  // (yani bu özellik ilk kez devreye giriyorsa) hâlihazırda var olan tüm kullanıcılar "zaten görmüş"
+  // sayılır — aksi halde bu özellik yayınlandığı an, sitesi aylardır kullanan herkese video tekrar
+  // gösterilirdi. Sütun zaten varsa (sonraki sunucu açılışları) bu backfill bir daha çalışmaz.
+  try {
+    await db.execute(`ALTER TABLE users ADD COLUMN intro_seen INTEGER DEFAULT 0;`);
+    await db.execute(`UPDATE users SET intro_seen = 1`);
+    console.log('✅ intro_seen sütunu eklendi; mevcut kullanıcılar "zaten görmüş" olarak işaretlendi.');
+  } catch (err) {
+    console.log(`ℹ️ intro_seen sütun kontrolü: ${err.message}`);
+  }
 }
 
 // Sunucu kalkarken veya DB başlatılırken çağırın
@@ -936,6 +949,14 @@ app.post('/api/login', async (req, res) => {
       });
     }
 
+    // Giriş sonrası tanıtım videosu: sadece hesaba ilk kez giriş yapılıyorsa gösterilir.
+    // Bu istekte gösterileceği belirlenince aynı anda "görüldü" olarak işaretlenir, böylece
+    // bir sonraki girişte (video sonuna kadar izlense de izlenmese de) tekrar oynamaz.
+    const showIntro = !user.intro_seen;
+    if (showIntro) {
+      await db.execute({ sql: `UPDATE users SET intro_seen = 1 WHERE id = ?`, args: [user.id] });
+    }
+
     // Başarılı Giriş
     res.json({
       id: user.id,
@@ -950,7 +971,8 @@ app.post('/api/login', async (req, res) => {
       status: user.status,
       intern_start_date: user.intern_start_date,
       intern_end_date: user.intern_end_date,
-      engineer_id: user.engineer_id
+      engineer_id: user.engineer_id,
+      showIntro
     });
   } catch (err) {
     console.error('Giriş Hatası:', err);
