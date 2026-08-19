@@ -723,6 +723,22 @@
                   <div id="meetingRejectedList" class="space-y-2 scroll-panel max-h-[420px] pr-1"></div>
                 </div>
               </div>
+
+              <!-- GEÇMİŞ TOPLANTILAR: tarihi geçmiş, onaylanmış (gerçekleşmiş) toplantılar. Katılımcılar
+                   burada istedikleri zaman toplantıda konuşulanlara dair not düşebilir; notları sadece
+                   o toplantıyı görebilenler (talep eden, çağrılanlar, Admin/İK) görür. -->
+              <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+                <button type="button" onclick="toggleMeetingGroupPanel('history')" class="w-full flex items-center justify-between gap-2 p-4 text-left">
+                  <h4 class="font-bold text-sm text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left"></i>Geçmiş Toplantılar
+                    <span id="meetingHistoryCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-500/10 text-slate-600 dark:text-slate-300 border border-slate-500/30">0</span>
+                  </h4>
+                  <i id="meetingHistoryChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                </button>
+                <div id="meetingHistoryBody" class="hidden px-4 pb-4">
+                  <div id="meetingHistoryList" class="space-y-2 scroll-panel max-h-[420px] pr-1"></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -3140,10 +3156,14 @@
       if (chevron) chevron.classList.toggle('rotate-180');
     }
 
-    // Toplantı modalındaki "Bekleyen Yeni Talepler" / "Reddedilen Talepler" panellerini açar/kapatır
+    // Toplantı modalındaki "Bekleyen Yeni Talepler" / "Reddedilen Talepler" / "Geçmiş Toplantılar" panellerini açar/kapatır
     function toggleMeetingGroupPanel(kind) {
-      const bodyId = kind === 'pending' ? 'meetingPendingBody' : 'meetingRejectedBody';
-      const chevronId = kind === 'pending' ? 'meetingPendingChevron' : 'meetingRejectedChevron';
+      const ids = {
+        pending: ['meetingPendingBody', 'meetingPendingChevron'],
+        rejected: ['meetingRejectedBody', 'meetingRejectedChevron'],
+        history: ['meetingHistoryBody', 'meetingHistoryChevron']
+      };
+      const [bodyId, chevronId] = ids[kind] || ids.pending;
       const body = document.getElementById(bodyId);
       const chevron = document.getElementById(chevronId);
       if (!body) return;
@@ -6241,6 +6261,102 @@
     `;
     }
 
+    // Geçmiş (gerçekleşmiş) bir toplantı kartı: talep bilgisiyle birlikte, katılımcıların istedikleri
+    // zaman toplantıda konuşulanlara dair not ekleyebildiği açılır/kapanır bir "Notlar" bölümü içerir.
+    function renderMeetingHistoryCard(m) {
+      const rolesText = m.target_roles
+        ? m.target_roles.split(',').map(r => ROLE_LABELS_TR[r.trim()] || r.trim()).join(', ')
+        : '';
+      return `
+      <div class="bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
+        <div class="flex justify-between items-start gap-2 mb-1.5">
+          <div>
+            <div class="font-semibold text-sm text-slate-900 dark:text-slate-100">${m.subject}</div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400">${m.requester_name || '-'}${m.requester_role ? ' (' + (ROLE_LABELS_TR[m.requester_role] || m.requester_role) + ')' : ''}${m.department ? ' · ' + (DEPARTMENT_LABELS[m.department] || m.department) : ''}</div>
+            ${m.preferred_date ? `<div class="text-[11px] text-slate-500 dark:text-slate-400"><i class="fa-regular fa-calendar me-1"></i>${formatMeetingDate(m.preferred_date)}</div>` : ''}
+            ${rolesText ? `<div class="text-[11px] text-cyan-600 dark:text-cyan-400 mt-0.5"><i class="fa-solid fa-bell me-1"></i>Çağrılanlar: ${rolesText}</div>` : ''}
+          </div>
+          ${MEETING_STATUS_BADGES[m.status] || m.status}
+        </div>
+        ${m.description ? `<p class="text-xs text-slate-600 dark:text-slate-300 mb-2">${m.description}</p>` : ''}
+
+        <button type="button" onclick="toggleMeetingNotes(${m.id})" class="w-full flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 text-left">
+          <span class="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-2"><i class="fa-solid fa-comment-dots text-cyan-500"></i>Notlar</span>
+          <i id="meetingNotesChevron_${m.id}" class="fa-solid fa-chevron-down text-slate-400 transition-transform text-xs"></i>
+        </button>
+        <div id="meetingNotesBody_${m.id}" class="hidden mt-2">
+          <div id="meetingNotesList_${m.id}" class="space-y-1.5 mb-2"></div>
+          <form onsubmit="handleAddMeetingNote(event, ${m.id})" class="flex gap-2">
+            <input type="text" id="meetingNoteInput_${m.id}" required placeholder="Toplantıda konuşulanlara dair not ekle..." class="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+            <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all shrink-0"><i class="fa-solid fa-paper-plane"></i></button>
+          </form>
+        </div>
+      </div>
+    `;
+    }
+
+    // Toplantı Notları: sadece o toplantıyı görebilenlerin (talep eden, çağrılanlar, kendi biriminden
+    // Müdür/Ekip Lideri, Admin/İK) erişebildiği, istedikleri zaman ekleyebildiği not listesi.
+    const meetingNotesLoadedFor = new Set();
+
+    async function toggleMeetingNotes(meetingId) {
+      const body = document.getElementById(`meetingNotesBody_${meetingId}`);
+      const chevron = document.getElementById(`meetingNotesChevron_${meetingId}`);
+      if (!body) return;
+      body.classList.toggle('hidden');
+      if (chevron) chevron.classList.toggle('rotate-180');
+      if (!body.classList.contains('hidden') && !meetingNotesLoadedFor.has(meetingId)) {
+        meetingNotesLoadedFor.add(meetingId);
+        await loadMeetingNotes(meetingId);
+      }
+    }
+
+    async function loadMeetingNotes(meetingId) {
+      const listEl = document.getElementById(`meetingNotesList_${meetingId}`);
+      if (!listEl) return;
+      listEl.innerHTML = `<p class="text-[11px] text-slate-400 text-center py-2">Yükleniyor...</p>`;
+      try {
+        let url = `${API_BASE_URL}/api/meetings/${meetingId}/notes?userId=${currentUser.id}&role=${currentUser.role}`;
+        if (currentUser.department) url += `&department=${encodeURIComponent(currentUser.department)}`;
+        const res = await fetch(url);
+        const notes = await safeJson(res) || [];
+        if (!res.ok) { listEl.innerHTML = `<p class="text-[11px] text-rose-500 text-center py-2">${(notes && notes.error) || 'Notlar yüklenemedi.'}</p>`; return; }
+
+        listEl.innerHTML = notes.length === 0
+          ? `<p class="text-[11px] text-slate-400 text-center py-2">Henüz not eklenmemiş.</p>`
+          : notes.map(n => `
+            <div class="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
+              <p class="text-xs text-slate-700 dark:text-slate-300 break-words">${escapeHtmlProj(n.note)}</p>
+              <div class="text-[10px] text-slate-400 mt-1">${escapeHtmlProj(n.author_name || '-')} · ${formatMeetingDate(n.created_at)}</div>
+            </div>
+          `).join('');
+      } catch (err) {
+        console.error('Toplantı notları alınamadı:', err);
+        listEl.innerHTML = `<p class="text-[11px] text-rose-500 text-center py-2">Notlar yüklenirken hata oluştu.</p>`;
+      }
+    }
+
+    async function handleAddMeetingNote(e, meetingId) {
+      e.preventDefault();
+      const input = document.getElementById(`meetingNoteInput_${meetingId}`);
+      const note = input.value.trim();
+      if (!note) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/meetings/${meetingId}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.id, role: currentUser.role, department: currentUser.department, note })
+        });
+        const data = await safeJson(res);
+        if (!res.ok) { showToast((data && data.error) || 'Not eklenemedi.', 'error'); return; }
+        input.value = '';
+        await loadMeetingNotes(meetingId);
+      } catch (err) {
+        console.error('Toplantı notu ekleme hatası:', err);
+        showToast('Not eklenirken hata oluştu.', 'error');
+      }
+    }
+
     // Bir toplantı talebini kalıcı olarak siler (reddedilen talep: Admin/İK; bekleyen mühendis talebi: inceleme yetkisi olan kullanıcı)
     async function handleDeleteMeetingRequest(meetingId) {
       if (!(await showConfirm('Bu talebi kalıcı olarak silmek istediğinizden emin misiniz?'))) return;
@@ -6258,13 +6374,15 @@
       }
     }
 
-    // Toplantı taleplerini "Bekleyen Yeni Talepler" ve "Reddedilen Talepler" olarak iki ayrı
-    // (aşağı açılır) panele doldurur.
+    // Toplantı taleplerini "Bekleyen Yeni Talepler", "Reddedilen Talepler" ve "Geçmiş Toplantılar"
+    // olarak üç ayrı (aşağı açılır) panele doldurur.
     async function loadMeetings() {
       const pendingList = document.getElementById('meetingPendingList');
       const rejectedList = document.getElementById('meetingRejectedList');
+      const historyList = document.getElementById('meetingHistoryList');
       const pendingCountEl = document.getElementById('meetingPendingCount');
       const rejectedCountEl = document.getElementById('meetingRejectedCount');
+      const historyCountEl = document.getElementById('meetingHistoryCount');
       if (!pendingList || !rejectedList) return;
 
       try {
@@ -6282,10 +6400,16 @@
 
         const pending = meetingsListCache.filter(m => m.status === 'PENDING').sort(sortFn);
         const rejected = meetingsListCache.filter(m => m.status === 'REJECTED').sort(sortFn);
+        // Geçmiş: onaylanmış (gerçekleşmiş) VE tarihi geçmiş toplantılar
+        const nowIso = new Date().toISOString();
+        const history = meetingsListCache
+          .filter(m => m.status === 'APPROVED' && m.preferred_date && m.preferred_date < nowIso)
+          .sort(sortFn);
 
         updateMeetingsBadge(pending.length);
         if (pendingCountEl) pendingCountEl.textContent = pending.length;
         if (rejectedCountEl) rejectedCountEl.textContent = rejected.length;
+        if (historyCountEl) historyCountEl.textContent = history.length;
 
         pendingList.innerHTML = pending.length > 0
           ? pending.map(renderMeetingCard).join('')
@@ -6294,6 +6418,12 @@
         rejectedList.innerHTML = rejected.length > 0
           ? rejected.map(renderMeetingCard).join('')
           : emptyStateHtml('fa-inbox', 'Reddedilen talep bulunmuyor.');
+
+        if (historyList) {
+          historyList.innerHTML = history.length > 0
+            ? history.map(renderMeetingHistoryCard).join('')
+            : emptyStateHtml('fa-inbox', 'Geçmiş toplantı bulunmuyor.');
+        }
       } catch (err) {
         console.error("Toplantı talepleri alınamadı:", err);
         const errHtml = `<p class="text-xs text-rose-500 text-center py-4">Veriler yüklenirken hata oluştu.</p>`;

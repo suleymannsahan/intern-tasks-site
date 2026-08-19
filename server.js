@@ -245,6 +245,20 @@ async function initDb() {
     // Google Takvim etkinlik kimliği (talep edenin takvimindeki etkinlik)
     try { await db.execute(`ALTER TABLE meeting_requests ADD COLUMN google_event_id TEXT`); } catch (e) {}
 
+    // Geçmiş toplantılarda konuşulanları not düşmek için: toplantıyı görebilen herkes (talep eden,
+    // çağrılanlar, Admin/İK) istediği zaman not ekleyebilir — GET /api/meetings/:id/notes ile listelenir.
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS meeting_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        note TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(meeting_id) REFERENCES meeting_requests(id),
+        FOREIGN KEY(user_id) REFERENCES users(id)
+      )
+    `);
+
     // ============================================================
     // PROJE SİSTEMİ: Firmalar → Projeler → İlerleme Kayıtları
     // ============================================================
@@ -2120,6 +2134,14 @@ app.delete('/api/admin/users/:id', async (req, res) => {
     }
     await db.execute({ sql: `DELETE FROM daily_logs WHERE intern_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM tasks WHERE assigned_to = ?`, args: [userId] });
+    // Bu kullanıcının talep ettiği toplantılara ait notları, talepleri silmeden önce temizle
+    // (meeting_notes.meeting_id -> meeting_requests.id FK hatası almamak için)
+    const userMeetingsForDelete = await db.execute({ sql: `SELECT id FROM meeting_requests WHERE requested_by = ?`, args: [userId] });
+    for (const mr of userMeetingsForDelete.rows) {
+      await db.execute({ sql: `DELETE FROM meeting_notes WHERE meeting_id = ?`, args: [mr.id] });
+    }
+    // Bu kullanıcının başkasının toplantısına yazdığı notlar (meeting_notes.user_id -> users.id FK)
+    await db.execute({ sql: `DELETE FROM meeting_notes WHERE user_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM meeting_requests WHERE requested_by = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM notifications WHERE user_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM attendance_logs WHERE intern_id = ?`, args: [userId] });
@@ -2680,6 +2702,14 @@ app.delete('/api/users/:id', async (req, res) => {
     }
     await db.execute({ sql: `DELETE FROM daily_logs WHERE intern_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM tasks WHERE assigned_to = ?`, args: [userId] });
+    // Bu kullanıcının talep ettiği toplantılara ait notları, talepleri silmeden önce temizle
+    // (meeting_notes.meeting_id -> meeting_requests.id FK hatası almamak için)
+    const userMeetingsForDelete = await db.execute({ sql: `SELECT id FROM meeting_requests WHERE requested_by = ?`, args: [userId] });
+    for (const mr of userMeetingsForDelete.rows) {
+      await db.execute({ sql: `DELETE FROM meeting_notes WHERE meeting_id = ?`, args: [mr.id] });
+    }
+    // Bu kullanıcının başkasının toplantısına yazdığı notlar (meeting_notes.user_id -> users.id FK)
+    await db.execute({ sql: `DELETE FROM meeting_notes WHERE user_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM meeting_requests WHERE requested_by = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM notifications WHERE user_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM attendance_logs WHERE intern_id = ?`, args: [userId] });
@@ -2739,6 +2769,14 @@ app.delete('/api/users/profile', async (req, res) => {
     }
     await db.execute({ sql: `DELETE FROM daily_logs WHERE intern_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM tasks WHERE assigned_to = ?`, args: [userId] });
+    // Bu kullanıcının talep ettiği toplantılara ait notları, talepleri silmeden önce temizle
+    // (meeting_notes.meeting_id -> meeting_requests.id FK hatası almamak için)
+    const userMeetingsForDelete = await db.execute({ sql: `SELECT id FROM meeting_requests WHERE requested_by = ?`, args: [userId] });
+    for (const mr of userMeetingsForDelete.rows) {
+      await db.execute({ sql: `DELETE FROM meeting_notes WHERE meeting_id = ?`, args: [mr.id] });
+    }
+    // Bu kullanıcının başkasının toplantısına yazdığı notlar (meeting_notes.user_id -> users.id FK)
+    await db.execute({ sql: `DELETE FROM meeting_notes WHERE user_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM meeting_requests WHERE requested_by = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM notifications WHERE user_id = ?`, args: [userId] });
     await db.execute({ sql: `DELETE FROM attendance_logs WHERE intern_id = ?`, args: [userId] });
@@ -3292,6 +3330,65 @@ app.put('/api/meetings/:id/content', async (req, res) => {
     res.json({ message: 'Toplantı talebi güncellendi.' });
   } catch (error) {
     res.status(500).json({ error: 'Talep güncellenirken hata: ' + error.message });
+  }
+});
+
+// ============================================================
+// TOPLANTI NOTLARI (Geçmiş Toplantılar): bir toplantıyı görebilen herkes (talep eden, çağrılan
+// roldeki/kişideki kullanıcılar, kendi biriminden Müdür/Ekip Lideri, Admin/İK) o toplantıya not
+// ekleyebilir/görüntüleyebilir — GET /api/meetings ile birebir aynı görünürlük kuralı kullanılır.
+// ============================================================
+async function canAccessMeeting(meetingId, userId, role, department) {
+  if (isAdmin(role)) return true;
+  const mRes = await db.execute({
+    sql: `SELECT requested_by, department, target_roles, target_user_ids FROM meeting_requests WHERE id = ?`,
+    args: [meetingId]
+  });
+  const m = mRes.rows[0];
+  if (!m) return false;
+  if (String(m.requested_by) === String(userId)) return true;
+  if (role && m.target_roles && m.target_roles.includes(role)) return true;
+  if (userId && m.target_user_ids && m.target_user_ids.includes(`,${userId},`)) return true;
+  if (['MANAGER', 'LEADER'].includes(role) && department && m.department === department) return true;
+  return false;
+}
+
+app.get('/api/meetings/:id/notes', async (req, res) => {
+  try {
+    const { userId, role, department } = req.query;
+    const meetingId = req.params.id;
+    const allowed = await canAccessMeeting(meetingId, userId, role, department);
+    if (!allowed) return res.status(403).json({ error: 'Bu toplantının notlarını görüntüleme yetkiniz yok.' });
+
+    const result = await db.execute({
+      sql: `SELECT meeting_notes.*, users.name AS author_name
+            FROM meeting_notes LEFT JOIN users ON meeting_notes.user_id = users.id
+            WHERE meeting_notes.meeting_id = ? ORDER BY meeting_notes.created_at ASC`,
+      args: [meetingId]
+    });
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/meetings/:id/notes', async (req, res) => {
+  try {
+    const { userId, role, department, note } = req.body;
+    const meetingId = req.params.id;
+    if (!note || !note.trim()) return res.status(400).json({ error: 'Not boş olamaz.' });
+
+    const allowed = await canAccessMeeting(meetingId, userId, role, department);
+    if (!allowed) return res.status(403).json({ error: 'Bu toplantıya not ekleme yetkiniz yok.' });
+
+    const createdAt = new Date().toISOString();
+    const result = await db.execute({
+      sql: `INSERT INTO meeting_notes (meeting_id, user_id, note, created_at) VALUES (?, ?, ?, ?)`,
+      args: [meetingId, userId, note.trim(), createdAt]
+    });
+    res.json({ id: Number(result.lastInsertRowid), message: 'Not eklendi.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Not eklenirken hata: ' + error.message });
   }
 });
 
