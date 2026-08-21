@@ -1864,6 +1864,11 @@
                   </select>
                 </div>
               </div>
+              <div class="relative mb-2">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                <input type="text" id="taskAssigneeSearch" oninput="populateAssigneeOptions()" placeholder="Tüm sistemde isme göre ara..." class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+              </div>
+              <p class="text-[10px] text-slate-400 mb-2">Bir şey yazınca Birim/Alt Alan/Rol filtreleri bir an için yok sayılır ve tüm sistemdeki uygun kişiler arasında aranır.</p>
               <div class="flex items-center justify-between mb-1">
                 <label class="block text-[10px] text-slate-500">Kişi(ler) <span class="text-rose-500">*</span> <span id="taskAssigneeSelectedCount" class="hidden text-cyan-600 dark:text-cyan-400 font-semibold"></span></label>
                 <label class="flex items-center gap-1.5 text-[10px] font-semibold text-cyan-600 dark:text-cyan-400 cursor-pointer select-none">
@@ -10034,6 +10039,8 @@
     // taskAssignSelectedIds; filtre değişimlerinde SIFIRLANMAZ, sadece burada ve gönderim sonrası).
     async function resetTaskAssignFilter() {
       const roleSel = document.getElementById('taskAssignRole');
+      const searchInput = document.getElementById('taskAssigneeSearch');
+      if (searchInput) searchInput.value = '';
       taskAssignSelectedDepts = [];
       taskAssignSelectedIds = new Set();
       renderTaskAssignDeptToggle();
@@ -10104,15 +10111,21 @@
       const depts = taskAssignSelectedDepts;
       const subArea = document.getElementById('taskAssignSubArea')?.value || '';
       const role = document.getElementById('taskAssignRole')?.value || '';
+      const searchVal = (document.getElementById('taskAssigneeSearch')?.value || '').trim().toLowerCase();
       const assignableRoles = getTaskAssignableRolesForViewer();
 
-      const people = usersList.filter(u =>
-        assignableRoles.includes(u.role) &&
-        (!u.status || u.status === 'APPROVED') &&
-        (depts.length === 0 || depts.includes(u.department)) &&
-        (!subArea || u.sub_area === subArea) &&
-        (!role || u.role === role)
-      ).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
+      // Arama kutusuna bir şey yazıldıysa: Birim/Alt Alan/Rol filtrelerini yok sayıp tüm sistemdeki
+      // (yetkili olunan roller içindeki) kişiler arasında isim/kullanıcı adına göre arar.
+      const people = usersList.filter(u => {
+        if (!assignableRoles.includes(u.role)) return false;
+        if (u.status && u.status !== 'APPROVED') return false;
+        if (searchVal) {
+          return (u.name || '').toLowerCase().includes(searchVal) || (u.username || '').toLowerCase().includes(searchVal);
+        }
+        return (depts.length === 0 || depts.includes(u.department)) &&
+          (!subArea || u.sub_area === subArea) &&
+          (!role || u.role === role);
+      }).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
 
       if (people.length === 0) {
         listEl.innerHTML = '';
@@ -10569,6 +10582,7 @@
         showToast(errorCount > 0 ? `${msg} (${errorCount} kişiye atanamadı: ${lastError})` : msg, errorCount > 0 ? 'info' : 'success');
         document.getElementById('taskDescription').value = '';
         if (document.getElementById('taskProject')) document.getElementById('taskProject').value = '';
+        if (document.getElementById('taskAssigneeSearch')) document.getElementById('taskAssigneeSearch').value = '';
         taskAssignSelectedIds = new Set();
         document.querySelectorAll('#taskAssigneeList .task-assignee-checkbox').forEach(cb => { cb.checked = false; });
         const selectAllBox = document.getElementById('taskAssigneeSelectAll');
