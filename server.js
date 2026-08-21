@@ -2545,6 +2545,25 @@ app.put('/api/tasks/:id/complete', async (req, res) => {
   }
 });
 
+// Atanan kişi, kendisine gelen revize isteğini "gördüm, düzeltmeye devam ediyorum" diyerek onaylar:
+// görev REVISION_REQUESTED'ten IN_PROGRESS'e döner ama revizyon geçmişi (task_revisions) SİLİNMEZ,
+// kayıt olarak durur (bkz. Revizyon Geçmişi bölümü).
+app.put('/api/tasks/:id/acknowledge-revision', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    const result = await db.execute({
+      sql: `UPDATE tasks SET status = 'IN_PROGRESS' WHERE id = ? AND status = 'REVISION_REQUESTED'`,
+      args: [taskId]
+    });
+    if (result.rowsAffected === 0) {
+      return res.status(404).json({ error: 'Görev bulunamadı veya revize durumunda değil.' });
+    }
+    res.json({ message: 'Revize isteği onaylandı, görev tekrar devam ediyor olarak işaretlendi.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Görev durumu güncellenemedi: ' + error.message });
+  }
+});
+
 // Görev Onaylama / Revize Etme Endpoint'i
 app.put('/api/tasks/:id/review', async (req, res) => {
   try {

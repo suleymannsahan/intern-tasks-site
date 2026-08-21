@@ -11062,7 +11062,14 @@
 
         ${revisionsHtml ? `
           <div>
-            <span class="text-xs font-bold text-rose-500"><i class="fa-solid fa-rotate-left me-1"></i>Revizyon Geçmişi:</span>
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <span class="text-xs font-bold text-rose-500"><i class="fa-solid fa-rotate-left me-1"></i>Revizyon Geçmişi:</span>
+              ${task.status === 'REVISION_REQUESTED' && task.assigned_to === currentUser.id ? `
+                <button onclick="acknowledgeRevision(${task.id}, '${closeFnName}')" class="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1">
+                  <i class="fa-solid fa-check"></i> Onayla (Devam Ediyor'a Al)
+                </button>
+              ` : ''}
+            </div>
             <div class="mt-2 space-y-2">${revisionsHtml}</div>
           </div>
         ` : ''}
@@ -11885,6 +11892,26 @@
         }
       } catch (err) {
         console.error('Hata:', err);
+        showToast('Sunucu ile iletişim kurulurken bir hata oluştu.', 'error');
+      }
+    }
+
+    // Atanan kişi, kendisine gelen revize isteğini "gördüm, düzeltmeye devam ediyorum" diyerek
+    // onaylar: görev tekrar "Devam Ediyor" görünür, ama Revizyon Geçmişi'ndeki not SİLİNMEZ.
+    async function acknowledgeRevision(taskId, closeFnName) {
+      if (!(await showConfirm('Revize isteğini onaylayıp görevi tekrar "Devam Ediyor" olarak işaretlemek istediğinize emin misiniz? Revizyon notu geçmişte kalmaya devam edecek.'))) return;
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/acknowledge-revision`, { method: 'PUT' });
+        const data = await safeJson(response);
+        if (response.ok) {
+          showToast(data?.message || 'Revize isteği onaylandı, görev devam ediyor.', 'success');
+          await loadTasks();
+          if (closeFnName && typeof window[closeFnName] === 'function') window[closeFnName]();
+        } else {
+          showToast('Hata: ' + ((data && data.error) || 'İşlem başarısız.'), 'error');
+        }
+      } catch (err) {
+        console.error('Revize onaylama hatası:', err);
         showToast('Sunucu ile iletişim kurulurken bir hata oluştu.', 'error');
       }
     }
