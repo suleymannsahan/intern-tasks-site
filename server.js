@@ -36,6 +36,8 @@ const DEFAULT_SETTINGS = {
   email_task_approved: true,
   email_project_assigned: true,
   email_personal_reminder: true,
+  email_new_user_credentials: true,
+  email_daily_log_reminder: true,
   // Kayıt onay kuralları: bu rollerden/departmanlardan biriyle kayıt olunursa admin onayı gerekir
   approval_required_roles: ['MANAGER', 'LEADER'],
   approval_required_departments: ['INSAN_KAYNAKLARI'],
@@ -1912,6 +1914,80 @@ function startPersonalReminderScheduler() {
 // Planlama notları: zamanı 24 saat içine giren notlar için tek seferlik hatırlatma e-postası.
 startPersonalReminderScheduler();
 
+// ============================================================
+// GÜNLÜK BİLGİLENDİRME HATIRLATMASI: mesai bitiminden (TR saati 18:00) 30 dk sonra, yani 18:30'da,
+// Admin/İK hariç tüm kullanıcılardan — o gün aktif (IN_PROGRESS/REVISION_REQUESTED) görevi olup
+// henüz günlük ilerleme notu (daily_logs) girmemiş olanlara — hatırlatma e-postası gönderir.
+// node-cron gerekmez: aiReport.js'teki zamanlayıcıyla aynı, bağımsız setInterval tabanlı desen.
+// ============================================================
+const DAILY_LOG_REMINDER_HOUR = 18;   // mesai bitimi TR saati
+const DAILY_LOG_REMINDER_MINUTE = 30; // +30 dk
+
+let _dailyLogReminderBasladi = false;
+function startDailyLogReminderScheduler() {
+  if (_dailyLogReminderBasladi) return;
+  _dailyLogReminderBasladi = true;
+
+  let sonCalismaGunu = null; // aynı gün ikinci kez çalışmasın (bellekte)
+
+  const tick = async () => {
+    try {
+      if (!SETTINGS_CACHE.email_daily_log_reminder) return;
+
+      const now = new Date(Date.now() + 3 * 60 * 60 * 1000); // Türkiye saati (sabit UTC+3)
+      const gun = now.getUTCDay();          // 0=Paz, 6=Cmt
+      const saat = now.getUTCHours();
+      const dakika = now.getUTCMinutes();
+      const gunISO = now.toISOString().split('T')[0];
+
+      if (gun === 0 || gun === 6) return;                                  // hafta sonu atla
+      if ((SETTINGS_CACHE.holidays || []).includes(gunISO)) return;         // resmi tatil atla
+      if (saat !== DAILY_LOG_REMINDER_HOUR || dakika < DAILY_LOG_REMINDER_MINUTE || dakika > DAILY_LOG_REMINDER_MINUTE + 4) return;
+      if (sonCalismaGunu === gunISO) return;                               // bugün zaten çalıştı
+      sonCalismaGunu = gunISO;
+
+      // Admin/İK hariç, onaylı tüm kullanıcılar arasından o gün aktif görevi olup henüz not
+      // girmemiş olanları bul (bir kişiye tek e-posta yeter, görev sayısı fark etmez).
+      const usersRes = await db.execute(
+        `SELECT id, name, email FROM users WHERE status = 'APPROVED' AND role NOT IN ('ADMIN', 'HR')`
+      );
+
+      let gonderilen = 0;
+      for (const u of usersRes.rows) {
+        if (!isRealEmail(u.email)) continue;
+        try {
+          const activeRes = await db.execute({
+            sql: `SELECT COUNT(*) as cnt FROM tasks WHERE assigned_to = ? AND status IN ('IN_PROGRESS', 'REVISION_REQUESTED')`,
+            args: [u.id]
+          });
+          if (!activeRes.rows[0] || Number(activeRes.rows[0].cnt) === 0) continue; // bugün loglayacak aktif görevi yok
+
+          const logRes = await db.execute({
+            sql: `SELECT COUNT(*) as cnt FROM daily_logs WHERE intern_id = ? AND log_date = ?`,
+            args: [u.id, gunISO]
+          });
+          if (logRes.rows[0] && Number(logRes.rows[0].cnt) > 0) continue; // bugün zaten not girmiş
+
+          await sendDetailsEmail(
+            u.email, u.name,
+            'Günlük Bilgilendirme Girilmedi',
+            'Günlük İlerleme Notu Hatırlatması',
+            'Bugün için aktif göreviniz bulunuyor ancak henüz günlük ilerleme notu girmediniz. Lütfen panel üzerinden bugüne ait notunuzu ekleyin.',
+            [['Tarih', gunISO]],
+            'Panele Git'
+          );
+          gonderilen++;
+        } catch (mailErr) { console.error(`Günlük bilgilendirme hatırlatma e-postası hatası (kullanıcı ${u.id}):`, mailErr.message); }
+      }
+      console.log(`📋 Günlük bilgilendirme hatırlatma e-postaları gönderildi (${gunISO}, ${gonderilen} kişi).`);
+    } catch (e) { console.error('Günlük bilgilendirme hatırlatma zamanlayıcı hatası:', e.message); }
+  };
+
+  setInterval(tick, 60 * 1000); // dakikada bir kontrol
+  console.log(`⏰ Günlük bilgilendirme hatırlatma zamanlayıcısı aktif (her iş günü ${DAILY_LOG_REMINDER_HOUR}:${String(DAILY_LOG_REMINDER_MINUTE).padStart(2, '0')} TR).`);
+}
+startDailyLogReminderScheduler();
+
 // Tüm giriş yapmış kullanıcıların erişebileceği, hassas olmayan ayarlar
 // (ör. iş günü hesabı için tatil günleri) — yetki kontrolü yok, kasıtlı olarak herkese açık.
 app.get('/api/settings/public', async (req, res) => {
@@ -2039,6 +2115,21 @@ app.post('/api/admin/users', async (req, res) => {
         role === 'INTERN' ? (endDate || null) : null
       ]
     });
+
+    // Giriş bilgilerini e-postayla gönder (gerçek bir e-posta girildiyse) — asıl kullanıcı
+    // oluşturma işlemini bloklamasın diye ayrı try/catch.
+    if (SETTINGS_CACHE.email_new_user_credentials && isRealEmail(finalEmail)) {
+      try {
+        await sendDetailsEmail(
+          finalEmail, name,
+          'Hesabınız Oluşturuldu — Giriş Bilgileriniz',
+          'Görevlendirme ve Takip Paneline Hoş Geldiniz',
+          'Sizin için bir hesap oluşturuldu. Aşağıdaki bilgilerle panele giriş yapabilirsiniz.',
+          [['Kullanıcı Adı', username], ['Şifre', password]],
+          'Panele Git'
+        );
+      } catch (mailErr) { console.error('Yeni kullanıcı bilgilendirme e-postası hatası:', mailErr.message); }
+    }
 
     res.json({ message: 'Kullanıcı başarıyla oluşturuldu.' });
   } catch (error) {

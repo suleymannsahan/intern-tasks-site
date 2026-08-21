@@ -818,25 +818,33 @@
               </div>
             </div>
 
-            <!-- ADMİN İÇİN: BİRİM → (Elektronikse) ALAN → ROL FİLTRESİ -->
-            <div id="adminTaskFilterWrap" class="hidden bg-cyan-50/60 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900/50 rounded-xl p-3 grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
-              <select id="filterAdminDept" onchange="handleAdminTaskDeptFilterChange()" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
-                <option value="">Tüm Birimler</option>
-                <option value="ELEKTRONIK">Elektronik</option>
-                <option value="MEKANIK">Mekanik</option>
-                <option value="YAZILIM">Yazılım</option>
-              </select>
-              <select id="filterAdminSubArea" onchange="applyTaskFilters()" class="hidden bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
-                <option value="">Tüm Alanlar</option>
-              </select>
-              <select id="filterAdminRole" onchange="applyTaskFilters()" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
-                <option value="">Tüm Roller</option>
-                <option value="MANAGER">Müdür</option>
-                <option value="LEADER">Ekip Lideri</option>
-                <option value="ENGINEER">Mühendis</option>
-                <option value="TECHNICIAN">Teknisyen</option>
-                <option value="INTERN">Stajyer</option>
-              </select>
+            <!-- ADMİN/İK İÇİN: PROJE → (o projeye görevlendirilenlerin) BİRİMİ → KİŞİ akışı; ayrıca
+                 ayrı bir "Sadece Stajyerler" modu (toggle butonlu) — bu açıkken proje/birim/kişi
+                 seçiciler devre dışı kalır, yerine stajyer isimleri toggle buton olarak listelenir. -->
+            <div id="adminTaskFilterWrap" class="hidden bg-cyan-50/60 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900/50 rounded-xl p-3 space-y-3">
+              <label class="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer select-none w-fit">
+                <input type="checkbox" id="adminInternModeToggle" onchange="toggleAdminInternMode(this.checked)" class="accent-cyan-600 w-4 h-4">
+                Sadece Stajyerler
+              </label>
+
+              <div id="adminInternFilterWrap" class="hidden">
+                <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">Stajyer Seç</label>
+                <div id="adminInternToggle" class="inline-flex flex-wrap gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-300 dark:border-slate-700"></div>
+              </div>
+
+              <!-- Kademeli akış: önce Proje seçilir; proje seçilince o projeye atanan görevlerin
+                   Birimleri görünür olur; birim seçilince de o birimdeki Kişiler görünür olur. -->
+              <div id="adminProjectFlowWrap" class="flex flex-col gap-2">
+                <select id="filterAdminProject" onchange="handleAdminTaskProjectFilterChange()" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+                  <option value="">Proje Seçin</option>
+                </select>
+                <select id="filterAdminDept" onchange="handleAdminTaskDeptFilterChange()" class="hidden bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+                  <option value="">Tüm Birimler</option>
+                </select>
+                <select id="filterAdminPerson" onchange="applyTaskFilters()" class="hidden bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+                  <option value="">Tüm Kişiler</option>
+                </select>
+              </div>
             </div>
 
             <!-- EKİP LİDERİ / MÜDÜR İÇİN: KENDİ BİRİMİNDE ROL FİLTRESİ (rol sıralaması mantığına göre) -->
@@ -845,33 +853,41 @@
               <div id="leaderTaskRoleToggle" class="inline-flex flex-wrap gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-300 dark:border-slate-700"></div>
             </div>
 
-            <!-- İKİ BÖLÜM: AKTİF | GEÇMİŞ -->
+            <!-- İKİ BÖLÜM: AKTİF | GEÇMİŞ — varsayılan kapalı gelir; bir filtre seçildikçe
+                 (proje/birim/kişi, arama, durum, stajyer/rol) otomatik açılır; başlığa tıklanarak
+                 da elle açılıp kapanabilir (bkz. toggleTaskSection). -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <!-- SOL: AKTİF GÖREVLER -->
               <section class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-                <div class="flex items-center justify-between mb-3">
+                <button type="button" onclick="toggleTaskSection('active')" class="w-full flex items-center justify-between mb-3">
                   <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-spinner text-cyan-500"></i>Aktif Görevler <span id="activeTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">0</span></h4>
+                  <i id="activeTaskChevron" class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                </button>
+                <div id="activeTaskBody" class="hidden">
+                  <select id="filterStatusActive" onchange="applyTaskFilters()" class="w-full mb-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+                    <option value="">Tüm Aktif Durumlar</option>
+                    <option value="IN_PROGRESS">Devam Ediyor</option>
+                    <option value="COMPLETED">Tamamlandı (Onay Bekliyor)</option>
+                    <option value="REVISION_REQUESTED">Revize İstendi</option>
+                  </select>
+                  <div id="taskList" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
                 </div>
-                <select id="filterStatusActive" onchange="applyTaskFilters()" class="w-full mb-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
-                  <option value="">Tüm Aktif Durumlar</option>
-                  <option value="IN_PROGRESS">Devam Ediyor</option>
-                  <option value="COMPLETED">Tamamlandı (Onay Bekliyor)</option>
-                  <option value="REVISION_REQUESTED">Revize İstendi</option>
-                </select>
-                <div id="taskList" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
               </section>
 
               <!-- SAĞ: GEÇMİŞ / TAMAMLANAN GÖREVLER -->
               <section class="bg-slate-100/80 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-xl p-4">
-                <div class="flex items-center justify-between mb-3">
+                <button type="button" onclick="toggleTaskSection('past')" class="w-full flex items-center justify-between mb-3">
                   <h4 class="font-bold text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left"></i>Geçmiş / Tamamlanan <span id="pastTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">0</span></h4>
+                  <i id="pastTaskChevron" class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                </button>
+                <div id="pastTaskBody" class="hidden">
+                  <select id="filterStatusPast" onchange="applyTaskFilters()" class="w-full mb-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+                    <option value="">Tümü (Onaylanan + Tamamlanan)</option>
+                    <option value="APPROVED">Onaylandı</option>
+                    <option value="COMPLETED">Tamamlandı</option>
+                  </select>
+                  <div id="pastTaskList" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
                 </div>
-                <select id="filterStatusPast" onchange="applyTaskFilters()" class="w-full mb-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
-                  <option value="">Tümü (Onaylanan + Tamamlanan)</option>
-                  <option value="APPROVED">Onaylandı</option>
-                  <option value="COMPLETED">Tamamlandı</option>
-                </select>
-                <div id="pastTaskList" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
               </section>
             </div>
           </div>
@@ -1141,6 +1157,12 @@
               </label>
               <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
                 <input type="checkbox" id="setting_email_personal_reminder" class="accent-cyan-600 w-4 h-4"> Planlama notu eklendiğinde / tarihi yaklaşınca e-posta gönder
+              </label>
+              <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" id="setting_email_new_user_credentials" class="accent-cyan-600 w-4 h-4"> Yeni kullanıcı eklendiğinde giriş bilgilerini e-posta ile gönder
+              </label>
+              <label class="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" id="setting_email_daily_log_reminder" class="accent-cyan-600 w-4 h-4"> Günlük bilgilendirme girilmezse mesai bitiminden 30 dk sonra hatırlatma e-postası gönder (Admin/İK hariç)
               </label>
             </div>
           </div>
@@ -1817,18 +1839,13 @@
               </button>
               <h2 class="font-bold text-lg text-slate-900 dark:text-slate-100">Yeni Görev Atama</h2>
             </div>
-            <!-- Kime atanacak: herhangi bir birimden, herhangi bir çalışan rolünden kişi seçilebilir -->
+            <!-- Kime atanacak: herhangi bir birimden, herhangi bir çalışan rolünden bir veya birden fazla kişi seçilebilir -->
             <div class="mb-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
               <label class="block text-xs font-semibold mb-2 text-slate-700 dark:text-slate-300">Görev Kime Atanacak?</label>
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
                 <div>
-                  <label class="block text-[10px] text-slate-500 mb-1">Birim</label>
-                  <select id="taskAssignDept" onchange="handleTaskAssignDeptChange()" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
-                    <option value="">Tüm Birimler</option>
-                    <option value="ELEKTRONIK">Elektronik</option>
-                    <option value="MEKANIK">Mekanik</option>
-                    <option value="YAZILIM">Yazılım</option>
-                  </select>
+                  <label class="block text-[10px] text-slate-500 mb-1">Birim <span class="text-slate-400 normal-case font-normal">(çoklu seçilebilir)</span></label>
+                  <div id="taskAssignDeptToggle" class="flex flex-wrap gap-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1"></div>
                 </div>
                 <div>
                   <label class="block text-[10px] text-slate-500 mb-1">Alt Alan</label>
@@ -1846,21 +1863,29 @@
                     <option value="LEADER">Ekip Lideri</option>
                   </select>
                 </div>
-                <div>
-                  <label class="block text-[10px] text-slate-500 mb-1">Kişi</label>
-                  <select id="taskAssignee" required class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500"></select>
-                </div>
               </div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-[10px] text-slate-500">Kişi(ler) <span class="text-rose-500">*</span> <span id="taskAssigneeSelectedCount" class="hidden text-cyan-600 dark:text-cyan-400 font-semibold"></span></label>
+                <label class="flex items-center gap-1.5 text-[10px] font-semibold text-cyan-600 dark:text-cyan-400 cursor-pointer select-none">
+                  <input type="checkbox" id="taskAssigneeSelectAll" onchange="toggleAllTaskAssignees(this.checked)" class="accent-cyan-600 w-3.5 h-3.5">
+                  Listedekilerin Tümünü Seç
+                </label>
+              </div>
+              <div id="taskAssigneeList" class="max-h-40 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 space-y-0.5"></div>
+              <p id="taskAssigneeEmptyHint" class="hidden text-[10px] text-slate-400 text-center py-2">Bu filtreye uygun kişi yok.</p>
+              <p class="text-[10px] text-slate-400 mt-1">Bir kişiyi seçtikten sonra Birim/Alt Alan/Rol filtresini değiştirseniz de seçiminiz korunur — farklı birimlerden kişileri üst üste ekleyebilirsiniz.</p>
             </div>
 
             <form onsubmit="handleCreateTask(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="md:col-span-2">
+              <!-- Görev Tanımı: sadece seçili kişi(ler) arasında en az bir Stajyer varsa görünür
+                   (bkz. updateTaskTitleFieldVisibility) — diğer roller sadece Açıklama girer. -->
+              <div id="taskTitleWrap" class="hidden md:col-span-2">
                 <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Görev Tanımı</label>
-                <input type="text" id="taskTitle" required class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                <input type="text" id="taskTitle" class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
               </div>
               <div class="md:col-span-2">
                 <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Görev Açıklaması</label>
-                <textarea id="taskDescription" rows="2" placeholder="Görev detaylarını ve yönergeleri giriniz..." class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500"></textarea>
+                <textarea id="taskDescription" required rows="2" placeholder="Görev detaylarını ve yönergeleri giriniz..." class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500"></textarea>
               </div>
               <div>
                 <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Alan / Departman</label>
@@ -2854,12 +2879,8 @@
       <form onsubmit="handleSaveEditedTask(event)" class="space-y-3">
         <input type="hidden" id="editTaskId">
         <div>
-          <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">Görev Başlığı</label>
-          <input type="text" id="editTaskTitle" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">Açıklama</label>
-          <textarea id="editTaskDescription" rows="3" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm"></textarea>
+          <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">Görev Açıklaması</label>
+          <textarea id="editTaskDescription" required rows="3" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm"></textarea>
         </div>
         <div>
           <label class="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-300">Kategori</label>
@@ -3420,6 +3441,7 @@
         if (typeof loadTasks === 'function') loadTasks();
         if (typeof populateAdminTaskFilters === 'function') populateAdminTaskFilters();
         if (typeof populateLeaderTaskFilter === 'function') populateLeaderTaskFilter();
+        if (typeof collapseTaskSections === 'function') collapseTaskSections();
       }
     }
 
@@ -3560,7 +3582,6 @@
       if (!task) return;
 
       document.getElementById('editTaskId').value = task.id;
-      document.getElementById('editTaskTitle').value = task.title;
       document.getElementById('editTaskDescription').value = task.description || '';
       document.getElementById('editTaskCategory').value = task.category;
       document.getElementById('editTaskEndDate').value = task.end_date;
@@ -3588,8 +3609,8 @@
     async function handleSaveEditedTask(e) {
       e.preventDefault();
       const taskId = document.getElementById('editTaskId').value;
-      const title = document.getElementById('editTaskTitle').value;
       const description = document.getElementById('editTaskDescription').value;
+      const title = deriveTaskTitleFromDescription(description);
       const category = document.getElementById('editTaskCategory').value;
       const endDate = document.getElementById('editTaskEndDate').value;
       const projectId = document.getElementById('editTaskProject') ? document.getElementById('editTaskProject').value : '';
@@ -4097,7 +4118,7 @@
       setSelectOptions('meetingTargetDepartment', `<option value="">-- Birim Seçiniz --</option>${deptOpts}${hrOpt}`);
       // Admin'in Görevler filtresi ve Yeni Görev Atama: İş birimleriyle sınırlı (İK hariç)
       setSelectOptions('filterAdminDept', `<option value="">Tüm Birimler</option>${deptOpts}`);
-      setSelectOptions('taskAssignDept', `<option value="">Tüm Birimler</option>${deptOpts}`);
+      if (typeof renderTaskAssignDeptToggle === 'function') renderTaskAssignDeptToggle();
 
       if (typeof populateAdminStatusDeptChips === 'function' && document.getElementById('adminStatusDeptChips')) {
         populateAdminStatusDeptChips();
@@ -6045,10 +6066,11 @@
       container.innerHTML = progressCurrentPersonTasks.map(t => `
         <button onclick="selectPersonTask(${t.id})" class="w-full text-left bg-slate-100 dark:bg-slate-900 border ${progressSelectedTaskId === t.id ? 'border-cyan-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl p-3 text-xs transition-all">
           <div class="flex justify-between items-center gap-2">
-            <span class="font-semibold text-slate-800 dark:text-slate-200">${t.title}</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-200">${escapeHtmlProj(getTaskDisplayHeading(t))}</span>
             <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${t.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}">${TASK_STATUS_LABELS_TR[t.status] || t.status}</span>
           </div>
-          <div class="text-[11px] text-slate-400 mt-1">${t.category || ''} · Son tarih: ${t.end_date || '-'}</div>
+          <div class="text-[11px] text-slate-400 mt-1 line-clamp-1">${escapeHtmlProj(t.description || '')}</div>
+          <div class="text-[11px] text-slate-400 mt-0.5">${t.category || ''} · Son tarih: ${t.end_date || '-'}</div>
         </button>
       `).join('');
     }
@@ -6871,6 +6893,8 @@
         document.getElementById('setting_email_task_approved').checked = !!data.email_task_approved;
         document.getElementById('setting_email_project_assigned').checked = !!data.email_project_assigned;
         document.getElementById('setting_email_personal_reminder').checked = data.email_personal_reminder !== false;
+        document.getElementById('setting_email_new_user_credentials').checked = data.email_new_user_credentials !== false;
+        document.getElementById('setting_email_daily_log_reminder').checked = data.email_daily_log_reminder !== false;
 
         const approvalRoles = data.approval_required_roles || [];
         document.querySelectorAll('.setting-approval-role').forEach(cb => { cb.checked = approvalRoles.includes(cb.value); });
@@ -6932,6 +6956,8 @@
         email_task_approved: document.getElementById('setting_email_task_approved').checked,
         email_project_assigned: document.getElementById('setting_email_project_assigned').checked,
         email_personal_reminder: document.getElementById('setting_email_personal_reminder').checked,
+        email_new_user_credentials: document.getElementById('setting_email_new_user_credentials').checked,
+        email_daily_log_reminder: document.getElementById('setting_email_daily_log_reminder').checked,
         approval_required_roles: Array.from(document.querySelectorAll('.setting-approval-role:checked')).map(cb => cb.value),
         approval_required_departments: Array.from(document.querySelectorAll('.setting-approval-dept:checked')).map(cb => cb.value),
         site_name: document.getElementById('setting_site_name').value.trim(),
@@ -9020,7 +9046,7 @@
         if (currentUser.department) {
           url += `&department=${encodeURIComponent(currentUser.department)}`;
         }
-        const res = await fetch(url);
+        const [res] = await Promise.all([fetch(url), loadTaskProjectsCache()]);
         tasksList = await res.json();
         renderTaskList();
         if (typeof renderMainTaskList === 'function') renderMainTaskList();
@@ -9079,6 +9105,19 @@
       }
       return newTaskProjectsCache;
     }
+
+    // Görev başlığı artık kullanıcıya gösterilmiyor; görevler her yerde Proje Adı + Görev
+    // Açıklaması ile gösteriliyor. Proje adı, önbelleğe alınmış proje listesinden (yukarıdaki
+    // loadTaskProjectsCache) task.project_id ile eşlenerek senkron biçimde bulunur.
+    function getProjectNameById(projectId) {
+      if (!projectId || !newTaskProjectsCache) return '';
+      const p = newTaskProjectsCache.find(x => String(x.id) === String(projectId));
+      return p ? p.name : '';
+    }
+    function getTaskDisplayHeading(task) {
+      return getProjectNameById(task && task.project_id) || 'Görev';
+    }
+
     async function populateTaskProjectSelect(selectId, selectedId) {
       const sel = document.getElementById(selectId);
       if (!sel) return;
@@ -9320,6 +9359,7 @@
         if (typeof loadTasks === 'function') loadTasks();
         if (typeof populateAdminTaskFilters === 'function') populateAdminTaskFilters();
         if (typeof populateLeaderTaskFilter === 'function') populateLeaderTaskFilter();
+        if (typeof collapseTaskSections === 'function') collapseTaskSections();
       }, 'adminHomeSection');
     }
 
@@ -9735,7 +9775,8 @@
       const upcoming = mine.filter(t => t.days_left >= 0 && t.days_left <= 3).sort((a, b) => a.days_left - b.days_left);
 
       const cardHtml = (t, text) => `<button type="button" onclick="openTaskDetailModal(${t.id})" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
-          <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(t.title)}</div>
+          <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(getTaskDisplayHeading(t))}</div>
+          <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate">${escapeHtmlProj(t.description || '')}</div>
           <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-end mt-0.5">
             <span class="text-rose-500 font-bold">${text}</span>
           </div>
@@ -9943,11 +9984,59 @@
       return TASK_ASSIGNABLE_ROLES;
     }
 
-    // "Yeni Görev Atama" filtrelerini (Birim/Alt Alan/Rol) varsayılana döndürür ve kişi listesini yeniler
+    // "Yeni Görev Atama" formundaki Birim filtresi: tek seçimden çoklu seçime geçirildi (birden
+    // fazla birimdeki kişilere aynı anda görev atanabilsin diye) — bkz. renderTaskAssignDeptToggle.
+    // Boş dizi = "Tüm Birimler" (filtre yok). Birim listesi PROJECT_DEPTS'ten (admin'in
+    // ekleyip/sildiği güncel birimler) dinamik olarak okunur — bkz. refreshAllDepartmentSelects.
+    let taskAssignSelectedDepts = [];
+
+    function renderTaskAssignDeptToggle() {
+      const toggle = document.getElementById('taskAssignDeptToggle');
+      if (!toggle) return;
+      // Silinmiş bir birim seçili kalmışsa temizle
+      const validKeys = (PROJECT_DEPTS || []).map(d => d.key);
+      taskAssignSelectedDepts = taskAssignSelectedDepts.filter(d => validKeys.includes(d));
+      toggle.innerHTML = ['<button type="button" data-dept="" onclick="toggleTaskAssignDept(\'\')" class="px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all">Tüm Birimler</button>']
+        .concat((PROJECT_DEPTS || []).map(d => `<button type="button" data-dept="${d.key}" onclick="toggleTaskAssignDept('${d.key}')" class="px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all">${escapeHtmlProj(d.label)}</button>`))
+        .join('');
+      updateTaskAssignDeptToggleStyles();
+    }
+
+    function updateTaskAssignDeptToggleStyles() {
+      const toggle = document.getElementById('taskAssignDeptToggle');
+      if (!toggle) return;
+      const activeCls = ['bg-cyan-600', 'text-white'];
+      const passiveCls = ['text-slate-500', 'dark:text-slate-400'];
+      toggle.querySelectorAll('button[data-dept]').forEach(btn => {
+        const d = btn.dataset.dept;
+        const isActive = d === '' ? taskAssignSelectedDepts.length === 0 : taskAssignSelectedDepts.includes(d);
+        if (isActive) { btn.classList.add(...activeCls); btn.classList.remove(...passiveCls); }
+        else { btn.classList.remove(...activeCls); btn.classList.add(...passiveCls); }
+      });
+    }
+
+    // Bir birim butonuna tıklanınca: "Tüm Birimler" seçimi temizler, diğerleri kendi aralarında
+    // çoklu olarak açılıp kapanır (aynı anda birden fazla birim işaretli kalabilir).
+    async function toggleTaskAssignDept(dept) {
+      if (dept === '') {
+        taskAssignSelectedDepts = [];
+      } else if (taskAssignSelectedDepts.includes(dept)) {
+        taskAssignSelectedDepts = taskAssignSelectedDepts.filter(d => d !== dept);
+      } else {
+        taskAssignSelectedDepts = [...taskAssignSelectedDepts, dept];
+      }
+      updateTaskAssignDeptToggleStyles();
+      await handleTaskAssignDeptChange();
+    }
+
+    // "Yeni Görev Atama" filtrelerini (Birim/Alt Alan/Rol) varsayılana döndürür ve kişi listesini
+    // yeniler — sayfa yeniden açıldığı için seçili kişi kümesi de burada sıfırlanır (bkz.
+    // taskAssignSelectedIds; filtre değişimlerinde SIFIRLANMAZ, sadece burada ve gönderim sonrası).
     async function resetTaskAssignFilter() {
-      const deptSel = document.getElementById('taskAssignDept');
       const roleSel = document.getElementById('taskAssignRole');
-      if (deptSel) deptSel.value = '';
+      taskAssignSelectedDepts = [];
+      taskAssignSelectedIds = new Set();
+      renderTaskAssignDeptToggle();
       if (roleSel) {
         const roles = getTaskAssignableRolesForViewer();
         roleSel.innerHTML = `<option value="">Tüm Roller</option>` + roles.map(r => `<option value="${r}">${TASK_ROLE_LABELS[r]}</option>`).join('');
@@ -9957,7 +10046,8 @@
       populateAssigneeOptions();
     }
 
-    // Birim değişince: Alt Alan seçeneklerini yeniler (sadece o birimde alt alan varsa gösterir) ve kişi listesini günceller
+    // Birim seçimi değişince: Alt Alan seçeneklerini yeniler (seçili birim(ler)de alt alan varsa
+    // gösterir) ve kişi listesini günceller
     async function handleTaskAssignDeptChange() {
       await renderTaskAssignSubAreaOptions();
       populateAssigneeOptions();
@@ -9966,9 +10056,8 @@
     // adminTaskFilterSubareas: tüm birimlerin alt alanlarını tutan, bir kez çekilip önbelleğe
     // alınan paylaşımlı liste (bkz. populateAdminTaskFilters) — burada da aynı önbellek kullanılır.
     async function renderTaskAssignSubAreaOptions() {
-      const deptSel = document.getElementById('taskAssignDept');
       const subSel = document.getElementById('taskAssignSubArea');
-      if (!deptSel || !subSel) return;
+      if (!subSel) return;
 
       if (adminTaskFilterSubareas === null) {
         try {
@@ -9977,8 +10066,13 @@
         } catch (e) { adminTaskFilterSubareas = []; }
       }
 
-      const dept = deptSel.value;
-      const subs = dept ? (adminTaskFilterSubareas || []).filter(s => s.department_key === dept) : [];
+      // Hiç birim seçilmediyse ("Tüm Birimler") Alt Alan filtresi anlamsız olur, gizlenir — tek/çoklu
+      // birim seçildiğinde, seçili birimlerin alt alanları birleştirilip (aynı isim tekrar etmesin
+      // diye etikete göre tekilleştirilerek) gösterilir.
+      const depts = taskAssignSelectedDepts;
+      const rawSubs = depts.length > 0 ? (adminTaskFilterSubareas || []).filter(s => depts.includes(s.department_key)) : [];
+      const seenLabels = new Set();
+      const subs = rawSubs.filter(s => { if (seenLabels.has(s.label)) return false; seenLabels.add(s.label); return true; });
 
       if (subs.length > 0) {
         subSel.innerHTML = ['<option value="">Tüm Alanlar</option>']
@@ -9992,12 +10086,22 @@
       }
     }
 
-    // Görev atama seçim kutusunu seçili Birim/Alt Alan/Rol filtresine (ve atayanın yetkili olduğu rollere) göre doldurur
-    function populateAssigneeOptions() {
-      const select = document.getElementById('taskAssignee');
-      if (!select) return;
+    // Görev atama kişi seçimi, gösterilen (filtrelenmiş) listeden bağımsız bir kalıcı kümede
+    // (taskAssignSelectedIds) tutulur — böylece Birim/Alt Alan/Rol filtresi değiştirilse, hatta
+    // seçili kişi o an listede görünmese bile seçim kaybolmaz; farklı birimlerden kişiler üst üste
+    // eklenebilir. String id'ler tutulur (checkbox value'ları string olduğundan).
+    let taskAssignSelectedIds = new Set();
 
-      const dept = document.getElementById('taskAssignDept')?.value || '';
+    // Görev atama kişi listesini (çoklu seçim onay kutuları) seçili Birim/Alt Alan/Rol filtresine
+    // (ve atayanın yetkili olduğu rollere) göre doldurur. Aynı görev, işaretlenen herkese ayrı
+    // ayrı (her biri kendi durumunu bağımsız takip edebilsin diye) atanır — bkz. handleCreateTask.
+    function populateAssigneeOptions() {
+      const listEl = document.getElementById('taskAssigneeList');
+      const emptyHint = document.getElementById('taskAssigneeEmptyHint');
+      const selectAllBox = document.getElementById('taskAssigneeSelectAll');
+      if (!listEl) return;
+
+      const depts = taskAssignSelectedDepts;
       const subArea = document.getElementById('taskAssignSubArea')?.value || '';
       const role = document.getElementById('taskAssignRole')?.value || '';
       const assignableRoles = getTaskAssignableRolesForViewer();
@@ -10005,26 +10109,90 @@
       const people = usersList.filter(u =>
         assignableRoles.includes(u.role) &&
         (!u.status || u.status === 'APPROVED') &&
-        (!dept || u.department === dept) &&
+        (depts.length === 0 || depts.includes(u.department)) &&
         (!subArea || u.sub_area === subArea) &&
         (!role || u.role === role)
       ).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
 
-      select.innerHTML = '';
       if (people.length === 0) {
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.innerText = 'Bu filtreye uygun kişi yok';
-        select.appendChild(opt);
+        listEl.innerHTML = '';
+        if (emptyHint) emptyHint.classList.remove('hidden');
+        if (selectAllBox) selectAllBox.checked = false;
+        updateTaskTitleFieldVisibility();
+        updateTaskAssigneeSelectedCount();
         return;
       }
+      if (emptyHint) emptyHint.classList.add('hidden');
 
-      people.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.innerText = `${p.name} — ${ROLE_LABELS_TR[p.role] || p.role} (${DEPARTMENT_LABELS[p.department] || p.department || '—'})`;
-        select.appendChild(opt);
+      listEl.innerHTML = people.map(p => `
+        <label class="flex items-center gap-2 text-xs px-1.5 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+          <input type="checkbox" class="task-assignee-checkbox accent-cyan-600 w-3.5 h-3.5 shrink-0" value="${p.id}" data-role="${p.role}" ${taskAssignSelectedIds.has(String(p.id)) ? 'checked' : ''} onchange="onTaskAssigneeCheckboxChange(this)">
+          <span class="text-slate-700 dark:text-slate-200">${p.name} — ${ROLE_LABELS_TR[p.role] || p.role} (${DEPARTMENT_LABELS[p.department] || p.department || '—'})</span>
+        </label>
+      `).join('');
+      if (selectAllBox) selectAllBox.checked = Array.from(listEl.querySelectorAll('.task-assignee-checkbox')).every(cb => cb.checked);
+      updateTaskTitleFieldVisibility();
+      updateTaskAssigneeSelectedCount();
+    }
+
+    // Bir kişi kutusu elle işaretlenip kaldırıldıkça: kalıcı seçim kümesini günceller (o kişi bu
+    // an başka bir filtreye geçilse de seçili kalır), "Listedekilerin Tümünü Seç" kutusunun
+    // durumunu senkron tutar ve Görev Tanımı alanının görünürlüğünü/sayacı yeniler.
+    function onTaskAssigneeCheckboxChange(cb) {
+      if (cb.checked) taskAssignSelectedIds.add(cb.value);
+      else taskAssignSelectedIds.delete(cb.value);
+
+      const boxes = document.querySelectorAll('#taskAssigneeList .task-assignee-checkbox');
+      const selectAllBox = document.getElementById('taskAssigneeSelectAll');
+      if (selectAllBox && boxes.length > 0) selectAllBox.checked = Array.from(boxes).every(b => b.checked);
+
+      updateTaskTitleFieldVisibility();
+      updateTaskAssigneeSelectedCount();
+    }
+
+    // "Listedekilerin Tümünü Seç" kutusuna tıklanınca SADECE o an filtrede görünenleri işaretler/
+    // kaldırır — başka filtrelerden önceden seçilmiş kişilere dokunmaz.
+    function toggleAllTaskAssignees(checked) {
+      document.querySelectorAll('#taskAssigneeList .task-assignee-checkbox').forEach(cb => {
+        cb.checked = checked;
+        if (checked) taskAssignSelectedIds.add(cb.value);
+        else taskAssignSelectedIds.delete(cb.value);
       });
+      updateTaskTitleFieldVisibility();
+      updateTaskAssigneeSelectedCount();
+    }
+
+    // Toplam seçili kişi sayısını gösterir (o an listede görünmeyen, başka birimden önceden
+    // seçilmiş kişiler dahil) — seçimin filtre değiştirince kaybolmadığını kullanıcıya gösterir.
+    function updateTaskAssigneeSelectedCount() {
+      const el = document.getElementById('taskAssigneeSelectedCount');
+      if (!el) return;
+      const count = taskAssignSelectedIds.size;
+      el.classList.toggle('hidden', count === 0);
+      el.textContent = count > 0 ? `(${count} kişi seçili)` : '';
+    }
+
+    // "Görev Tanımı" alanı sadece seçili kişi(ler) arasında en az bir Stajyer varsa görünür ve
+    // zorunlu olur; aksi halde gizlenir, temizlenir ve zorunlu olmaktan çıkar (sadece Açıklama kalır).
+    // Kalıcı seçim kümesi (taskAssignSelectedIds) üzerinden kontrol edilir, çünkü seçili bir
+    // stajyer o an filtrede görünmüyor (dolayısıyla DOM'da checkbox'ı yok) olabilir.
+    function updateTaskTitleFieldVisibility() {
+      const wrap = document.getElementById('taskTitleWrap');
+      const input = document.getElementById('taskTitle');
+      if (!wrap || !input) return;
+      const hasIntern = Array.from(taskAssignSelectedIds).some(id => {
+        const u = usersList.find(x => String(x.id) === String(id));
+        return u && u.role === 'INTERN';
+      });
+      wrap.classList.toggle('hidden', !hasIntern);
+      input.toggleAttribute('required', hasIntern);
+      if (!hasIntern) input.value = '';
+    }
+
+    // İşaretlenmiş kişi id'lerini döner (görev bunların her birine ayrı ayrı atanır) — kalıcı
+    // seçim kümesinden okunur, o an ekranda görünmeyen (farklı filtreden seçilmiş) kişiler dahil.
+    function getSelectedTaskAssigneeIds() {
+      return Array.from(taskAssignSelectedIds);
     }
 
     // "Durum ve İş Yükü" rol toggle'ı (INTERN / ENGINEER) - mevcut seçim
@@ -10312,7 +10480,8 @@
       // "Görevlerim": SADECE kendisine atanan görevler
       const filtered = tasksList.filter(t => {
         if (t.assigned_to != currentUser.id) return false;
-        const matchesSearch = t.title.toLowerCase().includes(searchVal) ||
+        const matchesSearch = getTaskDisplayHeading(t).toLowerCase().includes(searchVal) ||
+                              (t.description && t.description.toLowerCase().includes(searchVal)) ||
                               (t.created_by && t.created_by.toLowerCase().includes(searchVal));
         const matchesStatus = filterStat === '' || t.status === filterStat;
         return matchesSearch && matchesStatus;
@@ -10337,41 +10506,87 @@
       }
     }
 
+    // Aynı görevi işaretlenen herkese ayrı ayrı atar (her kişi kendi görev satırını, kendi durumunu
+    // bağımsız takip edebilsin diye) — sunucuya kişi başına bir POST /api/tasks isteği gönderilir.
+    // Görev Tanımı alanı sadece Stajyerlere atarken görünür (bkz. updateTaskTitleFieldVisibility);
+    // diğer roller için (ve alan boş bırakılırsa) sunucudaki NOT NULL tasks.title alanı, gösterime
+    // çıkmayan kısa bir başlıkla açıklamadan otomatik türetilir.
+    function deriveTaskTitleFromDescription(desc) {
+      const trimmed = (desc || '').trim();
+      if (!trimmed) return 'Görev';
+      return trimmed.length > 80 ? trimmed.slice(0, 80) + '…' : trimmed;
+    }
+
     async function handleCreateTask(e) {
       e.preventDefault();
-      const title = document.getElementById('taskTitle').value;
       const description = document.getElementById('taskDescription').value;
-      const assignedTo = document.getElementById('taskAssignee').value;
+      const typedTitle = (document.getElementById('taskTitle')?.value || '').trim();
+      const title = typedTitle || deriveTaskTitleFromDescription(description);
+      const assigneeIds = getSelectedTaskAssigneeIds();
       const category = document.getElementById('taskCategory').value;
       const endDate = document.getElementById('taskEndDate').value;
       const projectId = document.getElementById('taskProject') ? document.getElementById('taskProject').value : '';
       const today = new Date().toISOString().split('T')[0];
       const workDays = calculateWorkDays(today, endDate);
 
-      const res = await fetch(`${API_BASE_URL}/api/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, assignedTo, category, endDate, workDays, projectId: projectId || null, createdBy: currentUser.name, userRole: currentUser.role })
-      });
+      if (assigneeIds.length === 0) {
+        showToast('En az bir kişi seçmelisiniz.', 'error');
+        return;
+      }
 
-      if (res.ok) {
-        showToast('Görev atandı!', 'success');
-        document.getElementById('taskTitle').value = '';
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+
+      let successCount = 0;
+      let errorCount = 0;
+      let lastError = '';
+      for (const assignedTo of assigneeIds) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, description, assignedTo, category, endDate, workDays, projectId: projectId || null, createdBy: currentUser.name, userRole: currentUser.role })
+          });
+          if (res.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+            const data = await safeJson(res);
+            lastError = (data && data.error) || 'Görev atanamadı.';
+          }
+        } catch (err) {
+          errorCount++;
+          lastError = err.message;
+        }
+      }
+
+      if (submitBtn) submitBtn.disabled = false;
+
+      if (successCount > 0) {
+        const msg = successCount === 1
+          ? 'Görev atandı!'
+          : `Görev ${successCount} kişiye atandı!`;
+        showToast(errorCount > 0 ? `${msg} (${errorCount} kişiye atanamadı: ${lastError})` : msg, errorCount > 0 ? 'info' : 'success');
         document.getElementById('taskDescription').value = '';
         if (document.getElementById('taskProject')) document.getElementById('taskProject').value = '';
+        taskAssignSelectedIds = new Set();
+        document.querySelectorAll('#taskAssigneeList .task-assignee-checkbox').forEach(cb => { cb.checked = false; });
+        const selectAllBox = document.getElementById('taskAssigneeSelectAll');
+        if (selectAllBox) selectAllBox.checked = false;
+        updateTaskTitleFieldVisibility();
+        updateTaskAssigneeSelectedCount();
         await loadTasks();
         if (typeof renderInternStatusList === 'function') renderInternStatusList();
         if (typeof renderEngineerInternStatusList === 'function') renderEngineerInternStatusList();
       } else {
-        const data = await res.json();
-        showToast('Hata: ' + (data.error || 'Görev atanamadı.'), 'error');
+        showToast('Hata: ' + lastError, 'error');
       }
     }
 
-    // Admin'in "Görevler" panelinde kullandığı Birim → Alan → Rol filtresi için alt alan önbelleği
+    // "Yeni Görev Atama" formundaki Alt Alan seçicisi için alt alan önbelleği (bkz. renderTaskAssignSubAreaOptions)
     let adminTaskFilterSubareas = null;
 
-    // Admin ise Birim/Alan/Rol filtresini gösterir ve doldurur; admin değilse gizli kalır
+    // Admin/İK ise Proje → Birim → Kişi akışını (ve "Sadece Stajyerler" toggle'ını) gösterir ve doldurur; değilse gizli kalır
     async function populateAdminTaskFilters() {
       const wrap = document.getElementById('adminTaskFilterWrap');
       if (!wrap) return;
@@ -10380,14 +10595,139 @@
       wrap.classList.toggle('hidden', !isAdmin);
       if (!isAdmin) return;
 
-      if (adminTaskFilterSubareas === null) {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/subareas`);
-          adminTaskFilterSubareas = await res.json();
-        } catch (e) { adminTaskFilterSubareas = []; }
-      }
+      // Her açılışta "Sadece Stajyerler" modu kapalı başlar, Proje/Birim/Kişi akışı görünür olur.
+      const internToggle = document.getElementById('adminInternModeToggle');
+      if (internToggle) internToggle.checked = false;
+      adminInternModeOn = false;
+      const internWrap = document.getElementById('adminInternFilterWrap');
+      const projectFlowWrap = document.getElementById('adminProjectFlowWrap');
+      if (internWrap) internWrap.classList.add('hidden');
+      if (projectFlowWrap) projectFlowWrap.classList.remove('hidden');
 
-      renderAdminTaskSubAreaOptions();
+      await populateAdminTaskProjectFilter();
+      renderAdminTaskDeptOptionsForProject();
+    }
+
+    // Proje seçeneklerini doldurur ("Tüm Görevler" + sistemde kayıtlı tüm projeler) — görev
+    // atama formuyla aynı proje önbelleğini kullanır.
+    async function populateAdminTaskProjectFilter() {
+      const sel = document.getElementById('filterAdminProject');
+      if (!sel) return;
+      const projects = await loadTaskProjectsCache();
+      const secili = sel.value;
+      sel.innerHTML = '<option value="">Proje Seçin</option>' +
+        (projects || []).map(p => `<option value="${p.id}">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</option>`).join('');
+      sel.value = (projects || []).some(p => String(p.id) === secili) ? secili : '';
+    }
+
+    // Proje değişince: o projeye atanan görevlerin sahiplerinin birimlerine göre Birim seçeneklerini
+    // daraltır. Birim seçici, bir proje seçilmeden görünmez (kademeli akış).
+    function renderAdminTaskDeptOptionsForProject() {
+      const projectSel = document.getElementById('filterAdminProject');
+      const deptSel = document.getElementById('filterAdminDept');
+      if (!projectSel || !deptSel) return;
+      const projectId = projectSel.value;
+
+      deptSel.classList.toggle('hidden', !projectId);
+      if (!projectId) deptSel.value = '';
+
+      const relevantTasks = projectId
+        ? (tasksList || []).filter(t => String(t.project_id) === String(projectId))
+        : [];
+      const depts = [...new Set(relevantTasks.map(t => t.assignee_department).filter(Boolean))]
+        .sort((a, b) => (DEPARTMENT_LABELS[a] || a).localeCompare(DEPARTMENT_LABELS[b] || b, 'tr'));
+
+      const secili = deptSel.value;
+      deptSel.innerHTML = '<option value="">Tüm Birimler</option>' +
+        depts.map(d => `<option value="${d}">${DEPARTMENT_LABELS[d] || d}</option>`).join('');
+      deptSel.value = depts.includes(secili) ? secili : '';
+
+      renderAdminTaskPersonOptions();
+    }
+
+    function handleAdminTaskProjectFilterChange() {
+      renderAdminTaskDeptOptionsForProject();
+      applyTaskFilters();
+    }
+
+    // Birim değişince: seçili proje + birime göre Kişi seçeneklerini daraltır. Kişi seçici,
+    // bir birim seçilmeden görünmez (kademeli akış).
+    function renderAdminTaskPersonOptions() {
+      const projectSel = document.getElementById('filterAdminProject');
+      const deptSel = document.getElementById('filterAdminDept');
+      const personSel = document.getElementById('filterAdminPerson');
+      if (!personSel) return;
+      const projectId = projectSel ? projectSel.value : '';
+      const dept = deptSel ? deptSel.value : '';
+
+      personSel.classList.toggle('hidden', !dept);
+      if (!dept) personSel.value = '';
+
+      let relevantTasks = dept ? (tasksList || []) : [];
+      if (projectId) relevantTasks = relevantTasks.filter(t => String(t.project_id) === String(projectId));
+      if (dept) relevantTasks = relevantTasks.filter(t => t.assignee_department === dept);
+
+      const peopleMap = new Map();
+      relevantTasks.forEach(t => {
+        if (t.assigned_to && t.assignee_name) peopleMap.set(t.assigned_to, t.assignee_name);
+      });
+      const people = [...peopleMap.entries()].sort((a, b) => a[1].localeCompare(b[1], 'tr'));
+
+      const secili = personSel.value;
+      personSel.innerHTML = '<option value="">Tüm Kişiler</option>' +
+        people.map(([id, name]) => `<option value="${id}">${escapeHtmlProj(name)}</option>`).join('');
+      personSel.value = people.some(([id]) => String(id) === secili) ? secili : '';
+    }
+
+    // "Sadece Stajyerler" modu: açılınca Proje/Birim/Kişi akışı gizlenir, yerine stajyer isimlerini
+    // toggle buton olarak listeleyen ayrı bir filtreleme alanı gelir.
+    let adminInternModeOn = false;
+    let adminInternFilterValue = '';
+
+    function toggleAdminInternMode(checked) {
+      adminInternModeOn = checked;
+      const projectFlowWrap = document.getElementById('adminProjectFlowWrap');
+      const internWrap = document.getElementById('adminInternFilterWrap');
+      if (projectFlowWrap) projectFlowWrap.classList.toggle('hidden', checked);
+      if (internWrap) internWrap.classList.toggle('hidden', !checked);
+      if (checked) populateAdminInternToggle();
+      applyTaskFilters();
+    }
+
+    function populateAdminInternToggle() {
+      const toggle = document.getElementById('adminInternToggle');
+      if (!toggle) return;
+      const interns = (usersList || [])
+        .filter(u => u.role === 'INTERN' && (!u.status || u.status === 'APPROVED'))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
+
+      const validValues = ['', ...interns.map(u => String(u.id))];
+      if (!validValues.includes(String(adminInternFilterValue))) adminInternFilterValue = '';
+
+      toggle.innerHTML = ['<button type="button" data-intern="" onclick="setAdminInternFilter(\'\')" class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all">Tümü</button>']
+        .concat(interns.map(u => `<button type="button" data-intern="${u.id}" onclick="setAdminInternFilter('${u.id}')" class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all">${escapeHtmlProj(u.name)}</button>`))
+        .join('');
+      updateAdminInternToggleStyles();
+    }
+
+    function updateAdminInternToggleStyles() {
+      const toggle = document.getElementById('adminInternToggle');
+      if (!toggle) return;
+      const activeCls = ['bg-cyan-600', 'text-white'];
+      const passiveCls = ['text-slate-500', 'dark:text-slate-400'];
+      toggle.querySelectorAll('button[data-intern]').forEach(btn => {
+        if (btn.dataset.intern === String(adminInternFilterValue)) {
+          btn.classList.add(...activeCls); btn.classList.remove(...passiveCls);
+        } else {
+          btn.classList.remove(...activeCls); btn.classList.add(...passiveCls);
+        }
+      });
+    }
+
+    function setAdminInternFilter(internId) {
+      adminInternFilterValue = internId;
+      updateAdminInternToggleStyles();
+      applyTaskFilters();
     }
 
     // Ekip Lideri / Müdür'ün "Görevler" panelinde kullandığı, kendi biriminde rol sıralamasına
@@ -10435,33 +10775,39 @@
       applyTaskFilters();
     }
 
-    // Seçili birime göre "Alan" seçeneklerini doldurur (sadece Elektronik'te alt alan var)
-    function renderAdminTaskSubAreaOptions() {
-      const deptSel = document.getElementById('filterAdminDept');
-      const subSel = document.getElementById('filterAdminSubArea');
-      if (!deptSel || !subSel) return;
-
-      const dept = deptSel.value;
-      const subs = (adminTaskFilterSubareas || []).filter(s => s.department_key === dept);
-
-      if (dept === 'ELEKTRONIK' && subs.length > 0) {
-        subSel.innerHTML = ['<option value="">Tüm Alanlar</option>']
-          .concat(subs.map(s => `<option value="${s.label}">${s.label}</option>`))
-          .join('');
-        subSel.classList.remove('hidden');
-      } else {
-        subSel.innerHTML = '<option value="">Tüm Alanlar</option>';
-        subSel.classList.add('hidden');
-      }
-    }
-
-    // Admin filtresinde Birim değişince: Alan seçeneklerini yeniler ve listeyi filtreler
+    // Admin filtresinde Birim değişince: seçili proje+birime göre Kişi seçeneklerini yeniler ve listeyi filtreler
     function handleAdminTaskDeptFilterChange() {
-      renderAdminTaskSubAreaOptions();
+      renderAdminTaskPersonOptions();
       applyTaskFilters();
     }
 
+    // Aktif/Geçmiş görev bölümleri varsayılan kapalı gelir; bir filtre seçildikçe otomatik açılır,
+    // başlığa tıklanarak da elle açılıp kapanabilir.
+    function setTaskSectionOpen(which, open) {
+      const body = document.getElementById(which === 'active' ? 'activeTaskBody' : 'pastTaskBody');
+      const chevron = document.getElementById(which === 'active' ? 'activeTaskChevron' : 'pastTaskChevron');
+      if (body) body.classList.toggle('hidden', !open);
+      if (chevron) chevron.classList.toggle('rotate-180', open);
+    }
+
+    function toggleTaskSection(which) {
+      const body = document.getElementById(which === 'active' ? 'activeTaskBody' : 'pastTaskBody');
+      const isOpen = body && !body.classList.contains('hidden');
+      setTaskSectionOpen(which, !isOpen);
+    }
+
+    function collapseTaskSections() {
+      setTaskSectionOpen('active', false);
+      setTaskSectionOpen('past', false);
+    }
+
+    function expandTaskSections() {
+      setTaskSectionOpen('active', true);
+      setTaskSectionOpen('past', true);
+    }
+
     function applyTaskFilters() {
+      expandTaskSections();
       renderTaskList();
     }
 
@@ -10506,22 +10852,30 @@
       const filterStatActive = document.getElementById('filterStatusActive')?.value || '';
       const filterStatPast = document.getElementById('filterStatusPast')?.value || '';
 
-      // Admin için: Birim → Alan → Rol filtresi. Ekip Lideri/Müdür için: kendi biriminde rol filtresi.
+      // Admin/İK için: "Sadece Stajyerler" modu açıksa stajyer(ler)e daralt; kapalıysa
+      // Proje → Birim → Kişi akışına göre filtrele. Ekip Lideri/Müdür için: kendi biriminde rol filtresi.
       const isAdminFilter = currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'HR');
       const isLeaderFilter = currentUser && ['LEADER', 'MANAGER'].includes(currentUser.role);
-      const filterDept = isAdminFilter ? (document.getElementById('filterAdminDept')?.value || '') : '';
-      const filterSubArea = isAdminFilter ? (document.getElementById('filterAdminSubArea')?.value || '') : '';
-      const filterRole = isAdminFilter ? (document.getElementById('filterAdminRole')?.value || '')
-        : isLeaderFilter ? (leaderTaskFilterRole || '') : '';
+      const filterRole = isLeaderFilter ? (leaderTaskFilterRole || '') : '';
+      const filterProject = (isAdminFilter && !adminInternModeOn) ? (document.getElementById('filterAdminProject')?.value || '') : '';
+      const filterDept = (isAdminFilter && !adminInternModeOn) ? (document.getElementById('filterAdminDept')?.value || '') : '';
+      const filterPerson = (isAdminFilter && !adminInternModeOn) ? (document.getElementById('filterAdminPerson')?.value || '') : '';
 
       let filtered = base.filter(t => {
-        const matchesSearch = t.title.toLowerCase().includes(searchVal) ||
+        const matchesSearch = getTaskDisplayHeading(t).toLowerCase().includes(searchVal) ||
+                              (t.description && t.description.toLowerCase().includes(searchVal)) ||
                               (t.assignee_name && t.assignee_name.toLowerCase().includes(searchVal)) ||
                               (t.created_by && t.created_by.toLowerCase().includes(searchVal));
-        const matchesDept = filterDept === '' || t.assignee_department === filterDept;
-        const matchesSubArea = filterSubArea === '' || t.assignee_sub_area === filterSubArea;
         const matchesRole = filterRole === '' || t.assignee_role === filterRole;
-        return matchesSearch && matchesDept && matchesSubArea && matchesRole;
+        if (isAdminFilter && adminInternModeOn) {
+          const matchesIntern = t.assignee_role === 'INTERN' &&
+            (adminInternFilterValue === '' || String(t.assigned_to) === String(adminInternFilterValue));
+          return matchesSearch && matchesIntern;
+        }
+        const matchesProject = filterProject === '' || String(t.project_id) === String(filterProject);
+        const matchesDept = filterDept === '' || t.assignee_department === filterDept;
+        const matchesPerson = filterPerson === '' || String(t.assigned_to) === String(filterPerson);
+        return matchesSearch && matchesRole && matchesProject && matchesDept && matchesPerson;
       });
 
       // Sıralama: son teslim tarihine göre yakından uzağa
@@ -10593,12 +10947,14 @@
       const noteCount = taskLogs.length;
       const revCount = (task.revisions && task.revisions.length) || 0;
 
-      // Kart sadece özet gösterir; detay için tıklanır (modal açılır)
+      // Kart sadece özet gösterir; detay için tıklanır (modal açılır). Başlık artık kullanılmıyor —
+      // görev Proje Adı (varsa) ve Görev Açıklaması ile tanımlanıyor.
       card.innerHTML = `
         <div class="flex justify-between items-start gap-2">
-          <h4 class="font-bold text-base text-cyan-600 dark:text-cyan-300 break-words min-w-0">${task.title}</h4>
+          <h4 class="font-bold text-base text-cyan-600 dark:text-cyan-300 break-words min-w-0">${escapeHtmlProj(getTaskDisplayHeading(task))}</h4>
           ${statusBadge}
         </div>
+        <p class="mt-1 text-xs text-slate-600 dark:text-slate-300 break-words line-clamp-2">${escapeHtmlProj(task.description || 'Açıklama girilmemiş.')}</p>
         <div class="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span><i class="fa-regular fa-user me-1"></i>${task.assignee_name || 'Bilinmiyor'}</span>
           <span class="${isOverdue ? 'text-rose-500 font-bold' : ''}"><i class="fa-regular fa-calendar me-1"></i>${task.end_date || '-'}</span>
@@ -10677,7 +11033,7 @@
       if (task.assigned_to === currentUser.id && task.status !== 'APPROVED') {
         internButtons = `
           <div class="flex flex-wrap gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-            <button onclick="openLogModal('${task.id}', '${(task.title || '').replace(/'/g, "\\'")}'); ${closeFnName}();" class="flex-1 bg-slate-200 dark:bg-slate-900 hover:bg-slate-300 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold py-2.5 rounded-xl transition-all">
+            <button onclick="openLogModal('${task.id}', '${getTaskDisplayHeading(task).replace(/'/g, "\\'")}'); ${closeFnName}();" class="flex-1 bg-slate-200 dark:bg-slate-900 hover:bg-slate-300 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold py-2.5 rounded-xl transition-all">
               <i class="fa-solid fa-pen me-1"></i> Not / İlerleme Ekle
             </button>
             ${task.status !== 'COMPLETED' ? `
@@ -10695,6 +11051,7 @@
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-500 dark:text-slate-400">
+          ${getProjectNameById(task.project_id) ? `<div class="sm:col-span-2"><i class="fa-solid fa-diagram-project text-cyan-500 me-1"></i> Proje Adı: <b class="text-slate-800 dark:text-slate-200">${escapeHtmlProj(getProjectNameById(task.project_id))}</b></div>` : ''}
           <div><i class="fa-solid fa-user-check text-cyan-500 me-1"></i> Görevi Veren: <b class="text-slate-800 dark:text-slate-200">${task.created_by || 'Sistem'}</b></div>
           <div><i class="fa-regular fa-user me-1"></i> Atanan: <b class="text-slate-800 dark:text-slate-200">${task.assignee_name || 'Bilinmiyor'}</b></div>
           <div><i class="fa-solid fa-tag me-1"></i> Kategori: <b class="text-slate-800 dark:text-slate-200">${task.category || '-'}</b></div>
@@ -10736,7 +11093,7 @@
         isManager = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && task.assigned_to != currentUser.id;
       }
 
-      document.getElementById('taskDetailTitle').innerText = task.title || '';
+      document.getElementById('taskDetailTitle').innerText = getTaskDisplayHeading(task);
       document.getElementById('taskDetailStatus').innerHTML = getTaskStatusBadgeHtml(task);
       document.getElementById('taskDetailBody').innerHTML = buildTaskDetailBodyHtml(task, isManager, 'closeTaskDetailModal', 'taskAttachmentsSection');
 
@@ -10759,7 +11116,7 @@
         isManager = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && task.assigned_to != currentUser.id;
       }
 
-      document.getElementById('pdTaskTitle').innerText = task.title || '';
+      document.getElementById('pdTaskTitle').innerText = getTaskDisplayHeading(task);
       document.getElementById('pdTaskStatus').innerHTML = getTaskStatusBadgeHtml(task);
       document.getElementById('pdTaskBody').innerHTML = buildTaskDetailBodyHtml(task, isManager, 'closePersonSubView', 'pdTaskAttachmentsSection');
 
@@ -11026,7 +11383,7 @@
       let plan;
       try { plan = JSON.parse(task.is_plani); } catch (e) { return; }
       const titleEl = document.getElementById('ganttZoomTitle');
-      if (titleEl) titleEl.innerText = task.title || 'Akıllı İş Planı';
+      if (titleEl) titleEl.innerText = getTaskDisplayHeading(task) || 'Akıllı İş Planı';
       const contentEl = document.getElementById('ganttZoomContent');
       if (contentEl) contentEl.innerHTML = ipGanttCiz(plan.adimlar || [], true);
       const modal = document.getElementById('ganttZoomModal');
@@ -11703,20 +12060,22 @@
           }
 
           doc.setFillColor(248, 250, 252);
-          doc.rect(15, y, 180, 18, 'F');
+          doc.rect(15, y, 180, 24, 'F');
 
           doc.setFontSize(10);
           doc.setFont('helvetica', 'bold');
-          doc.text(fixTurkishChars(`${index + 1}. ${task.title}`), 18, y + 7);
+          doc.text(fixTurkishChars(`${index + 1}. ${getTaskDisplayHeading(task)}`), 18, y + 7);
 
           doc.setFontSize(8);
           doc.setFont('helvetica', 'normal');
-          doc.text(fixTurkishChars(`Kategori: ${task.category || '-'} | Veren: ${task.created_by || 'Sistem'} | Bitis: ${task.end_date || '-'}`), 18, y + 13);
+          const taskDesc = (task.description || '').trim();
+          doc.text(fixTurkishChars(taskDesc.length > 100 ? taskDesc.slice(0, 100) + '...' : (taskDesc || 'Aciklama girilmemis.')), 18, y + 13);
+          doc.text(fixTurkishChars(`Kategori: ${task.category || '-'} | Veren: ${task.created_by || 'Sistem'} | Bitis: ${task.end_date || '-'}`), 18, y + 19);
 
           doc.setFont('helvetica', 'bold');
           doc.text(fixTurkishChars(`Durum: ${task.status}`), 150, y + 7);
 
-          y += 22;
+          y += 28;
         });
       }
 
@@ -11813,6 +12172,13 @@
       calendarEvents = [];
       if (!currentUser) { renderCalendar(); return; }
 
+      // Görev bir projeye bağlıysa (project_id) takvimde proje adını da göstermek için, "Yeni Görev
+      // Atama"/"Görev Düzenle" formlarındaki aynı proje önbelleğini kullanıyoruz — ekstra bir sunucu
+      // sorgusu/join gerekmeden, id -> proje eşlemesi burada kuruluyor.
+      const projectsForCalendar = await loadTaskProjectsCache();
+      const calendarProjectsById = {};
+      (projectsForCalendar || []).forEach(p => { calendarProjectsById[p.id] = p; });
+
       // 1) Görevler
       try {
         let url = `${API_BASE_URL}/api/tasks?userId=${currentUser.id}&role=${currentUser.role}`;
@@ -11823,14 +12189,16 @@
           tasks.forEach(t => {
             const date = calNormalizeDate(t.end_date);
             if (!date) return;
+            const proj = t.project_id ? calendarProjectsById[t.project_id] : null;
             calendarEvents.push({
               date,
               type: 'task',
-              title: t.title || 'Görev',
+              title: proj ? proj.name : 'Görev',
               description: t.description || '',
               assignee: t.assignee_name || '',
               category: t.category || '',
-              status: t.status || ''
+              status: t.status || '',
+              projectName: proj ? proj.name : ''
             });
           });
         }
@@ -11916,7 +12284,9 @@
             ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30'
             : 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30';
           const icon = ev.type === 'task' ? 'fa-clipboard-check' : 'fa-people-group';
-          chips += `<div class="truncate text-[9px] sm:text-[10px] leading-tight px-1 py-0.5 rounded border ${color} font-medium"><i class="fa-solid ${icon} mr-0.5"></i>${escapeHtmlCal(ev.title)}</div>`;
+          // Görev bir projeye bağlıysa, gün hücresinde başlık yerine sadece proje adı gösterilir
+          const chipLabel = (ev.type === 'task' && ev.projectName) ? ev.projectName : ev.title;
+          chips += `<div class="truncate text-[9px] sm:text-[10px] leading-tight px-1 py-0.5 rounded border ${color} font-medium"><i class="fa-solid ${icon} mr-0.5"></i>${escapeHtmlCal(chipLabel)}</div>`;
         });
         if (dayEvents.length > maxShown) {
           chips += `<div class="text-[9px] sm:text-[10px] text-slate-400 font-semibold pl-1">+${dayEvents.length - maxShown} daha</div>`;
@@ -11973,11 +12343,16 @@
           if (statusTxt) metaLines.push(`<i class="fa-solid fa-circle-info w-3.5 text-slate-400"></i> ${escapeHtmlCal(statusTxt)}`);
 
           const gcalUrl = buildGoogleCalUrl(ev, dateISO);
+          // Görevlerin artık ayrı bir başlığı yok; kart başlığında Proje Adı (varsa) gösterilir,
+          // yoksa genel "Görev" etiketi kullanılır. Toplantılarda başlık değişmeden kalır.
+          const headingHtml = isTask
+            ? (ev.projectName ? `Proje Adı: ${escapeHtmlCal(ev.projectName)}` : 'Görev')
+            : escapeHtmlCal(ev.title);
 
           return `
             <div class="border border-slate-200 dark:border-slate-800 border-l-4 ${accent} rounded-xl p-3 bg-slate-50 dark:bg-slate-950/40">
               <div class="flex items-start justify-between gap-2">
-                <div class="font-bold text-sm text-slate-900 dark:text-slate-100 break-words">${escapeHtmlCal(ev.title)}</div>
+                <div class="font-bold text-sm text-slate-900 dark:text-slate-100 break-words min-w-0">${headingHtml}</div>
                 ${badge}
               </div>
               ${ev.description ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-1 break-words">${escapeHtmlCal(ev.description)}</div>` : ''}
