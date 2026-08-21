@@ -211,6 +211,11 @@ async function initDb() {
     // için var olan görevler: normal "Görevler" listelerinde/sayımlarında hiç görünmez, sadece
     // ilgili Proje detay sayfasında (GET /api/tasks?planTaskForProject=) gösterilir.
     try { await db.execute(`ALTER TABLE tasks ADD COLUMN is_kart_plani_task INTEGER DEFAULT 0`); } catch (e) {}
+    // Aynı görev, "Yeni Görev Atama" formunda işaretlenen birden fazla kişiye ayrı ayrı satır olarak
+    // atanıyor (bkz. POST /api/tasks döngüsü); bu satırların aynı atama işleminden geldiğini
+    // işaretlemek için paylaşılan bir kimlik — takvimde tek bir etkinlik olarak birleştirmek için
+    // kullanılır (bkz. loadCalendarData). Eski (bu sütundan önce oluşturulmuş) görevlerde NULL kalır.
+    try { await db.execute(`ALTER TABLE tasks ADD COLUMN assign_batch_id TEXT`); } catch (e) {}
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS daily_logs (
@@ -1363,7 +1368,7 @@ app.put('/api/users/:id/intern-dates', async (req, res) => {
 // Görev Oluşturma
 app.post('/api/tasks', async (req, res) => {
   try {
-    const { title, description, assignedTo, category, endDate, workDays, createdBy, userRole, userId, projectId, isKartPlaniTask } = req.body;
+    const { title, description, assignedTo, category, endDate, workDays, createdBy, userRole, userId, projectId, isKartPlaniTask, batchId } = req.body;
 
     if (!['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER', 'INTERN'].includes(userRole)) {
       return res.status(403).json({ error: 'Görev atamaya yetkiniz yok!' });
@@ -1384,8 +1389,8 @@ app.post('/api/tasks', async (req, res) => {
     }
 
     const result = await db.execute({
-      sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status, project_id, is_kart_plani_task) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?)`,
-      args: [title, description || '', assignedTo, category, endDate, workDays, createdBy, projectId || null, isKartPlaniTask ? 1 : 0]
+      sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status, project_id, is_kart_plani_task, assign_batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?, ?)`,
+      args: [title, description || '', assignedTo, category, endDate, workDays, createdBy, projectId || null, isKartPlaniTask ? 1 : 0, batchId || null]
     });
     const newTaskId = Number(result.lastInsertRowid);
 

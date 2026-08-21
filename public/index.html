@@ -10550,6 +10550,11 @@
       const submitBtn = e.target.querySelector('button[type="submit"]');
       if (submitBtn) submitBtn.disabled = true;
 
+      // Aynı gönderimde işaretlenen herkese ayrı ayrı görev satırı açılır (bkz. fonksiyon başındaki
+      // not), ama hepsi aynı "batchId"yi taşır — böylece takvimde tek bir etkinlik olarak
+      // birleştirilebilirler (bkz. loadCalendarData), Kişi Detayı'nda ise yine ayrı ayrı görünürler.
+      const batchId = (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+
       let successCount = 0;
       let errorCount = 0;
       let lastError = '';
@@ -10558,7 +10563,7 @@
           const res = await fetch(`${API_BASE_URL}/api/tasks`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, description, assignedTo, category, endDate, workDays, projectId: projectId || null, createdBy: currentUser.name, userRole: currentUser.role })
+            body: JSON.stringify({ title, description, assignedTo, category, endDate, workDays, projectId: projectId || null, createdBy: currentUser.name, userRole: currentUser.role, batchId })
           });
           if (res.ok) {
             successCount++;
@@ -12227,7 +12232,7 @@
         const res = await fetch(url);
         const tasks = await res.json();
         if (Array.isArray(tasks)) {
-          tasks.forEach(t => {
+          const pushTaskEvent = (t, assigneeLabel) => {
             const date = calNormalizeDate(t.end_date);
             if (!date) return;
             const proj = t.project_id ? calendarProjectsById[t.project_id] : null;
@@ -12236,11 +12241,45 @@
               type: 'task',
               title: proj ? proj.name : 'Görev',
               description: t.description || '',
-              assignee: t.assignee_name || '',
+              assignee: assigneeLabel,
               category: t.category || '',
               status: t.status || '',
               projectName: proj ? proj.name : ''
             });
+          };
+
+          // Aynı "Yeni Görev Atama" gönderiminde birden fazla kişiye atanan görevler (aynı
+          // assign_batch_id + aynı bitiş tarihini paylaşırlar) takvimde TEK bir etkinlik olarak
+          // birleştirilir ve atanan herkesin adı o etkinliğin "Atanan" alanında listelenir — Kişi
+          // Detayı/Görevler listelerinde ise (bu birleştirme sadece burada yapılır) yine ayrı ayrı
+          // görünmeye devam ederler. Biri sonradan tek başına düzenlenip bitiş tarihi değişirse,
+          // doğal olarak gruptan ayrılıp kendi tarihinde ayrı bir etkinlik olarak görünür.
+          const batchGroups = {};
+          const soloTasks = [];
+          tasks.forEach(t => {
+            const date = calNormalizeDate(t.end_date);
+            if (!date) return;
+            if (t.assign_batch_id) {
+              const key = t.assign_batch_id + '|' + date;
+              (batchGroups[key] = batchGroups[key] || []).push(t);
+            } else {
+              soloTasks.push(t);
+            }
+          });
+
+          // Grup içinde durumlar farklıysa, en "eylem gerektiren" durum önce gösterilir.
+          const STATUS_PRIORITY = ['REVISION_REQUESTED', 'IN_PROGRESS', 'COMPLETED', 'APPROVED'];
+          const pickGroupStatus = (list) => {
+            for (const s of STATUS_PRIORITY) { if (list.some(t => t.status === s)) return s; }
+            return list[0].status || '';
+          };
+
+          soloTasks.forEach(t => pushTaskEvent(t, t.assignee_name || ''));
+
+          Object.values(batchGroups).forEach(group => {
+            if (group.length === 1) { pushTaskEvent(group[0], group[0].assignee_name || ''); return; }
+            const names = [...new Set(group.map(t => t.assignee_name).filter(Boolean))];
+            pushTaskEvent({ ...group[0], status: pickGroupStatus(group) }, names.join(', '));
           });
         }
       } catch (err) { console.error('Takvim görevleri alınamadı:', err); }
