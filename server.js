@@ -12,9 +12,10 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-// Varsayılan 100kb sınırı, base64'e çevrilmiş görev belgesi yüklemeleri (10MB'a kadar dosya,
-// base64 sonrası ~13-14MB JSON gövdesi) için yetersiz kalıyordu — 15mb'a çıkarıldı.
-app.use(express.json({ limit: '15mb' }));
+// Varsayılan 100kb sınırı, base64'e çevrilmiş dosya yüklemeleri için yetersiz kalıyordu.
+// Geliştirmeler alanındaki 50MB'lık dosya sınırı, base64 sonrası ~67MB'a şişebiliyor —
+// buna JSON gövdesinin geri kalanı için de pay bırakarak 70mb'a çıkarıldı.
+app.use(express.json({ limit: '70mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Turso Bulut Veritabanı Bağlantısı
@@ -543,6 +544,10 @@ async function initDb() {
         created_at TEXT NOT NULL
       )
     `);
+    // password_plain: yükleyen kişi kendi koyduğu şifreyi daha sonra tekrar görebilsin diye
+    // (bcrypt hash geri döndürülemediği için) düz metin olarak da tutulur — sadece dosyanın
+    // sahibine, /api/dev-files/:id/password ile döndürülür.
+    try { await db.execute(`ALTER TABLE dev_files ADD COLUMN password_plain TEXT`); } catch (e) {}
 
     console.log('Turso bulut veritabanı tabloları hazır.');
   } catch (err) {
@@ -2842,9 +2847,9 @@ app.delete('/api/attachments/:id', async (req, res) => {
 // GELİŞTİRMELER: ana ekrandaki şifreli dosya paylaşım alanı (bkz. initDb'deki dev_files
 // tablosu yorumu). Şifre bcrypt ile hashlenip tutulur, indirme öncesi karşılaştırılır.
 // ============================================================
-const DEV_FILE_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const DEV_FILE_MAX_BYTES = 50 * 1024 * 1024; // 50MB
 
-// Dosya yükle — şifreyi yükleyen kişi kendisi belirler
+// Dosya yükle — şifreyi yükleyen kişi kendisi belirler, dosya türünde herhangi bir kısıtlama yoktur
 app.post('/api/dev-files', async (req, res) => {
   try {
     const { fileName, mimeType, fileData, password, description, userId, userName } = req.body;
@@ -2858,14 +2863,14 @@ app.post('/api/dev-files', async (req, res) => {
 
     const approxBytes = Math.ceil((fileData.length * 3) / 4);
     if (approxBytes > DEV_FILE_MAX_BYTES) {
-      return res.status(400).json({ error: 'Dosya boyutu 10MB sınırını aşıyor.' });
+      return res.status(400).json({ error: 'Dosya boyutu 50MB sınırını aşıyor.' });
     }
 
     const passwordHash = await bcrypt.hash(String(password), 10);
 
     const result = await db.execute({
-      sql: `INSERT INTO dev_files (file_name, mime_type, file_size, file_data, password_hash, description, uploaded_by, uploaded_by_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [fileName, mimeType || null, approxBytes, fileData, passwordHash, description || null, userName || null, userId || null, nowTurkeyLocal()]
+      sql: `INSERT INTO dev_files (file_name, mime_type, file_size, file_data, password_hash, password_plain, description, uploaded_by, uploaded_by_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [fileName, mimeType || null, approxBytes, fileData, passwordHash, String(password), description || null, userName || null, userId || null, nowTurkeyLocal()]
     });
 
     res.json({ id: Number(result.lastInsertRowid), message: 'Dosya yüklendi.' });
@@ -2887,6 +2892,29 @@ app.get('/api/dev-files', async (req, res) => {
       ORDER BY df.id DESC
     `);
     res.json(r.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Yüklediğim dosyanın şifresini geri göster — sadece dosyanın sahibi görebilir
+app.get('/api/dev-files/:id/password', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: 'userId gereklidir.' });
+
+    const r = await db.execute({ sql: `SELECT uploaded_by_id, password_plain FROM dev_files WHERE id = ?`, args: [req.params.id] });
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Dosya bulunamadı.' });
+
+    const file = r.rows[0];
+    if (Number(file.uploaded_by_id) !== Number(userId)) {
+      return res.status(403).json({ error: 'Sadece dosyayı yükleyen kişi şifresini görebilir.' });
+    }
+    if (!file.password_plain) {
+      return res.status(404).json({ error: 'Bu dosya için kayıtlı şifre bulunamadı.' });
+    }
+
+    res.json({ password: file.password_plain });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

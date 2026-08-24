@@ -1960,7 +1960,7 @@
                   <input type="text" id="devFileDescription" placeholder="Bu dosya hakkında kısa not..." class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
                 </div>
               </div>
-              <p class="text-[10px] text-slate-400">Dosyayı indirmek isteyenlerin bu şifreyi bilmesi gerekir; şifreyi paylaşmayı unutmayın. Üst sınır 10MB.</p>
+              <p class="text-[10px] text-slate-400">Dosyayı indirmek isteyenlerin bu şifreyi bilmesi gerekir; şifreyi paylaşmayı unutmayın. Her türde dosya kabul edilir, üst sınır 50MB.</p>
               <div class="flex justify-end">
                 <button type="submit" id="devFileUploadBtn" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-5 py-2 rounded-xl text-sm transition-all shadow-lg shadow-cyan-500/20">
                   <i class="fa-solid fa-upload me-1.5"></i>Yükle
@@ -9329,24 +9329,51 @@
 
       const canManage = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role);
       listEl.innerHTML = files.map(f => {
-        const canDelete = canManage || Number(f.uploaded_by_id) === Number(currentUser.id);
+        const isOwner = Number(f.uploaded_by_id) === Number(currentUser.id);
+        const canDelete = canManage || isOwner;
         return `
-          <div class="flex items-center justify-between gap-2 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2.5">
-            <button type="button" onclick="openDevFileDownloadModal(${f.id}, '${escapeHtmlProj(f.file_name).replace(/'/g, "\\'")}')" class="min-w-0 flex-1 flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-400 hover:underline text-left">
-              <i class="fa-solid fa-file-shield shrink-0"></i>
-              <span class="min-w-0">
-                <span class="block truncate font-semibold">${escapeHtmlProj(f.file_name)}</span>
-                ${f.description ? `<span class="block truncate text-[10px] text-slate-400 font-normal">${escapeHtmlProj(f.description)}</span>` : ''}
-              </span>
-              <span class="shrink-0 text-slate-400">(${formatDosyaBoyutu(f.file_size)})</span>
-            </button>
-            <div class="flex items-center gap-2 shrink-0">
-              <span class="text-[10px] text-slate-400">${f.uploaded_by || ''}</span>
-              ${canDelete ? `<button type="button" onclick="handleDeleteDevFile(${f.id})" class="text-rose-500 hover:text-rose-600 text-xs"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+          <div class="bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <button type="button" onclick="openDevFileDownloadModal(${f.id}, '${escapeHtmlProj(f.file_name).replace(/'/g, "\\'")}')" class="min-w-0 flex-1 flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-400 hover:underline text-left">
+                <i class="fa-solid fa-file-shield shrink-0"></i>
+                <span class="min-w-0">
+                  <span class="block truncate font-semibold">${escapeHtmlProj(f.file_name)}</span>
+                  ${f.description ? `<span class="block truncate text-[10px] text-slate-400 font-normal">${escapeHtmlProj(f.description)}</span>` : ''}
+                </span>
+                <span class="shrink-0 text-slate-400">(${formatDosyaBoyutu(f.file_size)})</span>
+              </button>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-[10px] text-slate-400">${f.uploaded_by || ''}</span>
+                ${isOwner ? `<button type="button" onclick="toggleDevFilePasswordReveal(${f.id})" title="Şifreni gör" class="text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 text-xs"><i class="fa-solid fa-key"></i></button>` : ''}
+                ${canDelete ? `<button type="button" onclick="handleDeleteDevFile(${f.id})" class="text-rose-500 hover:text-rose-600 text-xs"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+              </div>
             </div>
+            ${isOwner ? `<div id="devFilePwReveal_${f.id}" class="hidden mt-1.5 text-[10px] font-mono text-emerald-600 dark:text-emerald-400"></div>` : ''}
           </div>
         `;
       }).join('');
+    }
+
+    // Bir dosyanın şifresini sadece yükleyen kişi görebilir (bkz. GET /api/dev-files/:id/password)
+    async function toggleDevFilePasswordReveal(id) {
+      const box = document.getElementById(`devFilePwReveal_${id}`);
+      if (!box) return;
+      if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
+
+      if (!box.dataset.loaded) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/dev-files/${id}/password?userId=${currentUser.id}`);
+          const data = await res.json();
+          if (!res.ok) { showToast('Hata: ' + (data.error || 'Şifre alınamadı.'), 'error'); return; }
+          box.textContent = `Şifre: ${data.password}`;
+          box.dataset.loaded = '1';
+        } catch (err) {
+          console.error('Şifre alınamadı:', err);
+          showToast('Şifre alınırken bir hata oluştu.', 'error');
+          return;
+        }
+      }
+      box.classList.remove('hidden');
     }
 
     function handleUploadDevFile(event) {
@@ -9357,7 +9384,7 @@
       const description = document.getElementById('devFileDescription').value.trim();
 
       if (!file) { showToast('Lütfen bir dosya seçin.', 'error'); return; }
-      if (file.size > 10 * 1024 * 1024) { showToast('Dosya boyutu 10MB sınırını aşıyor.', 'error'); return; }
+      if (file.size > 50 * 1024 * 1024) { showToast('Dosya boyutu 50MB sınırını aşıyor.', 'error'); return; }
       if (!password || password.length < 4) { showToast('Şifre en az 4 karakter olmalıdır.', 'error'); return; }
 
       const uploadBtn = document.getElementById('devFileUploadBtn');
