@@ -818,9 +818,10 @@
               </div>
             </div>
 
-            <!-- ADMİN/İK İÇİN: PROJE → (o projeye görevlendirilenlerin) BİRİMİ → KİŞİ akışı; ayrıca
-                 ayrı bir "Sadece Stajyerler" modu (toggle butonlu) — bu açıkken proje/birim/kişi
-                 seçiciler devre dışı kalır, yerine stajyer isimleri toggle buton olarak listelenir. -->
+            <!-- ADMİN/İK/MÜDÜR/EKİP LİDERİ İÇİN: PROJE → (o projeye görevlendirilenlerin) BİRİMİ →
+                 KİŞİ akışı; ayrıca ayrı bir "Sadece Stajyerler" modu (toggle butonlu) — bu açıkken
+                 proje/birim/kişi seçiciler devre dışı kalır, yerine stajyer isimleri toggle buton
+                 olarak listelenir (Müdür/Ekip Lideri için bu liste kendi birimiyle sınırlı kalır). -->
             <div id="adminTaskFilterWrap" class="hidden bg-cyan-50/60 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900/50 rounded-xl p-3 space-y-3">
               <label class="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer select-none w-fit">
                 <input type="checkbox" id="adminInternModeToggle" onchange="toggleAdminInternMode(this.checked)" class="accent-cyan-600 w-4 h-4">
@@ -9181,14 +9182,20 @@
       if (typeof loadTeamProgress === 'function') loadTeamProgress();
     }
 
+    // Müdür/Ekip Lideri "Görevler" kutucuğu artık kendi sade sayfası (leaderTasksPageSection —
+    // hâlâ Mühendis'in openEngineerTasksPage'i tarafından kullanılıyor) yerine, Admin/İK'nın
+    // kullandığı aynı "tasksDropdown" sayfasını açar: Proje → Birim → Kişi kademeli filtresi,
+    // "Sadece Stajyerler" modu (kendi birimiyle sınırlı) ve varsayılan kapalı gelen Aktif/Geçmiş
+    // bölümleri Müdür/Ekip Lideri için de aynı şekilde çalışsın diye (bkz. populateAdminTaskFilters).
     function openLeaderTasksPage() {
-      const home = document.getElementById('leaderSection');
-      if (home) home.classList.add('hidden');
-      const section = document.getElementById('leaderTasksPageSection');
-      if (section) section.classList.remove('hidden');
-      populateLeaderTasksRoleFilter();
-      populateTaskBoxPersonToggle();
-      renderLeaderTasksPage();
+      openModalAsPage('tasksDropdown', () => {
+        const modal = document.getElementById('tasksDropdown');
+        if (modal) modal.classList.remove('hidden');
+        if (typeof loadTasks === 'function') loadTasks();
+        if (typeof populateAdminTaskFilters === 'function') populateAdminTaskFilters();
+        if (typeof populateLeaderTaskFilter === 'function') populateLeaderTaskFilter();
+        if (typeof collapseTaskSections === 'function') collapseTaskSections();
+      }, 'leaderSection');
     }
 
     // ============================================================
@@ -10605,14 +10612,17 @@
     // "Yeni Görev Atama" formundaki Alt Alan seçicisi için alt alan önbelleği (bkz. renderTaskAssignSubAreaOptions)
     let adminTaskFilterSubareas = null;
 
-    // Admin/İK ise Proje → Birim → Kişi akışını (ve "Sadece Stajyerler" toggle'ını) gösterir ve doldurur; değilse gizli kalır
+    // Admin/İK/Müdür/Ekip Lideri ise Proje → Birim → Kişi akışını (ve "Sadece Stajyerler" toggle'ını)
+    // gösterir ve doldurur; değilse gizli kalır. Müdür/Ekip Lideri zaten kendi birimiyle sınırlı
+    // olduğundan (bkz. loadTasks'taki department parametresi) Proje/Birim/Kişi seçenekleri otomatik
+    // olarak sadece kendi biriminin verisini yansıtır — ek bir kapsam sızıntısı olmaz.
     async function populateAdminTaskFilters() {
       const wrap = document.getElementById('adminTaskFilterWrap');
       if (!wrap) return;
 
-      const isAdmin = currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'HR');
-      wrap.classList.toggle('hidden', !isAdmin);
-      if (!isAdmin) return;
+      const canUseAdminTaskFilters = currentUser && ['ADMIN', 'HR', 'MANAGER', 'LEADER'].includes(currentUser.role);
+      wrap.classList.toggle('hidden', !canUseAdminTaskFilters);
+      if (!canUseAdminTaskFilters) return;
 
       // Her açılışta "Sadece Stajyerler" modu kapalı başlar, Proje/Birim/Kişi akışı görünür olur.
       const internToggle = document.getElementById('adminInternModeToggle');
@@ -10716,8 +10726,10 @@
     function populateAdminInternToggle() {
       const toggle = document.getElementById('adminInternToggle');
       if (!toggle) return;
+      // Müdür/Ekip Lideri için stajyer listesi kendi birimiyle sınırlanır (Admin/İK için sınır yok)
+      const isDeptLocked = currentUser && ['MANAGER', 'LEADER'].includes(currentUser.role);
       const interns = (usersList || [])
-        .filter(u => u.role === 'INTERN' && (!u.status || u.status === 'APPROVED'))
+        .filter(u => u.role === 'INTERN' && (!u.status || u.status === 'APPROVED') && (!isDeptLocked || u.department === currentUser.department))
         .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
 
       const validValues = ['', ...interns.map(u => String(u.id))];
@@ -10837,16 +10849,19 @@
     }
 
     // "Görevler" alanında gösterilecek görevler:
-    // - Kendisine ATANMAMIŞ olacak (kendi görevleri "Görevlerim" alanında)
+    // - Kendisine ATANMAMIŞ olacak (kendi görevleri "Görevlerim" alanında) — Müdür/Ekip Lideri
+    //   istisna: onların ayrı bir "Görevlerim" kutucuğu olmadığından, kendilerine atanan görevler de
+    //   burada (ekip görevleriyle birlikte) görünür; "Görevler" onlar için tek görev ekranı.
     // - Atanan kişinin rolü, mevcut kullanıcının bir ALT rolü olacak (rol sıralaması)
     // - Admin herkesin görevini görür
     function getVisibleTeamTasks() {
       if (!currentUser) return [];
       const isAdmin = currentUser.role === 'ADMIN' || currentUser.role === 'HR';
+      const includeOwnTasks = ['MANAGER', 'LEADER'].includes(currentUser.role);
       const subRoles = getSubordinateRoles(currentUser.role); // örn. LEADER -> [ENGINEER, TECHNICIAN, INTERN]
 
       return (tasksList || []).filter(t => {
-        if (t.assigned_to == currentUser.id) return false; // kendi görevi değil
+        if (t.assigned_to == currentUser.id) return includeOwnTasks; // kendi görevi (bkz. yukarı)
         if (isAdmin) return true; // Admin/İK: kendine hatırlatma amaçlı görevler dahil, herkesin tüm görevlerini görür
         // Stajyerin kendine hatırlatma amaçlı eklediği görevler (oluşturan = atanan kişi) yalnızca
         // kendi panelinde (Görevlerim) görünür; yöneticilerin "Görevler" (ekip) listesine sızmaz.
@@ -10871,9 +10886,10 @@
       const filterStatActive = document.getElementById('filterStatusActive')?.value || '';
       const filterStatPast = document.getElementById('filterStatusPast')?.value || '';
 
-      // Admin/İK için: "Sadece Stajyerler" modu açıksa stajyer(ler)e daralt; kapalıysa
-      // Proje → Birim → Kişi akışına göre filtrele. Ekip Lideri/Müdür için: kendi biriminde rol filtresi.
-      const isAdminFilter = currentUser && (currentUser.role === 'ADMIN' || currentUser.role === 'HR');
+      // Admin/İK/Müdür/Ekip Lideri için: "Sadece Stajyerler" modu açıksa stajyer(ler)e daralt;
+      // kapalıysa Proje → Birim → Kişi akışına göre filtrele. Ekip Lideri/Müdür için AYRICA (bu
+      // ikisiyle birlikte, AND'lenerek) kendi biriminde rol filtresi de uygulanır.
+      const isAdminFilter = currentUser && ['ADMIN', 'HR', 'MANAGER', 'LEADER'].includes(currentUser.role);
       const isLeaderFilter = currentUser && ['LEADER', 'MANAGER'].includes(currentUser.role);
       const filterRole = isLeaderFilter ? (leaderTaskFilterRole || '') : '';
       const filterProject = (isAdminFilter && !adminInternModeOn) ? (document.getElementById('filterAdminProject')?.value || '') : '';
@@ -10913,19 +10929,23 @@
       if (ac) ac.textContent = activeTasks.length;
       if (pc) pc.textContent = pastTasks.length;
 
-      // Bu alandaki görevler başkasına ait; yönetim yetkisi olanlar (üst roller/admin) müdahale edebilir
-      const isManager = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role);
+      // Bu alandaki görevler genelde başkasına ait; yönetim yetkisi olanlar (üst roller/admin)
+      // müdahale edebilir. Müdür/Ekip Lideri'nin KENDİ görevi de bu listeye dahil olduğundan (bkz.
+      // getVisibleTeamTasks), isManager kişi bazında hesaplanır — yoksa kendi görevinde de
+      // Onayla/Revize Et gibi yönetici butonlarını (kendine) görürlerdi.
+      const canManageRole = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role);
+      const isManagerFor = (task) => canManageRole && task.assigned_to != currentUser.id;
 
       if (activeTasks.length === 0) {
         container.innerHTML = `<div class="text-xs text-slate-500">Görev bulunmamaktadır.</div>`;
       } else {
-        activeTasks.forEach(task => container.appendChild(createTaskCard(task, false, isManager)));
+        activeTasks.forEach(task => container.appendChild(createTaskCard(task, false, isManagerFor(task))));
       }
 
       if (pastTasks.length === 0) {
         pastContainer.innerHTML = `<div class="text-xs text-slate-500">Geçmiş/Tamamlanan görev kaydı bulunmuyor.</div>`;
       } else {
-        pastTasks.forEach(task => pastContainer.appendChild(createTaskCard(task, true, isManager)));
+        pastTasks.forEach(task => pastContainer.appendChild(createTaskCard(task, true, isManagerFor(task))));
       }
     }
 
