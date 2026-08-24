@@ -2874,12 +2874,18 @@ app.post('/api/dev-files', async (req, res) => {
   }
 });
 
-// Dosyaları listele (şifre ve içerik hariç, sadece meta veriler)
+// Dosyaları listele (şifre ve içerik hariç, sadece meta veriler). Yükleyenin birimi/alt alanı,
+// arayüzdeki "önce birime, sonra kişiye göre filtrele" akışı için users tablosundan join edilir.
 app.get('/api/dev-files', async (req, res) => {
   try {
-    const r = await db.execute(
-      `SELECT id, file_name, mime_type, file_size, description, uploaded_by, uploaded_by_id, created_at FROM dev_files ORDER BY id DESC`
-    );
+    const r = await db.execute(`
+      SELECT df.id, df.file_name, df.mime_type, df.file_size, df.description, df.uploaded_by,
+             df.uploaded_by_id, df.created_at, u.department AS uploaded_by_department,
+             u.sub_area AS uploaded_by_sub_area
+      FROM dev_files df
+      LEFT JOIN users u ON u.id = df.uploaded_by_id
+      ORDER BY df.id DESC
+    `);
     res.json(r.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });

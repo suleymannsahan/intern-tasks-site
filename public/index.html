@@ -1968,9 +1968,23 @@
               </div>
             </form>
 
-            <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Yüklenen Dosyalar</span>
+            <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Yüklenen Dosyalar</span>
+              <div class="flex items-center gap-2">
+                <select id="devFilesDeptFilter" onchange="onDevFilesDeptFilterChange()" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-cyan-500">
+                  <option value="">Tüm Birimler</option>
+                  <option value="ELEKTRONIK">Elektronik</option>
+                  <option value="MEKANIK">Mekanik</option>
+                  <option value="YAZILIM">Yazılım</option>
+                </select>
+                <select id="devFilesUserFilter" onchange="renderDevFilesList()" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-cyan-500">
+                  <option value="">Tüm Kişiler</option>
+                </select>
+              </div>
+            </div>
             <div id="devFilesList" class="mt-2 space-y-1.5"></div>
             <p id="devFilesEmptyHint" class="hidden text-xs text-slate-400 text-center py-6">Henüz yüklenmiş dosya yok.</p>
+            <p id="devFilesNoMatchHint" class="hidden text-xs text-slate-400 text-center py-6">Bu filtreye uygun dosya yok.</p>
           </div>
         </section>
 
@@ -9238,6 +9252,7 @@
     // ============================================================
     const DEV_FILES_HOME_SECTIONS = ['leaderSection', 'adminHomeSection', 'engineerHomeSection', 'technicianHomeSection', 'internHomeSection'];
     let pendingDevFileDownload = null; // { id, fileName }
+    let devFilesCache = []; // son çekilen tam liste; birim/kişi filtreleri bunun üzerinde client-side çalışır
 
     function openDevFilesPage() {
       DEV_FILES_HOME_SECTIONS.forEach(id => {
@@ -9248,6 +9263,8 @@
       if (section) section.classList.remove('hidden');
       const form = document.querySelector('#devFilesPageSection form');
       if (form) form.reset();
+      const deptFilter = document.getElementById('devFilesDeptFilter');
+      if (deptFilter) deptFilter.value = '';
       loadDevFiles();
     }
 
@@ -9258,18 +9275,57 @@
     }
 
     async function loadDevFiles() {
-      const listEl = document.getElementById('devFilesList');
-      const emptyHint = document.getElementById('devFilesEmptyHint');
-      if (!listEl) return;
-      let files = [];
       try {
         const res = await fetch(`${API_BASE_URL}/api/dev-files`);
-        if (res.ok) files = await res.json();
+        devFilesCache = res.ok ? await res.json() : [];
       } catch (err) {
         console.error('Dosyalar alınamadı:', err);
+        devFilesCache = [];
       }
+      onDevFilesDeptFilterChange();
+    }
 
-      if (emptyHint) emptyHint.classList.toggle('hidden', files.length > 0);
+    // Birim filtresi değişince, o birime uygun kişileri "Kişi" seçicisine yeniden doldurur
+    // (seçili kişi artık listede yoksa filtre "Tüm Kişiler"e döner) ve listeyi tazeler.
+    function onDevFilesDeptFilterChange() {
+      const dept = document.getElementById('devFilesDeptFilter').value;
+      const userFilter = document.getElementById('devFilesUserFilter');
+      const prevSelected = userFilter.value;
+
+      const inDept = devFilesCache.filter(f => !dept || f.uploaded_by_department === dept);
+      const uniqueUploaders = [];
+      const seen = new Set();
+      inDept.forEach(f => {
+        if (f.uploaded_by_id != null && !seen.has(f.uploaded_by_id)) {
+          seen.add(f.uploaded_by_id);
+          uniqueUploaders.push({ id: f.uploaded_by_id, name: f.uploaded_by || '(İsimsiz)' });
+        }
+      });
+      uniqueUploaders.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+
+      userFilter.innerHTML = '<option value="">Tüm Kişiler</option>'
+        + uniqueUploaders.map(u => `<option value="${u.id}">${escapeHtmlProj(u.name)}</option>`).join('');
+      userFilter.value = uniqueUploaders.some(u => String(u.id) === prevSelected) ? prevSelected : '';
+
+      renderDevFilesList();
+    }
+
+    function renderDevFilesList() {
+      const listEl = document.getElementById('devFilesList');
+      const emptyHint = document.getElementById('devFilesEmptyHint');
+      const noMatchHint = document.getElementById('devFilesNoMatchHint');
+      if (!listEl) return;
+
+      const dept = document.getElementById('devFilesDeptFilter').value;
+      const userId = document.getElementById('devFilesUserFilter').value;
+      const files = devFilesCache.filter(f => {
+        if (dept && f.uploaded_by_department !== dept) return false;
+        if (userId && String(f.uploaded_by_id) !== userId) return false;
+        return true;
+      });
+
+      if (emptyHint) emptyHint.classList.toggle('hidden', devFilesCache.length > 0);
+      if (noMatchHint) noMatchHint.classList.toggle('hidden', !(devFilesCache.length > 0 && files.length === 0));
 
       const canManage = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role);
       listEl.innerHTML = files.map(f => {
