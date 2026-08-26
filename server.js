@@ -15,9 +15,10 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-// Varsayılan 100kb sınırı, base64'e çevrilmiş görev belgesi yüklemeleri (10MB'a kadar dosya,
-// base64 sonrası ~13-14MB JSON gövdesi) için yetersiz kalıyordu — 15mb'a çıkarıldı.
-app.use(express.json({ limit: '15mb' }));
+// Varsayılan 100kb sınırı, base64'e çevrilmiş dosya yüklemeleri için yetersiz kalıyordu.
+// Geliştirmeler alanındaki 50MB'lık dosya sınırı, base64 sonrası ~67MB'a şişebiliyor —
+// buna JSON gövdesinin geri kalanı için de pay bırakarak 70mb'a çıkarıldı.
+app.use(express.json({ limit: '70mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Turso Bulut Veritabanı Bağlantısı
@@ -472,6 +473,10 @@ async function initDb() {
         FOREIGN KEY(intern_id) REFERENCES users(id)
       )
     `);
+    // session_type: 'office' (varsayılan, Geolocation ile) veya 'remote-vpn' (VPN watcher ile).
+    // client_ip: uzaktan oturumlarda WireGuard tünel IP'si; kimin bağlandığını doğrulamaya yardımcı olur.
+    try { await db.execute(`ALTER TABLE attendance_logs ADD COLUMN session_type TEXT DEFAULT 'office'`); } catch (e) {}
+    try { await db.execute(`ALTER TABLE attendance_logs ADD COLUMN client_ip TEXT`); } catch (e) {}
 
     // ============================================================
     // SİSTEM AYARLARI: basit key-value deposu (Admin/İK "Ayarlar" paneli). Değerler her zaman
@@ -522,6 +527,30 @@ async function initDb() {
         FOREIGN KEY(user_id) REFERENCES users(id)
       )
     `);
+
+    // ============================================================
+    // GELİŞTİRMELER: ana ekrandaki şifreli dosya paylaşım alanı. Herkes dosya yükleyip kendi
+    // belirlediği bir şifre koyabilir; dosyayı indirmek isteyen bu şifreyi girmek zorundadır.
+    // Diğer base64 tablolarıyla aynı sebepten (kalıcı disk yok) içerik veritabanında tutulur.
+    // ============================================================
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS dev_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_name TEXT NOT NULL,
+        mime_type TEXT,
+        file_size INTEGER,
+        file_data TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        description TEXT,
+        uploaded_by TEXT,
+        uploaded_by_id INTEGER,
+        created_at TEXT NOT NULL
+      )
+    `);
+    // password_plain: yükleyen kişi kendi koyduğu şifreyi daha sonra tekrar görebilsin diye
+    // (bcrypt hash geri döndürülemediği için) düz metin olarak da tutulur — sadece dosyanın
+    // sahibine, /api/dev-files/:id/password ile döndürülür.
+    try { await db.execute(`ALTER TABLE dev_files ADD COLUMN password_plain TEXT`); } catch (e) {}
 
     console.log('Turso bulut veritabanı tabloları hazır.');
   } catch (err) {
@@ -2986,6 +3015,123 @@ app.delete('/api/attachments/:id', async (req, res) => {
   }
 });
 
+// ============================================================
+// GELİŞTİRMELER: ana ekrandaki şifreli dosya paylaşım alanı (bkz. initDb'deki dev_files
+// tablosu yorumu). Şifre bcrypt ile hashlenip tutulur, indirme öncesi karşılaştırılır.
+// ============================================================
+const DEV_FILE_MAX_BYTES = 50 * 1024 * 1024; // 50MB
+
+// Dosya yükle — şifreyi yükleyen kişi kendisi belirler, dosya türünde herhangi bir kısıtlama yoktur
+app.post('/api/dev-files', async (req, res) => {
+  try {
+    const { fileName, mimeType, fileData, password, description, userId, userName } = req.body;
+
+    if (!fileName || !fileData) {
+      return res.status(400).json({ error: 'Dosya adı ve içeriği gereklidir.' });
+    }
+    if (!password || String(password).length < 4) {
+      return res.status(400).json({ error: 'Şifre en az 4 karakter olmalıdır.' });
+    }
+
+    const approxBytes = Math.ceil((fileData.length * 3) / 4);
+    if (approxBytes > DEV_FILE_MAX_BYTES) {
+      return res.status(400).json({ error: 'Dosya boyutu 50MB sınırını aşıyor.' });
+    }
+
+    const passwordHash = await bcrypt.hash(String(password), 10);
+
+    const result = await db.execute({
+      sql: `INSERT INTO dev_files (file_name, mime_type, file_size, file_data, password_hash, password_plain, description, uploaded_by, uploaded_by_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [fileName, mimeType || null, approxBytes, fileData, passwordHash, String(password), description || null, userName || null, userId || null, nowTurkeyLocal()]
+    });
+
+    res.json({ id: Number(result.lastInsertRowid), message: 'Dosya yüklendi.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Dosya yüklenemedi: ' + error.message });
+  }
+});
+
+// Dosyaları listele (şifre ve içerik hariç, sadece meta veriler). Yükleyenin birimi/alt alanı,
+// arayüzdeki "önce birime, sonra kişiye göre filtrele" akışı için users tablosundan join edilir.
+app.get('/api/dev-files', async (req, res) => {
+  try {
+    const r = await db.execute(`
+      SELECT df.id, df.file_name, df.mime_type, df.file_size, df.description, df.uploaded_by,
+             df.uploaded_by_id, df.created_at, u.department AS uploaded_by_department,
+             u.sub_area AS uploaded_by_sub_area
+      FROM dev_files df
+      LEFT JOIN users u ON u.id = df.uploaded_by_id
+      ORDER BY df.id DESC
+    `);
+    res.json(r.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Yüklediğim dosyanın şifresini geri göster — sadece dosyanın sahibi görebilir
+app.get('/api/dev-files/:id/password', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: 'userId gereklidir.' });
+
+    const r = await db.execute({ sql: `SELECT uploaded_by_id, password_plain FROM dev_files WHERE id = ?`, args: [req.params.id] });
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Dosya bulunamadı.' });
+
+    const file = r.rows[0];
+    if (Number(file.uploaded_by_id) !== Number(userId)) {
+      return res.status(403).json({ error: 'Sadece dosyayı yükleyen kişi şifresini görebilir.' });
+    }
+    if (!file.password_plain) {
+      return res.status(404).json({ error: 'Bu dosya için kayıtlı şifre bulunamadı.' });
+    }
+
+    res.json({ password: file.password_plain });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Dosyayı indir — doğru şifre gerekir
+app.post('/api/dev-files/:id/download', async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Şifre gereklidir.' });
+
+    const r = await db.execute({ sql: `SELECT * FROM dev_files WHERE id = ?`, args: [req.params.id] });
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Dosya bulunamadı.' });
+    const file = r.rows[0];
+
+    const validPassword = await bcrypt.compare(String(password), file.password_hash);
+    if (!validPassword) return res.status(403).json({ error: 'Şifre hatalı.' });
+
+    const buffer = Buffer.from(file.file_data, 'base64');
+    res.setHeader('Content-Type', file.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.file_name)}"`);
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Dosya sil — yükleyen kişi ya da yönetici rolleri
+app.delete('/api/dev-files/:id', async (req, res) => {
+  try {
+    const { userId, userRole } = req.body;
+    const r = await db.execute({ sql: `SELECT uploaded_by_id FROM dev_files WHERE id = ?`, args: [req.params.id] });
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Dosya bulunamadı.' });
+
+    const isOwner = Number(r.rows[0].uploaded_by_id) === Number(userId);
+    const isManager = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(userRole);
+    if (!isOwner && !isManager) return res.status(403).json({ error: 'Bu dosyayı silme yetkiniz yok.' });
+
+    await db.execute({ sql: `DELETE FROM dev_files WHERE id = ?`, args: [req.params.id] });
+    res.json({ message: 'Dosya silindi.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Stajyer Silme
 app.delete('/api/users/:id', async (req, res) => {
   try {
@@ -3933,6 +4079,102 @@ app.get('/api/attendance/team', async (req, res) => {
     res.json(r.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
+// UZAKTAN ÇALIŞMA (VPN) GİRİŞ/ÇIKIŞ TAKİBİ
+// Ofis dışında VPN üzerinden bağlanan stajyerler için check-in/check-out, tarayıcıdan değil
+// VPN sunucusundaki bir watcher script'inden (bkz. vpn/watcher.js) gelir. Bu yüzden kimlik
+// doğrulama kullanıcı oturumu yerine paylaşılan bir "secret" ile yapılır — aynı SHEET_SYNC_SECRET
+// deseni (bkz. yukarısı), çünkü bu da sunucudan sunucuya bir çağrı.
+// ============================================================
+const VPN_WATCHER_SECRET = process.env.VPN_WATCHER_SECRET;
+
+function checkVpnWatcherSecret(req, res) {
+  if (!VPN_WATCHER_SECRET) {
+    res.status(500).json({ error: 'VPN_WATCHER_SECRET ortam değişkeni tanımlı değil.' });
+    return false;
+  }
+  const provided = req.body.secret;
+  if (!provided || provided !== VPN_WATCHER_SECRET) {
+    res.status(403).json({ error: 'Geçersiz secret.' });
+    return false;
+  }
+  return true;
+}
+
+// Watcher, bir stajyerin WireGuard peer'ı "bağlandı" durumuna geçtiğinde bunu çağırır.
+app.post('/api/attendance/vpn-checkin', async (req, res) => {
+  try {
+    if (!checkVpnWatcherSecret(req, res)) return;
+    const { internId, clientIp } = req.body;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+
+    const openRes = await db.execute({
+      sql: `SELECT id FROM attendance_logs WHERE intern_id = ? AND check_out_at IS NULL`,
+      args: [internId]
+    });
+    if (openRes.rows.length > 0) {
+      // Zaten açık bir oturum var (ör. ofisten giriş yapılmış) — tekrar satır açma.
+      return res.json({ skipped: true, reason: 'already-open' });
+    }
+
+    const now = nowTurkeyLocal();
+    const result = await db.execute({
+      sql: `INSERT INTO attendance_logs (intern_id, check_in_at, session_type, client_ip) VALUES (?, ?, 'remote-vpn', ?)`,
+      args: [internId, now, clientIp || null]
+    });
+
+    try {
+      const uRes = await db.execute({ sql: `SELECT name, engineer_id FROM users WHERE id = ?`, args: [internId] });
+      const intern = uRes.rows[0];
+      if (intern && intern.engineer_id) {
+        const timeLabel = now.substring(11, 16);
+        await createNotification(intern.engineer_id, 'ATTENDANCE_CHECKIN', 'ATTENDANCE', 'Stajyer VPN ile Giriş Yaptı', `${intern.name} ${timeLabel}'de VPN üzerinden bağlandı.`, Number(result.lastInsertRowid));
+      }
+    } catch (notifErr) { console.error('VPN giriş bildirimi hatası:', notifErr.message); }
+
+    res.json({ id: Number(result.lastInsertRowid), checkInAt: now });
+  } catch (error) {
+    res.status(500).json({ error: 'VPN girişi kaydedilemedi: ' + error.message });
+  }
+});
+
+// Watcher, peer'ın handshake'i belirli bir süre yenilenmeyip "koptu" sayıldığında bunu çağırır.
+app.post('/api/attendance/vpn-checkout', async (req, res) => {
+  try {
+    if (!checkVpnWatcherSecret(req, res)) return;
+    const { internId } = req.body;
+    if (!internId) return res.status(400).json({ error: 'internId gerekli.' });
+
+    const openRes = await db.execute({
+      sql: `SELECT id FROM attendance_logs WHERE intern_id = ? AND check_out_at IS NULL AND session_type = 'remote-vpn' ORDER BY id DESC LIMIT 1`,
+      args: [internId]
+    });
+    if (openRes.rows.length === 0) {
+      return res.json({ skipped: true, reason: 'no-open-vpn-session' });
+    }
+    const logId = openRes.rows[0].id;
+
+    const now = nowTurkeyLocal();
+    await db.execute({
+      sql: `UPDATE attendance_logs SET check_out_at = ? WHERE id = ?`,
+      args: [now, logId]
+    });
+
+    try {
+      const uRes = await db.execute({ sql: `SELECT name, engineer_id FROM users WHERE id = ?`, args: [internId] });
+      const intern = uRes.rows[0];
+      if (intern && intern.engineer_id) {
+        const timeLabel = now.substring(11, 16);
+        await createNotification(intern.engineer_id, 'ATTENDANCE_CHECKOUT', 'ATTENDANCE', 'Stajyer VPN Bağlantısı Sonlandı', `${intern.name} ${timeLabel}'de VPN bağlantısı kesildi.`, logId);
+      }
+    } catch (notifErr) { console.error('VPN çıkış bildirimi hatası:', notifErr.message); }
+
+    res.json({ id: logId, checkOutAt: now });
+  } catch (error) {
+    res.status(500).json({ error: 'VPN çıkışı kaydedilemedi: ' + error.message });
   }
 });
 
