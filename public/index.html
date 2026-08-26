@@ -1080,6 +1080,10 @@
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-stamp"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
               </button>
+              <button type="button" onclick="openLioxerpTalepFormPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-invoice"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Talep Formları (LioXERP)</span>
+              </button>
             </div>
 
             <!-- SAĞ TARAF: hatırlatıcılar (mobilde en üstte / admin-İK'de çalışan sayılarının hemen altında görünür) -->
@@ -1397,6 +1401,25 @@
               </div>
               <div id="reportPersonnelSummary" class="grid grid-cols-2 gap-2"></div>
               <div id="reportPersonnelTable" class="overflow-x-auto scroll-panel max-h-[400px]"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ADMİN/İK: LioXERP TALEP FORMLARI (Uyumsoft ERP'den çekilen liste) -->
+        <section id="lioxerpTalepFormPageSection" class="hidden space-y-6">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-3">
+              <button type="button" onclick="closeLeaderSubPage()" class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-500 hover:border-cyan-500 transition-all">
+                <i class="fa-solid fa-arrow-left"></i>
+              </button>
+              <span class="flex items-center gap-2"><i class="fa-solid fa-file-invoice text-cyan-500"></i> Talep Formları (LioXERP)</span>
+            </h3>
+            <button type="button" onclick="loadLioxerpTalepFormlari()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shrink-0"><i class="fa-solid fa-rotate me-1.5"></i>Yenile</button>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">LioXERP sisteminden (Uyumsoft ERP) canlı olarak çekilen Talep Formu kayıtları — son ~25 yıllık kayıtlar arasından, sistemde bulunan tüm kayıtlar listelenir.</p>
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+            <div id="lioxerpTalepFormTable" class="overflow-x-auto scroll-panel max-h-[65vh]">
+              <p class="text-xs text-slate-400 text-center py-8">Yükleniyor...</p>
             </div>
           </div>
         </section>
@@ -8610,6 +8633,8 @@
       if (settingsPageSec) settingsPageSec.classList.add('hidden');
       const reportsPageSec = document.getElementById('reportsPageSection');
       if (reportsPageSec) reportsPageSec.classList.add('hidden');
+      const lioxerpTalepFormPageSec = document.getElementById('lioxerpTalepFormPageSection');
+      if (lioxerpTalepFormPageSec) lioxerpTalepFormPageSec.classList.add('hidden');
       const adminStatusPageSec = document.getElementById('adminStatusPageSection');
       if (adminStatusPageSec) adminStatusPageSec.classList.add('hidden');
       const engineerProjectsPageSec = document.getElementById('engineerProjectsPageSection');
@@ -9362,6 +9387,63 @@
       if (home) home.classList.add('hidden');
       const section = document.getElementById('reportsPageSection');
       if (section) section.classList.remove('hidden');
+    }
+
+    // LioXERP (Uyumsoft ERP) entegrasyonu: sunucu ortak bir servis hesabıyla otomatik giriş yapıp
+    // "Talep Formu" listesini çeker (bkz. server.js /api/lioxerp/talep-formlari) — kullanıcının
+    // kendi LioXERP bilgilerine ihtiyaç yoktur.
+    function openLioxerpTalepFormPage() {
+      const home = document.getElementById('adminHomeSection');
+      if (home) home.classList.add('hidden');
+      const section = document.getElementById('lioxerpTalepFormPageSection');
+      if (section) section.classList.remove('hidden');
+      loadLioxerpTalepFormlari();
+    }
+
+    async function loadLioxerpTalepFormlari() {
+      const container = document.getElementById('lioxerpTalepFormTable');
+      if (!container || !currentUser) return;
+      container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Yükleniyor...</p>`;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/lioxerp/talep-formlari?userRole=${currentUser.role}`);
+        const data = await safeJson(res);
+        if (!res.ok) {
+          container.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">${escapeHtmlProj((data && data.error) || 'Veri alınamadı.')}</p>`;
+          return;
+        }
+        if (!Array.isArray(data) || data.length === 0) {
+          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Kayıt bulunamadı.</p>`;
+          return;
+        }
+        const rowsHtml = data.map(r => `
+          <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+            <td class="px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">${escapeHtmlProj(r.DocNo || '-')}</td>
+            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.DocDate || '-')}</td>
+            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300">${escapeHtmlProj(r.BranchDesc || '-')}</td>
+            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300">${escapeHtmlProj(r.DocTraDesc || '-')}</td>
+            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.RequestUserName || '-')}</td>
+            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.WhouseDesc || '-')}</td>
+          </tr>
+        `).join('');
+        container.innerHTML = `
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-50 dark:bg-slate-800/80 sticky top-0">
+              <tr>
+                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Belge No</th>
+                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Belge Tarihi</th>
+                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">İşyeri</th>
+                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Hareket</th>
+                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Talep Eden</th>
+                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Depo</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        `;
+      } catch (err) {
+        container.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">Sunucu ile iletişim kurulamadı.</p>`;
+        console.error('LioXERP talep formu hatası:', err);
+      }
     }
 
     function openAdminTasksPage() {

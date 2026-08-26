@@ -7,6 +7,9 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const gcal = require('./googleCalendar');
 const ai = require('./ai');
+const http = require('http');
+const https = require('https');
+const { URL } = require('url');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -1438,10 +1441,179 @@ app.post('/api/tasks', async (req, res) => {
   }
 });
 
+// ============================================================
+// LioXERP ENTEGRASYONU (Uyumsoft ERP — "Talep Formu" listesi): LioXERP'in resmi/dokümante bir REST
+// API'si olmadığından (eski nesil ASP.NET WebForms + DevExpress ASPxGridView arayüzü), giriş ve
+// liste sayfası, tarayıcının kendisinin yaptığı istekler taklit edilerek elde edilir. Ortak bir
+// servis hesabı (.env: LIOXERP_USERNAME/PASSWORD) kullanılır — bireysel kullanıcı girişleri değil.
+// Oturum çerezi bir süre bellekte tutulur; düşerse otomatik olarak yeniden giriş yapılır.
+// ============================================================
+const LIOXERP_BASE_URL = process.env.LIOXERP_BASE_URL || 'http://154.53.161.123';
+const LIOXERP_USERNAME = process.env.LIOXERP_USERNAME;
+const LIOXERP_PASSWORD = process.env.LIOXERP_PASSWORD;
+
+function lioxerpRequest(pathAndQuery, method, headers, body) {
+  return new Promise((resolve, reject) => {
+    const base = new URL(LIOXERP_BASE_URL);
+    const mod = base.protocol === 'https:' ? https : http;
+    const req = mod.request({
+      hostname: base.hostname,
+      port: base.port || (base.protocol === 'https:' ? 443 : 80),
+      path: pathAndQuery,
+      method,
+      headers
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, body: data }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+function lioxerpCookieHeaderFrom(setCookieArray) {
+  return (setCookieArray || []).map(c => c.split(';')[0]).join('; ');
+}
+
+// Bir ASP.NET WebForms sayfasındaki tüm gizli (hidden) alanları (ör. __VIEWSTATE) okur — bu sayfayı
+// olduğu gibi geri göndermek (postback) için gereklidir.
+// Türkçe karakterler bu sayfalarda sayısal HTML karakter referansı olarak gelir (ör. &#199; = Ç).
+function lioxerpDecodeHtml(str) {
+  return String(str || '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+    .trim();
+}
+
+function lioxerpExtractHiddenFields(html) {
+  const fields = {};
+  const re = /<input[^>]*type="hidden"[^>]*>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    const tag = m[0];
+    const nameMatch = tag.match(/name="([^"]+)"/);
+    const valueMatch = tag.match(/value="([^"]*)"/);
+    if (nameMatch) {
+      fields[nameMatch[1]] = valueMatch ? lioxerpDecodeHtml(valueMatch[1]) : '';
+    }
+  }
+  return fields;
+}
+
+// LioXERP'e giriş yapıp o oturuma ait çerezi döner (tarayıcıdaki gerçek giriş isteğinin birebir
+// aynısı: POST /login.aspx/LogIn, JSON gövde).
+async function lioxerpLogin() {
+  if (!LIOXERP_USERNAME || !LIOXERP_PASSWORD) {
+    throw new Error('LIOXERP_USERNAME / LIOXERP_PASSWORD tanımlı değil (.env dosyasını kontrol edin).');
+  }
+  const homeRes = await lioxerpRequest('/login.aspx', 'GET', {});
+  const sessionCookie = lioxerpCookieHeaderFrom(homeRes.headers['set-cookie']);
+
+  const loginPayload = JSON.stringify({ username: LIOXERP_USERNAME, password: LIOXERP_PASSWORD, captchacode: null, ldap: false });
+  const loginRes = await lioxerpRequest('/login.aspx/LogIn', 'POST', {
+    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    'Content-Length': Buffer.byteLength(loginPayload),
+    'Cookie': sessionCookie
+  }, loginPayload);
+
+  let loggedIn = false;
+  try { loggedIn = JSON.parse(JSON.parse(loginRes.body).d).LoggedIn === true; } catch (e) {}
+  if (!loggedIn) throw new Error('LioXERP girişi başarısız oldu (kullanıcı adı/şifre veya sunucu adresini kontrol edin).');
+
+  return sessionCookie;
+}
+
+// Aktif oturum çerezini döner; yoksa/geçersiz sayılırsa yeni bir giriş yapar. Aynı anda birden
+// fazla istek gelirse tek bir girişin paylaşılması için promise önbelleğe alınır.
+let lioxerpSessionCookie = null;
+let lioxerpLoginPromise = null;
+async function lioxerpGetSession(forceNew) {
+  if (!forceNew && lioxerpSessionCookie) return lioxerpSessionCookie;
+  if (!lioxerpLoginPromise) {
+    lioxerpLoginPromise = lioxerpLogin().finally(() => { lioxerpLoginPromise = null; });
+  }
+  lioxerpSessionCookie = await lioxerpLoginPromise;
+  return lioxerpSessionCookie;
+}
+
+// Grid'in ham HTML'inden satırları ayrıştırır — her hücre "fieldname=" ile işaretlenmiş, bkz.
+// DevExpress ASPxGridView çıktısı.
+function lioxerpParseTalepFormuRows(html) {
+  const rows = [];
+  const rowRe = /<tr id="myListPage_DXDataRow\d+"[^>]*>([\s\S]*?)<\/tr>/g;
+  const cellRe = /fieldname="([^"]+)"[^>]*>(?:<a[^>]*>)?([^<]*)/g;
+  let rowMatch;
+  while ((rowMatch = rowRe.exec(html))) {
+    const rowHtml = rowMatch[1];
+    const row = {};
+    let cellMatch;
+    cellRe.lastIndex = 0;
+    while ((cellMatch = cellRe.exec(rowHtml))) {
+      row[cellMatch[1]] = lioxerpDecodeHtml(cellMatch[2]);
+    }
+    if (Object.keys(row).length > 0) rows.push(row);
+  }
+  return rows;
+}
+
+// "Talep Formu" (DemFormMCollection) listesini çeker. Ekranın varsayılan tarih filtresi sadece
+// "bugünü" gösterdiğinden, önce sayfa GET edilip gizli form alanları (ViewState dahil) okunur,
+// sonra Belge Tarihi filtresi geniş bir aralığa (01.01.2000 - bugün) çekilip aynı adrese tam form
+// POST'u yapılır — tarayıcıda "Ara" butonuna basmanın tam karşılığı.
+async function lioxerpFetchTalepFormlari(retry) {
+  const cookie = await lioxerpGetSession(!!retry);
+  const listPath = '/MainList.aspx?CommandName=DemFormMCollection.Show&M=1&MenuId=622';
+
+  const listRes = await lioxerpRequest(listPath, 'GET', { 'Cookie': cookie });
+  // Oturum düşmüşse (giriş sayfasına geri atıldıysa) grid'in kendisi hiç gelmez — bir kez daha,
+  // taze bir girişle dener.
+  if (!retry && !listRes.body.includes('myListPage_DXMainTable')) {
+    return lioxerpFetchTalepFormlari(true);
+  }
+
+  const fields = lioxerpExtractHiddenFields(listRes.body);
+  const formData = { ...fields };
+  formData['dte_DocDate_1'] = '01.01.2000';
+  formData['dte_DocDate_2'] = new Date().toLocaleDateString('tr-TR');
+  formData['dte_DocDate_1_VI'] = '';
+  formData['dte_DocDate_2_VI'] = '';
+  if ('cmb_DemFormStatus_1' in formData) formData['cmb_DemFormStatus_1'] = '';
+  formData['btnSearch'] = 'Ara';
+
+  const bodyStr = Object.entries(formData).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+  const postRes = await lioxerpRequest(listPath, 'POST', {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Content-Length': Buffer.byteLength(bodyStr),
+    'Cookie': cookie
+  }, bodyStr);
+
+  return lioxerpParseTalepFormuRows(postRes.body);
+}
+
 // Admin Yetki Kontrolü Fonksiyonu (İK, admin ile birebir aynı yetkilere sahiptir)
 const isAdmin = (role) => role === 'ADMIN' || role === 'HR';
 // Firma/Proje yönetiminde kendi biriminle sınırlı erişimi olan roller (Müdür, Ekip Lideri)
 const isDeptLockedRole = (role) => role === 'MANAGER' || role === 'LEADER';
+
+// LioXERP "Talep Formu" listesini döner — Admin/İK.
+app.get('/api/lioxerp/talep-formlari', async (req, res) => {
+  try {
+    const { userRole } = req.query;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+    const rows = await lioxerpFetchTalepFormlari();
+    res.json(rows);
+  } catch (error) {
+    console.error('LioXERP veri çekme hatası:', error.message);
+    res.status(502).json({ error: 'LioXERP verisi alınamadı: ' + error.message });
+  }
+});
 
 // Proje aşama checklist'ini (şablon uygulama, aşama işaretleme/ekleme/silme) kimin yönetebileceği:
 // Admin/İK, Müdür/Ekip Lideri ve Mühendis her zaman; bunların dışında sadece o projenin sorumlusu (owner).
