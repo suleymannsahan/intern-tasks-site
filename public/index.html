@@ -1425,8 +1425,24 @@
             <button type="button" onclick="loadLioxerpTalepFormlari()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shrink-0"><i class="fa-solid fa-rotate me-1.5"></i>Yenile</button>
           </div>
           <p class="text-xs text-slate-500 dark:text-slate-400">LioXERP sisteminden (Uyumsoft ERP) canlı olarak çekilen Talep Formu kayıtları — son ~25 yıllık kayıtlar arasından, sistemde bulunan tüm kayıtlar listelenir.</p>
+          <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-wrap gap-2 items-center">
+            <select id="lioxerpBranchFilter" onchange="lioxerpOnBranchChange()" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-cyan-500">
+              <option value="">1. İşyeri Seçin</option>
+            </select>
+            <select id="lioxerpBirimFilter" onchange="lioxerpOnBirimChange()" disabled class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed">
+              <option value="">2. Birim Seçin</option>
+            </select>
+            <select id="lioxerpProjeFilter" onchange="lioxerpOnFilterChange()" disabled class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed">
+              <option value="">3. Proje Kodu Seçin</option>
+            </select>
+            <div class="relative flex-1 min-w-[200px]">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+              <input type="text" id="lioxerpSearchInput" oninput="lioxerpOnFilterChange()" placeholder="Belge no, talep eden veya işyeri ara..." class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+            </div>
+            <span id="lioxerpDetailProgress" class="text-[10px] text-slate-400 w-full basis-full"></span>
+          </div>
           <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-            <div id="lioxerpTalepFormTable" class="overflow-x-auto scroll-panel max-h-[65vh]">
+            <div id="lioxerpTalepFormTable" class="overflow-x-auto">
               <p class="text-xs text-slate-400 text-center py-8">Yükleniyor...</p>
             </div>
           </div>
@@ -3051,8 +3067,12 @@
   <script>
     // API adresi: localhost'ta açıldıysa yerel sunucu, aksi halde canlı sunucu kullanılır.
     // Böylece yerel geliştirmede güncel server.js'e, yayında canlı sunucuya bağlanır.
-    const API_BASE_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-      ? `${location.protocol}//${location.hostname}:5000`
+    // Sayfa gerçekten bir sunucu üzerinden (http/https) açıldıysa, API'yi hep aynı adresten
+    // (location.origin) çağır — localhost, 127.0.0.1, yerel ağdaki bir IP (ör. 192.168.x.x:5000,
+    // başka bir bilgisayardan erişim için) veya üretim alan adı fark etmeksizin doğru çalışır.
+    // Yalnızca dosyaya çift tıklanıp file:// ile açıldığında üretim sunucusuna düşülür.
+    const API_BASE_URL = (location.protocol === 'http:' || location.protocol === 'https:')
+      ? location.origin
       : 'https://intern-tasks-pannel.onrender.com';
 
     let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
@@ -9538,6 +9558,7 @@
     // (böylece ilgili bölüm tekrar doğru/temiz bir başlangıç durumuna döner).
     // ============================================================
     async function closeLeaderSubPage() {
+      if (lioxerpDetailPollTimer) { clearInterval(lioxerpDetailPollTimer); lioxerpDetailPollTimer = null; }
       if (typeof showDashboard === 'function') await showDashboard();
       // Ana ekrana dönünce sitenin en başına değil, alt sayfaya girmeden önceki konuma dön
       requestAnimationFrame(() => scrollMainTo(preNavScrollY, false));
@@ -9762,6 +9783,53 @@
       loadLioxerpTalepFormlari();
     }
 
+    let lioxerpAllRows = [];
+    let lioxerpSortField = 'DocDate';
+    let lioxerpSortDir = 'desc';
+    let lioxerpPage = 1;
+    const LIOXERP_PAGE_SIZE = 25;
+    let lioxerpDetailSearchIndex = {};
+    let lioxerpDetailProjects = {}; // Id -> [ProjeKodu, ...] (satır detaylarından, İşyeri>Birim>Proje Kodu filtresi için)
+    let lioxerpDetailPollTimer = null;
+
+    // Liste yüklendikten sonra sunucu arka planda tüm kayıtların satır/ürün detaylarını
+    // önbelleğe alır; bu fonksiyon o önbelleği periyodik olarak çekip arama indeksine ekler,
+    // böylece arama kutusu ürün adı/proje kodu/not gibi "dosya içindeki" kısımları da tarayabilir.
+    function lioxerpStartDetailIndexPolling() {
+      if (lioxerpDetailPollTimer) clearInterval(lioxerpDetailPollTimer);
+      const poll = async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/lioxerp/talep-formlari-arama-indeksi?userRole=${currentUser.role}`);
+          const data = await safeJson(res);
+          if (!res.ok || !data) return;
+          lioxerpDetailSearchIndex = data.index || {};
+          lioxerpDetailProjects = data.projects || {};
+          const prog = data.progress || {};
+          const label = document.getElementById('lioxerpDetailProgress');
+          if (label) {
+            label.textContent = prog.running
+              ? `Ürün/satır detayları önbelleğe alınıyor: ${prog.done}/${prog.total}...`
+              : (prog.total > 0 ? 'Detaylı arama hazır.' : '');
+          }
+          if (document.getElementById('lioxerpBirimFilter')?.value) lioxerpPopulateProjeOptions();
+          if (document.getElementById('lioxerpSearchInput')?.value) lioxerpRenderTalepFormTable();
+          if (!prog.running && prog.total > 0 && prog.done >= prog.total) {
+            clearInterval(lioxerpDetailPollTimer);
+            lioxerpDetailPollTimer = null;
+          }
+        } catch (err) { /* sessizce geç, bir sonraki turda tekrar dener */ }
+      };
+      poll();
+      lioxerpDetailPollTimer = setInterval(poll, 4000);
+    }
+
+    function lioxerpParseDate(s) {
+      const parts = String(s || '').split('.');
+      if (parts.length !== 3) return 0;
+      const [d, m, y] = parts.map(Number);
+      return (y || 0) * 10000 + (m || 0) * 100 + (d || 0);
+    }
+
     async function loadLioxerpTalepFormlari() {
       const container = document.getElementById('lioxerpTalepFormTable');
       if (!container || !currentUser) return;
@@ -9773,40 +9841,203 @@
           container.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">${escapeHtmlProj((data && data.error) || 'Veri alınamadı.')}</p>`;
           return;
         }
-        if (!Array.isArray(data) || data.length === 0) {
-          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Kayıt bulunamadı.</p>`;
-          return;
-        }
-        const rowsHtml = data.map(r => `
-          <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 cursor-pointer" onclick="openLioxerpDetailModal('${r.Id}')">
-            <td class="px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">${escapeHtmlProj(r.DocNo || '-')}</td>
-            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.DocDate || '-')}</td>
-            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300">${escapeHtmlProj(r.BranchDesc || '-')}</td>
-            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300">${escapeHtmlProj(r.DocTraDesc || '-')}</td>
-            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.RequestUserName || '-')}</td>
-            <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.WhouseDesc || '-')}</td>
-          </tr>
-        `).join('');
-        container.innerHTML = `
-          <table class="w-full text-left border-collapse">
-            <thead class="bg-slate-50 dark:bg-slate-800/80 sticky top-0">
-              <tr>
-                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Belge No</th>
-                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Belge Tarihi</th>
-                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">İşyeri</th>
-                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Hareket</th>
-                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Talep Eden</th>
-                <th class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Depo</th>
-              </tr>
-            </thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-          <p class="text-[10px] text-slate-400 px-3 py-2">Detayları görmek için bir satıra tıklayın.</p>
-        `;
+        lioxerpAllRows = Array.isArray(data) ? data : [];
+        lioxerpPage = 1;
+        lioxerpDetailSearchIndex = {};
+        lioxerpDetailProjects = {};
+        lioxerpPopulateBranchOptions();
+        lioxerpRenderTalepFormTable();
+        lioxerpStartDetailIndexPolling();
       } catch (err) {
         container.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">Sunucu ile iletişim kurulamadı.</p>`;
         console.error('LioXERP talep formu hatası:', err);
       }
+    }
+
+    function lioxerpOnFilterChange() {
+      lioxerpPage = 1;
+      lioxerpRenderTalepFormTable();
+    }
+
+    // İşyeri > Birim > Proje Kodu basamaklı filtresi: her adım bir öncekine göre daralır, bir
+    // önceki seçilmeden sonraki adım pasif kalır.
+    function lioxerpPopulateBranchOptions() {
+      const sel = document.getElementById('lioxerpBranchFilter');
+      if (!sel) return;
+      const current = sel.value;
+      const branches = [...new Map(lioxerpAllRows.map(r => [r.BranchCode, r.BranchDesc])).entries()]
+        .filter(([code]) => code)
+        .sort((a, b) => a[0].localeCompare(b[0], 'tr'));
+      sel.innerHTML = `<option value="">1. İşyeri Seçin</option>` +
+        branches.map(([code, desc]) => `<option value="${escapeHtmlProj(code)}">${escapeHtmlProj(desc || code)}</option>`).join('');
+      sel.value = current;
+    }
+
+    function lioxerpPopulateBirimOptions() {
+      const branchSel = document.getElementById('lioxerpBranchFilter');
+      const birimSel = document.getElementById('lioxerpBirimFilter');
+      if (!branchSel || !birimSel) return;
+      const branch = branchSel.value;
+      const current = birimSel.value;
+      if (!branch) {
+        birimSel.innerHTML = `<option value="">2. Birim Seçin</option>`;
+        birimSel.disabled = true;
+        return;
+      }
+      const birimler = [...new Map(lioxerpAllRows.filter(r => r.BranchCode === branch).map(r => [r.DocTraCode, r.DocTraDesc])).entries()]
+        .filter(([code]) => code)
+        .sort((a, b) => a[0].localeCompare(b[0], 'tr'));
+      birimSel.innerHTML = `<option value="">2. Birim Seçin</option>` +
+        birimler.map(([code, desc]) => `<option value="${escapeHtmlProj(code)}">${escapeHtmlProj(desc || code)}</option>`).join('');
+      birimSel.disabled = false;
+      birimSel.value = current;
+    }
+
+    function lioxerpPopulateProjeOptions() {
+      const branchSel = document.getElementById('lioxerpBranchFilter');
+      const birimSel = document.getElementById('lioxerpBirimFilter');
+      const projeSel = document.getElementById('lioxerpProjeFilter');
+      if (!branchSel || !birimSel || !projeSel) return;
+      const branch = branchSel.value;
+      const birim = birimSel.value;
+      const current = projeSel.value;
+      if (!birim) {
+        projeSel.innerHTML = `<option value="">3. Proje Kodu Seçin</option>`;
+        projeSel.disabled = true;
+        return;
+      }
+      const codes = new Set();
+      lioxerpAllRows
+        .filter(r => r.BranchCode === branch && r.DocTraCode === birim)
+        .forEach(r => (lioxerpDetailProjects[r.Id] || []).forEach(c => codes.add(c)));
+      const sorted = [...codes].sort((a, b) => a.localeCompare(b, 'tr', { numeric: true }));
+      projeSel.innerHTML = `<option value="">3. Proje Kodu Seçin</option>` +
+        sorted.map(c => `<option value="${escapeHtmlProj(c)}">${escapeHtmlProj(c)}</option>`).join('');
+      projeSel.disabled = false;
+      projeSel.value = current;
+    }
+
+    function lioxerpOnBranchChange() {
+      document.getElementById('lioxerpBirimFilter').value = '';
+      document.getElementById('lioxerpProjeFilter').value = '';
+      lioxerpPopulateBirimOptions();
+      lioxerpPopulateProjeOptions();
+      lioxerpOnFilterChange();
+    }
+
+    function lioxerpOnBirimChange() {
+      document.getElementById('lioxerpProjeFilter').value = '';
+      lioxerpPopulateProjeOptions();
+      lioxerpOnFilterChange();
+    }
+
+    function lioxerpSortBy(field) {
+      if (lioxerpSortField === field) {
+        lioxerpSortDir = lioxerpSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        lioxerpSortField = field;
+        lioxerpSortDir = field === 'DocDate' ? 'desc' : 'asc';
+      }
+      lioxerpPage = 1;
+      lioxerpRenderTalepFormTable();
+    }
+
+    function lioxerpGoToPage(page) {
+      lioxerpPage = page;
+      lioxerpRenderTalepFormTable();
+    }
+
+    function lioxerpRenderTalepFormTable() {
+      const container = document.getElementById('lioxerpTalepFormTable');
+      if (!container) return;
+
+      if (lioxerpAllRows.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Kayıt bulunamadı.</p>`;
+        return;
+      }
+
+      const search = (document.getElementById('lioxerpSearchInput')?.value || '').toLocaleLowerCase('tr');
+      const branchFilter = document.getElementById('lioxerpBranchFilter')?.value || '';
+      const birimFilter = document.getElementById('lioxerpBirimFilter')?.value || '';
+      const projeFilter = document.getElementById('lioxerpProjeFilter')?.value || '';
+
+      let rows = lioxerpAllRows.filter(r => {
+        if (branchFilter && r.BranchCode !== branchFilter) return false;
+        if (birimFilter && r.DocTraCode !== birimFilter) return false;
+        if (projeFilter && !(lioxerpDetailProjects[r.Id] || []).includes(projeFilter)) return false;
+        if (search) {
+          const haystack = [r.DocNo, r.BranchDesc, r.RequestUserName, r.DocTraDesc, r.WhouseDesc, lioxerpDetailSearchIndex[r.Id]]
+            .map(v => (v || '').toLocaleLowerCase('tr')).join(' ');
+          if (!haystack.includes(search)) return false;
+        }
+        return true;
+      });
+
+      rows.sort((a, b) => {
+        let av, bv;
+        if (lioxerpSortField === 'DocDate') {
+          av = lioxerpParseDate(a.DocDate);
+          bv = lioxerpParseDate(b.DocDate);
+        } else {
+          av = (a[lioxerpSortField] || '').toLocaleLowerCase('tr');
+          bv = (b[lioxerpSortField] || '').toLocaleLowerCase('tr');
+        }
+        if (av < bv) return lioxerpSortDir === 'asc' ? -1 : 1;
+        if (av > bv) return lioxerpSortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      if (rows.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Filtreyle eşleşen kayıt bulunamadı.</p>`;
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(rows.length / LIOXERP_PAGE_SIZE));
+      if (lioxerpPage > totalPages) lioxerpPage = totalPages;
+      const startIdx = (lioxerpPage - 1) * LIOXERP_PAGE_SIZE;
+      const pageRows = rows.slice(startIdx, startIdx + LIOXERP_PAGE_SIZE);
+
+      const columns = [
+        { field: 'DocNo', label: 'Belge No' },
+        { field: 'DocDate', label: 'Belge Tarihi' },
+        { field: 'BranchDesc', label: 'İşyeri' },
+        { field: 'DocTraDesc', label: 'Hareket' },
+        { field: 'RequestUserName', label: 'Talep Eden' },
+        { field: 'WhouseDesc', label: 'Depo' }
+      ];
+      const theadHtml = columns.map(c => {
+        const isActive = lioxerpSortField === c.field;
+        const arrow = isActive ? (lioxerpSortDir === 'asc' ? '<i class="fa-solid fa-arrow-up-short-wide ms-1"></i>' : '<i class="fa-solid fa-arrow-down-wide-short ms-1"></i>') : '';
+        return `<th onclick="lioxerpSortBy('${c.field}')" class="px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 cursor-pointer select-none hover:text-cyan-500 whitespace-nowrap">${c.label}${arrow}</th>`;
+      }).join('');
+
+      const rowsHtml = pageRows.map(r => `
+        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 cursor-pointer" onclick="openLioxerpDetailModal('${r.Id}')">
+          <td class="px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">${escapeHtmlProj(r.DocNo || '-')}</td>
+          <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.DocDate || '-')}</td>
+          <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300">${escapeHtmlProj(r.BranchDesc || '-')}</td>
+          <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300">${escapeHtmlProj(r.DocTraDesc || '-')}</td>
+          <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.RequestUserName || '-')}</td>
+          <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.WhouseDesc || '-')}</td>
+        </tr>
+      `).join('');
+
+      container.innerHTML = `
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-slate-50 dark:bg-slate-800/80 sticky top-0">
+            <tr>${theadHtml}</tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-100 dark:border-slate-800">
+          <p class="text-[10px] text-slate-400">${rows.length} kayıttan ${startIdx + 1}-${Math.min(startIdx + LIOXERP_PAGE_SIZE, rows.length)} arası gösteriliyor. Detay için bir satıra tıklayın.</p>
+          <div class="flex items-center gap-1">
+            <button type="button" onclick="lioxerpGoToPage(${lioxerpPage - 1})" ${lioxerpPage <= 1 ? 'disabled' : ''} class="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 hover:border-cyan-500 hover:text-cyan-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><i class="fa-solid fa-chevron-left"></i></button>
+            <span class="text-xs font-semibold text-slate-600 dark:text-slate-300 px-2">${lioxerpPage} / ${totalPages}</span>
+            <button type="button" onclick="lioxerpGoToPage(${lioxerpPage + 1})" ${lioxerpPage >= totalPages ? 'disabled' : ''} class="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 hover:border-cyan-500 hover:text-cyan-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </div>
+      `;
     }
 
     // Bir Talep Formu kaydının satır (ürün/hizmet) detaylarını LioXERP'ten çekip modalda gösterir.

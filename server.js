@@ -10,6 +10,7 @@ const ai = require('./ai');
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+const { PDFParse } = require('pdf-parse');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -1502,6 +1503,29 @@ function lioxerpRequest(pathAndQuery, method, headers, body) {
   });
 }
 
+// lioxerpRequest gövdeyi string olarak biriktirir (chunk += string), bu da PDF gibi ikili
+// yanıtları bozar. PDF export isteği için ayrı, Buffer tabanlı bir varyant gerekir.
+function lioxerpRequestBuffer(pathAndQuery, method, headers, body) {
+  return new Promise((resolve, reject) => {
+    const base = new URL(LIOXERP_BASE_URL);
+    const mod = base.protocol === 'https:' ? https : http;
+    const req = mod.request({
+      hostname: base.hostname,
+      port: base.port || (base.protocol === 'https:' ? 443 : 80),
+      path: pathAndQuery,
+      method,
+      headers
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => { chunks.push(chunk); });
+      res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
 function lioxerpCookieHeaderFrom(setCookieArray) {
   return (setCookieArray || []).map(c => c.split(';')[0]).join('; ');
 }
@@ -1594,38 +1618,104 @@ function lioxerpParseGridRows(html, rowIdPrefix) {
   return rows;
 }
 
-// "Talep Formu" (DemFormMCollection) listesini çeker. Ekranın varsayılan tarih filtresi sadece
-// "bugünü" gösterdiğinden, önce sayfa GET edilip gizli form alanları (ViewState dahil) okunur,
-// sonra Belge Tarihi filtresi geniş bir aralığa (01.01.2000 - bugün) çekilip aynı adrese tam form
-// POST'u yapılır — tarayıcıda "Ara" butonuna basmanın tam karşılığı.
+// Ekrandaki normal "Ara" araması, bu hesabın oturumuna göre yalnızca eski/kısıtlı bir alt kümeyi
+// döndürüyor (sebebi tam çözülemedi — muhtemelen sunucu tarafında oturuma özel bir önbellek/kapsam).
+// Ancak araç çubuğundaki "Yazdır/Dışarı Aktar" menü öğesi (CustomMenu, CLICK:0i3i0) bu kısıtlamayı
+// atlayıp ekrandaki filtreyle eşleşen TÜM kayıtları tek bir PDF'e basıyor — taze bir oturumdan bile.
+// Bu yüzden liste verisini HTML grid yerine bu PDF export'unu ayrıştırarak elde ediyoruz.
+//
+// PDF, yazdırma genişliği yüzünden her kayıt grubunu 3 ardışık sayfaya bölüyor:
+//   sayfa 1: Id, İşyeri Kodu, İşyeri Adı, Belge No, Belge Tarihi, Hareket Kodu
+//   sayfa 2: Hareket Adı, Kar Merkezi Kodu, Talep Eden Kullanıcı, Özel Kod1, Özel Kod2
+//   sayfa 3: Talep Depo Kodu, Talep Depo Adı, Onay Durumu, Icon
+// ve bu 3'lü döngü sayfa sonuna kadar tekrarlanır. Aynı gruptaki 3 sayfa aynı satır sırasını
+// korur, bu yüzden satırlar indekse göre eşlenip birleştirilir.
+function lioxerpParsePdfGroup1(text) {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  lines.shift(); // başlık satırı
+  const rows = [];
+  let buffer = '';
+  for (const line of lines) {
+    buffer = buffer ? `${buffer} ${line}` : line;
+    if (/FRM-\w+$/.test(buffer)) {
+      rows.push(buffer);
+      buffer = '';
+    }
+  }
+  const re = /^(\d+)\s+(\S+)\s+(.*?)\s+(\S+-\d+)\s+(\d{2}\.\d{2}\.\d{4})\s+(FRM-\w+)$/;
+  return rows.map((row) => {
+    const m = row.match(re);
+    if (!m) return {};
+    return { Id: m[1], BranchCode: m[2], BranchDesc: m[3], DocNo: m[4], DocDate: m[5], DocTraCode: m[6] };
+  });
+}
+function lioxerpParsePdfGroup2(text) {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  lines.shift();
+  return lines.map((line) => {
+    let l = line;
+    let hareket = '';
+    if (l.startsWith('ELEKTRONİK TALEP FORMU')) { hareket = 'ELEKTRONİK TALEP FORMU'; l = l.slice(hareket.length).trim(); }
+    else if (l.startsWith('MEKANİK TALEP FORMU')) { hareket = 'MEKANİK TALEP FORMU'; l = l.slice(hareket.length).trim(); }
+    return { DocTraDesc: hareket, RequestUserName: l };
+  });
+}
+function lioxerpParsePdfGroup3(text) {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  lines.shift();
+  return lines.map((line) => {
+    if (line === '0') return { WhouseCode: '', WhouseDesc: '' };
+    const m = line.match(/^(.*?)\s+\1\s+0$/);
+    if (m) return { WhouseCode: m[1], WhouseDesc: m[1] };
+    return {};
+  });
+}
+
+// "Talep Formu" (DemFormMCollection) listesini çeker: liste sayfası GET edilip, araç
+// çubuğundaki "Yazdır/Dışarı Aktar" menü tıklamasının aynısı (__EVENTTARGET=CustomMenu,
+// __EVENTARGUMENT=CLICK:0i3i0) POST edilir, dönen PDF ayrıştırılıp satırlara çevrilir.
 async function lioxerpFetchTalepFormlari(retry) {
   const cookie = await lioxerpGetSession(!!retry);
   const listPath = '/MainList.aspx?CommandName=DemFormMCollection.Show&M=1&MenuId=622';
 
   const listRes = await lioxerpRequest(listPath, 'GET', { 'Cookie': cookie });
-  // Oturum düşmüşse (giriş sayfasına geri atıldıysa) grid'in kendisi hiç gelmez — bir kez daha,
-  // taze bir girişle dener.
   if (!retry && !listRes.body.includes('myListPage_DXMainTable')) {
     return lioxerpFetchTalepFormlari(true);
   }
 
   const fields = lioxerpExtractHiddenFields(listRes.body);
   const formData = { ...fields };
-  formData['dte_DocDate_1'] = '01.01.2000';
-  formData['dte_DocDate_2'] = new Date().toLocaleDateString('tr-TR');
-  formData['dte_DocDate_1_VI'] = '';
-  formData['dte_DocDate_2_VI'] = '';
-  if ('cmb_DemFormStatus_1' in formData) formData['cmb_DemFormStatus_1'] = '';
-  formData['btnSearch'] = 'Ara';
+  formData['__EVENTTARGET'] = 'CustomMenu';
+  formData['__EVENTARGUMENT'] = 'CLICK:0i3i0';
 
   const bodyStr = Object.entries(formData).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
-  const postRes = await lioxerpRequest(listPath, 'POST', {
+  const pdfRes = await lioxerpRequestBuffer(listPath, 'POST', {
     'Content-Type': 'application/x-www-form-urlencoded',
     'Content-Length': Buffer.byteLength(bodyStr),
     'Cookie': cookie
   }, bodyStr);
 
-  return lioxerpParseGridRows(postRes.body, 'myListPage_DXDataRow');
+  if (!retry && !String(pdfRes.headers['content-type'] || '').includes('application/pdf')) {
+    return lioxerpFetchTalepFormlari(true);
+  }
+
+  const parser = new PDFParse({ data: pdfRes.body });
+  const parsed = await parser.getText();
+  await parser.destroy();
+  const pages = parsed.pages ? parsed.pages.map((p) => p.text) : [parsed.text];
+
+  const allRows = [];
+  for (let i = 0; i < pages.length; i += 3) {
+    const g1 = lioxerpParsePdfGroup1(pages[i] || '');
+    const g2 = lioxerpParsePdfGroup2(pages[i + 1] || '');
+    const g3 = lioxerpParsePdfGroup3(pages[i + 2] || '');
+    const n = Math.max(g1.length, g2.length, g3.length);
+    for (let j = 0; j < n; j++) {
+      allRows.push({ ...(g1[j] || {}), ...(g2[j] || {}), ...(g3[j] || {}) });
+    }
+  }
+
+  return allRows.filter((r) => r.Id);
 }
 
 // Bir "Talep Formu" kaydının satır bazlı detaylarını (ürün/hizmet, miktar, birim fiyat, tutar,
@@ -1643,6 +1733,56 @@ async function lioxerpFetchTalepFormuDetay(id, retry) {
   return lioxerpParseGridRows(cardRes.body, 'TPnControl_grd_DemFormDCollection_DXDataRow');
 }
 
+// Talep Formu satır/ürün detaylarının arama için önbelleği. Liste ekranındaki arama kutusunun
+// "dosya içindeki" (ürün adı, proje kodu, notlar vb.) kısımları da tarayabilmesi için, listenin
+// tamamının detayı arka planda (kullanıcı beklemeden) LioXERP'ten çekilip belleğe alınır.
+const lioxerpDetailCache = new Map(); // Id -> satır dizisi
+let lioxerpDetailPrefetch = { running: false, total: 0, done: 0 };
+
+// Bir kaydın önbellekteki satırlarından, arama kutusunda eşleşebilecek metinleri tek bir
+// string'e birleştirir.
+function lioxerpDetailSearchText(id) {
+  const lines = lioxerpDetailCache.get(id);
+  if (!lines || lines.length === 0) return '';
+  return lines
+    .map((l) => [l.DcardName, l.ItemNameManual, l.ProjectCode, l.Note1, l.Note2, l.Note3, l.DemFormPlanningCode].filter(Boolean).join(' '))
+    .join(' ');
+}
+
+// Bir kaydın satırlarında geçen tekil (boş olmayan) proje kodlarını döner — İşyeri > Birim >
+// Proje Kodu şeklindeki basamaklı filtrede kullanılır.
+function lioxerpDetailProjectCodes(id) {
+  const lines = lioxerpDetailCache.get(id);
+  if (!lines || lines.length === 0) return [];
+  return [...new Set(lines.map((l) => l.ProjectCode).filter(Boolean))];
+}
+
+// Verilen id listesindeki her kaydın satır detayını (sınırlı eşzamanlılıkla) arka planda çeker.
+// Aynı anda tek bir tarama çalışır; zaten çalışıyorsa yeni bir tanesi başlatılmaz.
+async function lioxerpPrefetchDetailsInBackground(ids) {
+  if (lioxerpDetailPrefetch.running) return;
+  const pending = ids.filter((id) => !lioxerpDetailCache.has(id));
+  lioxerpDetailPrefetch = { running: true, total: pending.length, done: 0 };
+  if (pending.length === 0) { lioxerpDetailPrefetch.running = false; return; }
+
+  const CONCURRENCY = 5;
+  let index = 0;
+  async function worker() {
+    while (index < pending.length) {
+      const id = pending[index++];
+      try {
+        const rows = await lioxerpFetchTalepFormuDetay(id);
+        lioxerpDetailCache.set(id, rows);
+      } catch (e) {
+        lioxerpDetailCache.set(id, []); // hata alınsa da tekrar tekrar denenip sunucuyu yormasın
+      }
+      lioxerpDetailPrefetch.done++;
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+  lioxerpDetailPrefetch.running = false;
+}
+
 // Admin Yetki Kontrolü Fonksiyonu (İK, admin ile birebir aynı yetkilere sahiptir)
 const isAdmin = (role) => role === 'ADMIN' || role === 'HR';
 // Firma/Proje yönetiminde kendi biriminle sınırlı erişimi olan roller (Müdür, Ekip Lideri)
@@ -1655,10 +1795,29 @@ app.get('/api/lioxerp/talep-formlari', async (req, res) => {
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
     const rows = await lioxerpFetchTalepFormlari();
     res.json(rows);
+    // Liste yanıtı gönderildikten sonra, arama kutusunun satır/ürün detaylarını da kapsayabilmesi
+    // için tüm kayıtların detayı arka planda (kullanıcıyı bekletmeden) önbelleğe alınır.
+    lioxerpPrefetchDetailsInBackground(rows.map((r) => r.Id)).catch(() => {});
   } catch (error) {
     console.error('LioXERP veri çekme hatası:', error.message);
     res.status(502).json({ error: 'LioXERP verisi alınamadı: ' + error.message });
   }
+});
+
+// Arka planda önbelleğe alınan satır/ürün detaylarından oluşan arama indeksini döner — arama
+// kutusu bu indeksi liste verisiyle birleştirerek "dosya içindeki" kısımları da tarar.
+app.get('/api/lioxerp/talep-formlari-arama-indeksi', (req, res) => {
+  const { userRole } = req.query;
+  if (!isAdmin(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+  const index = {};
+  const projects = {};
+  for (const id of lioxerpDetailCache.keys()) {
+    const text = lioxerpDetailSearchText(id);
+    if (text) index[id] = text;
+    const codes = lioxerpDetailProjectCodes(id);
+    if (codes.length > 0) projects[id] = codes;
+  }
+  res.json({ index, projects, progress: { ...lioxerpDetailPrefetch } });
 });
 
 // Tek bir Talep Formu kaydının satır detaylarını döner — Admin/İK.
@@ -1666,7 +1825,9 @@ app.get('/api/lioxerp/talep-formlari/:id', async (req, res) => {
   try {
     const { userRole } = req.query;
     if (!isAdmin(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
-    const rows = await lioxerpFetchTalepFormuDetay(req.params.id);
+    const cached = lioxerpDetailCache.get(req.params.id);
+    const rows = cached && cached.length > 0 ? cached : await lioxerpFetchTalepFormuDetay(req.params.id);
+    if (!lioxerpDetailCache.has(req.params.id)) lioxerpDetailCache.set(req.params.id, rows);
     res.json(rows);
   } catch (error) {
     console.error('LioXERP detay çekme hatası:', error.message);
