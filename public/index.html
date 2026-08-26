@@ -1432,6 +1432,19 @@
           </div>
         </section>
 
+        <!-- LioXERP TALEP FORMU DETAY MODALI (bir kayda tıklanınca satır/ürün detaylarını gösterir) -->
+        <div id="lioxerpDetailModal" onclick="if(event.target===this) closeLioxerpDetailModal();" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl space-y-4">
+            <div class="flex justify-between items-center">
+              <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-file-invoice text-cyan-500"></i> Talep Formu Detayı
+              </h3>
+              <button onclick="closeLioxerpDetailModal()" class="text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div id="lioxerpDetailBody"></div>
+          </div>
+        </div>
+
         <!-- ADMİN: PROJELER (Proje Gidişatı + Aciliyet Sırası) -->
         <section id="adminPanelSection" class="hidden space-y-6">
           <!-- Ekip / Proje Gidişatı ana kartı -->
@@ -9765,7 +9778,7 @@
           return;
         }
         const rowsHtml = data.map(r => `
-          <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+          <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 cursor-pointer" onclick="openLioxerpDetailModal('${r.Id}')">
             <td class="px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 whitespace-nowrap">${escapeHtmlProj(r.DocNo || '-')}</td>
             <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${escapeHtmlProj(r.DocDate || '-')}</td>
             <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300">${escapeHtmlProj(r.BranchDesc || '-')}</td>
@@ -9788,11 +9801,60 @@
             </thead>
             <tbody>${rowsHtml}</tbody>
           </table>
+          <p class="text-[10px] text-slate-400 px-3 py-2">Detayları görmek için bir satıra tıklayın.</p>
         `;
       } catch (err) {
         container.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">Sunucu ile iletişim kurulamadı.</p>`;
         console.error('LioXERP talep formu hatası:', err);
       }
+    }
+
+    // Bir Talep Formu kaydının satır (ürün/hizmet) detaylarını LioXERP'ten çekip modalda gösterir.
+    async function openLioxerpDetailModal(id) {
+      const modal = document.getElementById('lioxerpDetailModal');
+      const body = document.getElementById('lioxerpDetailBody');
+      if (!modal || !body || !currentUser) return;
+      modal.classList.remove('hidden');
+      body.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Yükleniyor...</p>`;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/lioxerp/talep-formlari/${encodeURIComponent(id)}?userRole=${currentUser.role}`);
+        const data = await safeJson(res);
+        if (!res.ok) {
+          body.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">${escapeHtmlProj((data && data.error) || 'Detay alınamadı.')}</p>`;
+          return;
+        }
+        if (!Array.isArray(data) || data.length === 0) {
+          body.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Satır bulunamadı.</p>`;
+          return;
+        }
+        body.innerHTML = data.map((line, i) => `
+          <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 ${i > 0 ? 'mt-3' : ''}">
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <h4 class="font-bold text-sm text-slate-900 dark:text-slate-100">${escapeHtmlProj(line.DcardName || line.ItemNameManual || '-')}</h4>
+              <span class="px-2 py-0.5 text-[11px] rounded-md font-bold bg-cyan-500/10 text-cyan-600 border border-cyan-500/30 shrink-0">${escapeHtmlProj(line.DemFormStatus || '-')}</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <div><span class="text-slate-400">Kod:</span> ${escapeHtmlProj(line.DcardCode || '-')}</div>
+              <div><span class="text-slate-400">Miktar:</span> ${escapeHtmlProj(line.Qty || '-')} ${escapeHtmlProj(line.UnitCode || '')}</div>
+              <div><span class="text-slate-400">Birim Fiyat:</span> ${escapeHtmlProj(line.UnitPriceTraEstimated || '-')} ${escapeHtmlProj(line.CurTraCode || '')}</div>
+              <div><span class="text-slate-400">Tutar:</span> ${escapeHtmlProj(line.AmtTraEstimated || '-')} ${escapeHtmlProj(line.CurTraCode || '')}</div>
+              <div><span class="text-slate-400">Proje Kodu:</span> ${escapeHtmlProj(line.ProjectCode || '-')}</div>
+              <div><span class="text-slate-400">İhtiyaç Tarihi:</span> ${escapeHtmlProj(line.RequestDate || '-')}</div>
+              <div><span class="text-slate-400">Planlayan:</span> ${escapeHtmlProj(line.DemFormPlanningCode || '-')}</div>
+              <div><span class="text-slate-400">KDV Durumu:</span> ${escapeHtmlProj(line.VatStatus || '-')}</div>
+            </div>
+            ${(line.Note1 || line.Note2 || line.Note3) ? `<div class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">${[line.Note1, line.Note2, line.Note3].filter(Boolean).map(escapeHtmlProj).join(' · ')}</div>` : ''}
+          </div>
+        `).join('');
+      } catch (err) {
+        body.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">Sunucu ile iletişim kurulamadı.</p>`;
+        console.error('LioXERP detay hatası:', err);
+      }
+    }
+
+    function closeLioxerpDetailModal() {
+      const modal = document.getElementById('lioxerpDetailModal');
+      if (modal) modal.classList.add('hidden');
     }
 
     function openAdminTasksPage() {

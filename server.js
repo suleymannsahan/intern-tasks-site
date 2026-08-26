@@ -1572,11 +1572,13 @@ async function lioxerpGetSession(forceNew) {
   return lioxerpSessionCookie;
 }
 
-// Grid'in ham HTML'inden satırları ayrıştırır — her hücre "fieldname=" ile işaretlenmiş, bkz.
-// DevExpress ASPxGridView çıktısı.
-function lioxerpParseTalepFormuRows(html) {
+// Bir DevExpress ASPxGridView tablosunun ham HTML'inden satırları ayrıştırır — her hücre
+// "fieldname=" ile işaretlenmiş. rowIdPrefix, satırların <tr id="..."> önekidir (grid her yerde
+// farklı bir id kullanır — ör. liste ekranında "myListPage_DXDataRow", kart ekranındaki satır
+// detayında "TPnControl_grd_DemFormDCollection_DXDataRow").
+function lioxerpParseGridRows(html, rowIdPrefix) {
   const rows = [];
-  const rowRe = /<tr id="myListPage_DXDataRow\d+"[^>]*>([\s\S]*?)<\/tr>/g;
+  const rowRe = new RegExp(`<tr id="${rowIdPrefix}\\d+"[^>]*>([\\s\\S]*?)<\\/tr>`, 'g');
   const cellRe = /fieldname="([^"]+)"[^>]*>(?:<a[^>]*>)?([^<]*)/g;
   let rowMatch;
   while ((rowMatch = rowRe.exec(html))) {
@@ -1623,7 +1625,22 @@ async function lioxerpFetchTalepFormlari(retry) {
     'Cookie': cookie
   }, bodyStr);
 
-  return lioxerpParseTalepFormuRows(postRes.body);
+  return lioxerpParseGridRows(postRes.body, 'myListPage_DXDataRow');
+}
+
+// Bir "Talep Formu" kaydının satır bazlı detaylarını (ürün/hizmet, miktar, birim fiyat, tutar,
+// proje kodu, notlar vb.) çeker — tarayıcıda bir kayda çift tıklandığında açılan "Kart" ekranıyla
+// birebir aynı sayfa: GeneralCard.aspx?CommandName=DemFormMCollection.Update&ObjectId=<id>.
+async function lioxerpFetchTalepFormuDetay(id, retry) {
+  const cookie = await lioxerpGetSession(!!retry);
+  const cardPath = `/GeneralCard.aspx?CommandName=DemFormMCollection.Update&ObjectId=${encodeURIComponent(id)}`;
+
+  const cardRes = await lioxerpRequest(cardPath, 'GET', { 'Cookie': cookie });
+  if (!retry && !cardRes.body.includes('grd_DemFormDCollection')) {
+    return lioxerpFetchTalepFormuDetay(id, true);
+  }
+
+  return lioxerpParseGridRows(cardRes.body, 'TPnControl_grd_DemFormDCollection_DXDataRow');
 }
 
 // Admin Yetki Kontrolü Fonksiyonu (İK, admin ile birebir aynı yetkilere sahiptir)
@@ -1641,6 +1658,19 @@ app.get('/api/lioxerp/talep-formlari', async (req, res) => {
   } catch (error) {
     console.error('LioXERP veri çekme hatası:', error.message);
     res.status(502).json({ error: 'LioXERP verisi alınamadı: ' + error.message });
+  }
+});
+
+// Tek bir Talep Formu kaydının satır detaylarını döner — Admin/İK.
+app.get('/api/lioxerp/talep-formlari/:id', async (req, res) => {
+  try {
+    const { userRole } = req.query;
+    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+    const rows = await lioxerpFetchTalepFormuDetay(req.params.id);
+    res.json(rows);
+  } catch (error) {
+    console.error('LioXERP detay çekme hatası:', error.message);
+    res.status(502).json({ error: 'LioXERP detayı alınamadı: ' + error.message });
   }
 });
 
