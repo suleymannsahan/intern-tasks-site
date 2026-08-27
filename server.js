@@ -336,6 +336,8 @@ async function initDb() {
     try { await db.execute(`ALTER TABLE projects ADD COLUMN note TEXT`); } catch (e) {}
     try { await db.execute(`ALTER TABLE projects ADD COLUMN priority TEXT DEFAULT 'NORMAL'`); } catch (e) {}
     try { await db.execute(`ALTER TABLE projects ADD COLUMN status TEXT DEFAULT 'ACTIVE'`); } catch (e) {}
+    // Alt alan: sadece belirli firmalarda (ör. ASELSAN → AGS/MEOS) anlamlı, diğerlerinde boş kalır.
+    try { await db.execute(`ALTER TABLE projects ADD COLUMN sub_area TEXT`); } catch (e) {}
 
     // ============================================================
     // AŞAMA ŞABLONLARI: bir projeye uygulanabilen, tekrar kullanılabilir "ana aşama + alt aşama"
@@ -1842,6 +1844,15 @@ function canManageProjectStages(userRole, userId, project) {
   return !!(userId && project && project.owner_id != null && Number(project.owner_id) === Number(userId));
 }
 
+// Projenin TÜM alanlarını (firma, birim, alt alan, sorumlu, tarihler, öncelik, durum, not)
+// düzenleyebilme yetkisi: Admin/İK, Müdür/Ekip Lideri her zaman; Mühendis'in bu yetkisi YOK
+// (aşama işaretleme yetkisi ayrı, canManageProjectStages'te duruyor) — sadece kendi projesinin
+// sorumlusuysa (owner) düzenleyebilir.
+function canEditProjectDetails(userRole, userId, project) {
+  if (isAdmin(userRole) || isDeptLockedRole(userRole)) return true;
+  return !!(userId && project && project.owner_id != null && Number(project.owner_id) === Number(userId));
+}
+
 // Aşama checklist'inden genel ilerleme yüzdesini hesaplar: ana aşamalar eşit ağırlıklıdır (100/N);
 // bir ana aşamanın alt aşamaları varsa o ağırlığı kendi aralarında eşit bölüşür, yoksa ana aşamanın
 // kendisi (is_done) o ağırlığı tek başına taşır. Ağırlıklar hep anlık hesaplanır, DB'de saklanmaz —
@@ -1945,34 +1956,39 @@ async function authorizeHierarchicalUserAction(requesterId, requesterRole, targe
 }
 
 // Yapay zeka özellikleri (Akıllı İş Planı, Görev Asistanı, Genel Asistan) — ai.js içinde, izole.
-app.use('/api', ai.createAiRouter(db, { isAdmin }));
+// NOT: router'lar burada OLUŞTURULUR ama app'e BAĞLANMASI (app.use) dosyanın sonuna ertelenir
+// (bkz. aşağıdaki "AI router'larını bağla" bloğu) — çünkü her birinin içinde path'siz bir
+// router.use(...) koruması var ("API anahtarı yoksa 503"); bu erken bağlanırsa, aynı '/api'
+// önekini paylaşan ve daha SONRA tanımlanan asıl uygulama rotalarını (tasks/projects/meetings/
+// daily-logs/...) API anahtarı yokken gölgeleyip hepsini 503'e düşürüyordu.
+const aiRouter = ai.createAiRouter(db, { isAdmin });
 
 // AI AJAN KATMANI (Function Calling + Dinamik System Prompt) — aiAgent.js içinde, izole.
 // Onaylı yazma işlemleri: /api/agent/chat (öneri) + /api/agent/execute (uygula).
 const aiAgent = require('./aiAgent');
-app.use('/api', aiAgent.createAgentRouter(db, { isAdmin }));
+const aiAgentRouter = aiAgent.createAgentRouter(db, { isAdmin });
 
 // ÖZELLİK 5 — Otomatik Yönetici Özeti (rapor) — aiReport.js
 const aiReport = require('./aiReport');
-app.use('/api', aiReport.createReportRouter(db, { isAdmin }));
+const aiReportRouter = aiReport.createReportRouter(db, { isAdmin });
 aiReport.startReportScheduler(db, { isAdmin, sendDetailsEmail, createNotification });
 
 // ÖZELLİK 4 — Semantic Search / RAG (geçmiş görev hafızası) — aiRag.js
 const aiRag = require('./aiRag');
 aiRag.initRagSchema(db).catch(e => console.error('RAG şema:', e.message));
-app.use('/api', aiRag.createRagRouter(db, { isAdmin }));
+const aiRagRouter = aiRag.createRagRouter(db, { isAdmin });
 aiRag.startRagIndexer(db); // arka planda yeni/değişen görevleri indeksler
 
 // ÖZELLİK 2+3 — Risk erken uyarı + Akıllı atama önerisi — aiInsights.js
 const aiInsights = require('./aiInsights');
-app.use('/api', aiInsights.createInsightsRouter(db, { isAdmin }));
+const aiInsightsRouter = aiInsights.createInsightsRouter(db, { isAdmin });
 aiInsights.startRiskScheduler(db); // saatlik risk taraması -> bildirim paneline yazar
 
 // DOKÜMAN DENETİMİ — RAG + LLM-as-a-Judge: yeni .docx dokümanları onaylı referans
 // dokümanlara göre denetler; onaylanan dokümanlar otomatik olarak referans hafızasına eklenir.
 const aiDokDenetim = require('./aiDokDenetim');
 aiDokDenetim.initDokDenetimSchema(db).catch(e => console.error('Doküman Denetimi şema:', e.message));
-app.use('/api', aiDokDenetim.createDokDenetimRouter(db, { isAdmin }));
+const aiDokDenetimRouter = aiDokDenetim.createDokDenetimRouter(db, { isAdmin });
 
 // Bildirim zili: 24 saatten eski, hiç tıklanmamış bildirimleri otomatik temizler.
 startNotificationCleanup();
@@ -4597,7 +4613,7 @@ app.get('/api/projects/:id', async (req, res) => {
 // Proje oluştur (Admin: herhangi bir birim; Müdür: yalnızca kendi birimi — sunucu tarafında sabitlenir)
 app.post('/api/projects', async (req, res) => {
   try {
-    const { company_id, name, department, owner_id, start_date, end_date, priority, note, userRole, userId, createdBy } = req.body;
+    const { company_id, name, department, sub_area, owner_id, start_date, end_date, priority, note, userRole, userId, createdBy } = req.body;
     if (!company_id || !name || !start_date || !end_date) {
       return res.status(400).json({ error: 'Firma, proje adı ve tarihler zorunludur.' });
     }
@@ -4615,9 +4631,9 @@ app.post('/api/projects', async (req, res) => {
     }
 
     const r = await db.execute({
-      sql: `INSERT INTO projects (company_id, name, department, owner_id, start_date, end_date, priority, status, note, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`,
-      args: [company_id, name.trim(), finalDepartment, owner_id || null, start_date, end_date, priority || 'NORMAL', note || null, createdBy || null, todayISO()]
+      sql: `INSERT INTO projects (company_id, name, department, sub_area, owner_id, start_date, end_date, priority, status, note, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`,
+      args: [company_id, name.trim(), finalDepartment, sub_area || null, owner_id || null, start_date, end_date, priority || 'NORMAL', note || null, createdBy || null, todayISO()]
     });
     const newProjectId = Number(r.lastInsertRowid);
 
@@ -4676,16 +4692,21 @@ app.post('/api/projects', async (req, res) => {
 // Proje güncelle (Admin) — durum, öncelik, not, tarihler
 app.put('/api/projects/:id', async (req, res) => {
   try {
-    const { name, owner_id, start_date, end_date, priority, status, note, userRole } = req.body;
-    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    const { name, company_id, department, sub_area, owner_id, start_date, end_date, priority, status, note, userRole, userId } = req.body;
     const pid = req.params.id;
     const cur = await db.execute({ sql: `SELECT * FROM projects WHERE id = ?`, args: [pid] });
     if (cur.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
     const p = cur.rows[0];
+    if (!canEditProjectDetails(userRole, userId, p)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    // Müdür/Ekip Lideri kendi biriminin dışına proje taşıyamaz.
+    const finalDepartment = isDeptLockedRole(userRole) ? p.department : (department ?? p.department);
     await db.execute({
-      sql: `UPDATE projects SET name=?, owner_id=?, start_date=?, end_date=?, priority=?, status=?, note=? WHERE id=?`,
+      sql: `UPDATE projects SET name=?, company_id=?, department=?, sub_area=?, owner_id=?, start_date=?, end_date=?, priority=?, status=?, note=? WHERE id=?`,
       args: [
         name ?? p.name,
+        company_id ?? p.company_id,
+        finalDepartment,
+        sub_area !== undefined ? (sub_area || null) : p.sub_area,
         owner_id !== undefined ? owner_id : p.owner_id,
         start_date ?? p.start_date,
         end_date ?? p.end_date,
@@ -4977,11 +4998,17 @@ app.put('/api/projects/:id/stages/:stageId', async (req, res) => {
     const pRes = await db.execute({ sql: `SELECT * FROM projects WHERE id = ?`, args: [pid] });
     if (pRes.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
     const project = pRes.rows[0];
-    if (!canManageProjectStages(userRole, userId, project)) return res.status(403).json({ error: 'Yetkisiz erişim.' });
 
     const stageRes = await db.execute({ sql: `SELECT * FROM project_stages WHERE id = ? AND project_id = ?`, args: [stageId, pid] });
     if (stageRes.rows.length === 0) return res.status(404).json({ error: 'Aşama bulunamadı.' });
     const stage = stageRes.rows[0];
+
+    // Zaten tamamlanmış bir aşamayı düzenlemek (not değiştirme, geri alma, yeniden adlandırma)
+    // sıradan aşama yönetiminden (her mühendis) daha dar bir yetki gerektirir: sadece
+    // Admin/İK/Müdür/Ekip Lideri ve o projenin sorumlusu mühendis. Henüz tamamlanmamış bir
+    // aşamayı ilk kez onaylamak ise eskisi gibi her mühendise açık kalır.
+    const requiredCheck = stage.is_done ? canEditProjectDetails(userRole, userId, project) : canManageProjectStages(userRole, userId, project);
+    if (!requiredCheck) return res.status(403).json({ error: 'Yetkisiz erişim.' });
 
     if (isDone !== undefined && stage.parent_id == null) {
       const childCountRes = await db.execute({ sql: `SELECT COUNT(*) AS c FROM project_stages WHERE parent_id = ?`, args: [stageId] });
@@ -5027,7 +5054,11 @@ app.delete('/api/projects/:id/stages/:stageId', async (req, res) => {
     const stageId = req.params.stageId;
     const pRes = await db.execute({ sql: `SELECT owner_id FROM projects WHERE id = ?`, args: [pid] });
     if (pRes.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
-    if (!canManageProjectStages(userRole, userId, pRes.rows[0])) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    const stageRes = await db.execute({ sql: `SELECT is_done FROM project_stages WHERE id = ? AND project_id = ?`, args: [stageId, pid] });
+    if (stageRes.rows.length === 0) return res.status(404).json({ error: 'Aşama bulunamadı.' });
+    // Zaten tamamlanmış bir aşamayı silmek daha dar yetki gerektirir, bkz. PUT endpoint'indeki açıklama.
+    const requiredCheck = stageRes.rows[0].is_done ? canEditProjectDetails(userRole, userId, pRes.rows[0]) : canManageProjectStages(userRole, userId, pRes.rows[0]);
+    if (!requiredCheck) return res.status(403).json({ error: 'Yetkisiz erişim.' });
 
     await db.execute({ sql: `DELETE FROM project_stages WHERE parent_id = ? AND project_id = ?`, args: [stageId, pid] });
     await db.execute({ sql: `DELETE FROM project_stages WHERE id = ? AND project_id = ?`, args: [stageId, pid] });
@@ -5155,7 +5186,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
         (p.priority === 'YÜKSEK' || p.priority === 'HIGH' ? 20 : (p.priority === 'DÜŞÜK' || p.priority === 'LOW' ? -10 : 0));
       all.push({
         id: p.id, name: p.name, company_id: p.company_id, company_name: p.company_name, department: p.department,
-        owner_name: p.owner_name, end_date: p.end_date, priority: p.priority, status: p.status,
+        sub_area: p.sub_area, owner_name: p.owner_name, end_date: p.end_date, priority: p.priority, status: p.status,
         note: p.note, actual, days_left: daysLeft, is_overdue: overdue,
         urgency: Math.round(urgency)
       });
@@ -5213,6 +5244,16 @@ app.get('/api/admin/dashboard', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// AI router'larını bağla: bunlar EN SONA bağlanır ki, içlerindeki path'siz "API anahtarı yoksa
+// 503" koruması, yukarıda tanımlı asıl uygulama rotalarını (tasks/projects/meetings/daily-logs/
+// vb.) gölgelemesin — Express, aynı önek altında rotaları KAYIT SIRASINA göre eşleştirir.
+app.use('/api', aiRouter);
+app.use('/api', aiAgentRouter);
+app.use('/api', aiReportRouter);
+app.use('/api', aiRagRouter);
+app.use('/api', aiInsightsRouter);
+app.use('/api', aiDokDenetimRouter);
 
 // Sunucuyu Çalıştır
 app.listen(PORT, '0.0.0.0', () => {

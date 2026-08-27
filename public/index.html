@@ -1461,6 +1461,82 @@
           </div>
         </div>
 
+        <!-- PROJE DÜZENLE MODALI: "Projeler" kutucuğu olan herkes (Admin/İK, Müdür, Ekip Lideri,
+             Mühendis her zaman; bunların dışında sadece o projenin sorumlusu) projenin tüm
+             alanlarını buradan düzenleyebilir. -->
+        <div id="editProjectModal" onclick="if(event.target===this) closeEditProjectModal();" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+            <div class="flex justify-between items-center">
+              <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-pen text-cyan-500"></i> Projeyi Düzenle
+              </h3>
+              <button onclick="closeEditProjectModal()" class="text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="submitEditProject(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Firma</label>
+                <select id="editProjectCompany" onchange="syncEditProjectSubAreaFromCompany()" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500"></select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Proje Adı</label>
+                <input type="text" id="editProjectName" required class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+              </div>
+              <div id="editProjectDeptWrap">
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Birim</label>
+                <select id="editProjectDept" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                  <option value="ELEKTRONIK">Elektronik</option>
+                  <option value="YAZILIM">Yazılım</option>
+                  <option value="MEKANIK">Mekanik</option>
+                </select>
+              </div>
+              <div id="editProjectSubAreaWrap" class="hidden">
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Alt Alan</label>
+                <select id="editProjectSubArea" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                  <option value="AGS">AGS</option>
+                  <option value="MEOS">MEOS</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Sorumlu Kişi</label>
+                <select id="editProjectOwner" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                  <option value="">Belirtilmemiş</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Durum</label>
+                <select id="editProjectStatus" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                  <option value="ACTIVE">Aktif</option>
+                  <option value="COMPLETED">Tamamlandı</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Başlangıç Tarihi</label>
+                <input type="date" id="editProjectStart" required class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Bitiş Tarihi (Deadline)</label>
+                <input type="date" id="editProjectEnd" required class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Öncelik</label>
+                <select id="editProjectPriority" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                  <option value="YÜKSEK">Yüksek</option>
+                  <option value="NORMAL">Normal</option>
+                  <option value="DÜŞÜK">Düşük</option>
+                </select>
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Not (ops.)</label>
+                <input type="text" id="editProjectNote" placeholder="Kısa açıklama" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+              </div>
+              <div class="sm:col-span-2 flex justify-end gap-2 mt-1">
+                <button type="button" onclick="closeEditProjectModal()" class="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-4 py-2 rounded-xl transition-all">Vazgeç</button>
+                <button type="submit" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-5 py-2 rounded-xl text-sm transition-all shadow-lg shadow-cyan-500/20">Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
         <!-- ADMİN: PROJELER (Proje Gidişatı + Aciliyet Sırası) -->
         <section id="adminPanelSection" class="hidden space-y-6">
           <!-- Ekip / Proje Gidişatı ana kartı -->
@@ -1500,6 +1576,12 @@
                 <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Firma Seçin</div>
                 <div id="projCompanyChips" class="flex gap-2 scroll-chips"></div>
               </div>
+
+              <!-- ADIM 3: Alt Alan seçimi — sadece firma ASELSAN ise gösterilir (AGS/MEOS). -->
+              <div id="projSubAreaWrap" class="hidden">
+                <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Alt Alan Seçin</div>
+                <div id="projSubAreaChips" class="flex gap-2 scroll-chips"></div>
+              </div>
             </div>
           </div>
 
@@ -1526,6 +1608,19 @@
             </button>
             <div id="urgencyRankingBody" class="hidden px-5 pb-5">
               <div id="urgencyRankingList" class="space-y-2 scroll-panel max-h-72 pr-1"></div>
+            </div>
+          </div>
+
+          <!-- ALT: Tamamlanan Projeler (varsayılan kapalı) -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleCompletedProjectsPanel()" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h3 class="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-circle-check text-emerald-500"></i> Tamamlanan Projeler<span id="completedProjectsCompanyLabel" class="text-slate-400 font-normal"></span>
+              </h3>
+              <i id="completedProjectsChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="completedProjectsBody" class="hidden px-5 pb-5">
+              <div id="completedProjectsList" class="space-y-2 scroll-panel max-h-72 pr-1"></div>
             </div>
           </div>
         </section>
@@ -1673,7 +1768,13 @@
               <div id="pdProjBadges" class="flex flex-wrap gap-1.5"></div>
               <canvas id="pdProjChart" height="90"></canvas>
               <div>
-                <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">İlerleme Notları</h4>
+                <div class="flex items-center justify-between gap-3 mb-2">
+                  <h4 id="pdProjLogsTitle" class="text-xs font-bold text-slate-500 dark:text-slate-400">İlerleme Notları</h4>
+                  <div id="pdProjPerfWrap" class="hidden relative w-16 h-16 shrink-0">
+                    <canvas id="pdProjPerfDonut"></canvas>
+                    <div id="pdProjPerfLabel" class="absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-800 dark:text-slate-100"></div>
+                  </div>
+                </div>
                 <div id="pdProjLogs" class="space-y-2 max-h-64 overflow-y-auto"></div>
               </div>
               <div id="pdProjStages"></div>
@@ -1702,9 +1803,12 @@
         <!-- PROJE DETAY SAYFASI (tam ekran; "Projeler" kutucuğu olan herkes için — Mevcut
              Projeler / Sorumlu Olunan Projeler listesinden bir projeye tıklanınca açılır) -->
         <section id="projectDetailSection" class="hidden space-y-5">
-          <button onclick="closeProjectDetailPage()" class="text-sm text-cyan-600 dark:text-cyan-400 font-semibold flex items-center gap-1.5 hover:underline">
-            <i class="fa-solid fa-arrow-left"></i> Geri Dön
-          </button>
+          <div class="flex items-center justify-between gap-2">
+            <button onclick="closeProjectDetailPage()" class="text-sm text-cyan-600 dark:text-cyan-400 font-semibold flex items-center gap-1.5 hover:underline">
+              <i class="fa-solid fa-arrow-left"></i> Geri Dön
+            </button>
+            <button id="projDetEditBtn" onclick="openEditProjectModal()" class="hidden text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-xl transition-all"><i class="fa-solid fa-pen me-1.5"></i>Düzenle</button>
+          </div>
 
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -1744,7 +1848,13 @@
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm space-y-4">
             <canvas id="projDetChart" height="90"></canvas>
             <div>
-              <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">İlerleme Notları</h4>
+              <div class="flex items-center justify-between gap-3 mb-2">
+                <h4 id="projDetLogsTitle" class="text-xs font-bold text-slate-500 dark:text-slate-400">İlerleme Notları</h4>
+                <div id="projDetPerfWrap" class="hidden relative w-16 h-16 shrink-0">
+                  <canvas id="projDetPerfDonut"></canvas>
+                  <div id="projDetPerfLabel" class="absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-800 dark:text-slate-100"></div>
+                </div>
+              </div>
               <div id="projDetLogs" class="space-y-2 max-h-64 overflow-y-auto"></div>
             </div>
             <div id="projDetStages"></div>
@@ -1889,6 +1999,19 @@
             </button>
             <div id="engineerUrgencyBody" class="hidden px-5 pb-5">
               <div id="engineerUrgencyRankingList" class="space-y-2 scroll-panel max-h-72 pr-1"></div>
+            </div>
+          </div>
+
+          <!-- ALT: Tamamlanan Projeler (varsayılan kapalı) -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
+            <button type="button" onclick="toggleEngineerCompletedProjectsPanel()" class="w-full flex items-center justify-between gap-2 p-5 text-left">
+              <h3 class="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-circle-check text-emerald-500"></i> Tamamlanan Projeler
+              </h3>
+              <i id="engineerCompletedProjectsChevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="engineerCompletedProjectsBody" class="hidden px-5 pb-5">
+              <div id="engineerCompletedProjectsList" class="space-y-2 scroll-panel max-h-72 pr-1"></div>
             </div>
           </div>
         </section>
@@ -2452,6 +2575,13 @@
                 <option value="MEKANIK">Mekanik</option>
               </select>
             </div>
+            <div id="newProjectSubAreaWrap" class="hidden">
+              <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Alt Alan</label>
+              <select id="newProjectSubArea" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                <option value="AGS">AGS</option>
+                <option value="MEOS">MEOS</option>
+              </select>
+            </div>
             <div>
               <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Sorumlu Kişi</label>
               <select id="newProjectOwner" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
@@ -2864,7 +2994,12 @@
         </div>
         <div>
           <label class="block text-xs font-semibold mb-1">Şifre</label>
-          <input type="password" id="newUserPassword" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+          <div class="relative">
+            <input type="password" id="newUserPassword" required class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 pr-10 text-sm">
+            <button type="button" onclick="toggleNewUserPasswordVisibility()" tabindex="-1" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+              <i id="newUserPasswordToggleIcon" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
         </div>
         <div>
           <label class="block text-xs font-semibold mb-1">Birim</label>
@@ -3297,12 +3432,61 @@
       }
 
       if (n.box === 'PROJECTS' && n.ref_id && typeof openProjectDetailPage === 'function') {
-        openProjectDetailPage(n.ref_id);
+        // "Geri Dön" sonrası doğru sayfaya dönebilmek için, role göre tahmin etmek yerine o an
+        // GERÇEKTEN görünen üst düzey bölüm kullanılır (bildirime her sayfadan tıklanabilir).
+        openProjectDetailPage(n.ref_id, currentVisibleTopSection());
         return;
       }
 
-      // MEETINGS, PENDING_USERS ve özel bir hedefi olmayan diğer kutular
+      if (n.box === 'MEETINGS' && n.ref_id) {
+        // İlgili toplantı hangi role ait olursa olsun doğru "Toplantılar" sayfasını açar
+        // (dataBoxButonuAc o an görünür olan tek butonu bulur), ardından toplantının bulunduğu
+        // (Bekleyen/Reddedilen/Geçmiş) aşağı-açılır paneli açıp karta kadar kaydırıp vurgular —
+        // genel kutuyu açıp bırakmak yerine gerçekten o toplantıya gider.
+        if (!dataBoxButonuAc('MEETINGS')) return;
+        const tryJumpToMeeting = (attempt) => {
+          const m = (meetingsListCache || []).find(x => x.id == n.ref_id);
+          if (!m) {
+            if (attempt < 15) setTimeout(() => tryJumpToMeeting(attempt + 1), 200);
+            return;
+          }
+          const nowIso = new Date().toISOString();
+          let bodyId = null;
+          if (m.status === 'PENDING') bodyId = 'meetingPendingBody';
+          else if (m.status === 'REJECTED') bodyId = 'meetingRejectedBody';
+          else if (m.status === 'APPROVED' && m.preferred_date && m.preferred_date < nowIso) bodyId = 'meetingHistoryBody';
+          if (bodyId) {
+            const body = document.getElementById(bodyId);
+            if (body) body.classList.remove('hidden');
+            const chevron = document.getElementById(bodyId.replace('Body', 'Chevron'));
+            if (chevron) chevron.classList.add('rotate-180');
+          }
+          setTimeout(() => {
+            const card = document.getElementById(`meetingCard_${n.ref_id}`);
+            if (!card) return;
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.classList.add('ring-2', 'ring-cyan-500');
+            setTimeout(() => card.classList.remove('ring-2', 'ring-cyan-500'), 2000);
+          }, 150);
+        };
+        setTimeout(() => tryJumpToMeeting(0), 300);
+        return;
+      }
+
+      // PENDING_USERS ve özel bir hedefi olmayan diğer kutular
       dataBoxButonuAc(n.box);
+    }
+
+    // Bildirimden bir alt sayfaya (ör. proje detayı) giderken, dönüşte doğru yere gelinmesi için
+    // o an GERÇEKTEN görünür olan üst düzey bölümün id'sini bulur (role bazlı tahmin yerine).
+    function currentVisibleTopSection() {
+      const sections = document.querySelectorAll('#mainScrollArea section[id]');
+      // offsetParent !== null: sadece kendi "hidden" class'ını değil, gizli bir üst elemanın
+      // içinde kalıp kalmadığını da hesaba katan güvenilir görünürlük kontrolü.
+      for (const el of sections) {
+        if (el.offsetParent !== null) return el.id;
+      }
+      return 'adminPanelSection';
     }
 
     // Bildirimlerin ilgili olduğu her kutucuğun simgesinde küçük bir nokta gösterir/gizler
@@ -3364,6 +3548,24 @@
     function toggleUrgencyRankingPanel() {
       const body = document.getElementById('urgencyRankingBody');
       const chevron = document.getElementById('urgencyRankingChevron');
+      if (!body) return;
+      body.classList.toggle('hidden');
+      if (chevron) chevron.classList.toggle('rotate-180');
+    }
+
+    // "Tamamlanan Projeler" panelini açar/kapatır (varsayılan kapalı)
+    function toggleCompletedProjectsPanel() {
+      const body = document.getElementById('completedProjectsBody');
+      const chevron = document.getElementById('completedProjectsChevron');
+      if (!body) return;
+      body.classList.toggle('hidden');
+      if (chevron) chevron.classList.toggle('rotate-180');
+    }
+
+    // Mühendis: "Tamamlanan Projeler" panelini açar/kapatır (varsayılan kapalı)
+    function toggleEngineerCompletedProjectsPanel() {
+      const body = document.getElementById('engineerCompletedProjectsBody');
+      const chevron = document.getElementById('engineerCompletedProjectsChevron');
       if (!body) return;
       body.classList.toggle('hidden');
       if (chevron) chevron.classList.toggle('rotate-180');
@@ -4128,6 +4330,8 @@
     let projCompaniesCache = [];
     let projSelectedDept = null;
     let projSelectedCompany = null;
+    let projSelectedSubArea = null; // sadece firma ASELSAN iken anlamlı (AGS/MEOS)
+    const ASELSAN_SUB_AREAS = ['AGS', 'MEOS'];
 
     async function loadProjectDashboard() {
       await loadProjectDepartments();
@@ -4287,6 +4491,9 @@
     async function selectProjectDept(dept) {
       projSelectedDept = dept;
       projSelectedCompany = null;
+      projSelectedSubArea = null;
+      const subAreaWrap = document.getElementById('projSubAreaWrap');
+      if (subAreaWrap) subAreaWrap.classList.add('hidden');
       renderProjectDeptChips();
       // Firmaları çek (birime bağlı olanlar + genel olanlar)
       try {
@@ -4319,10 +4526,19 @@
     }
 
     // Firma seçilince "Proje Seçin" adımı/grafik yok artık — o firmanın projeleri doğrudan
-    // aşağıdaki "Mevcut Projeler" listesinde gösterilir (yoksa liste boş kalır).
+    // aşağıdaki "Mevcut Projeler" listesinde gösterilir (yoksa liste boş kalır). Firma ASELSAN ise
+    // ayrıca bir "Alt Alan Seçin" (AGS/MEOS) adımı çıkar; alt alan seçilene kadar liste boş kalır.
     async function selectProjectCompany(companyId) {
       projSelectedCompany = companyId;
+      projSelectedSubArea = null;
       renderProjectCompanyChips();
+
+      const company = (projCompaniesCache || []).find(c => c.id === companyId);
+      const isAselsan = company && company.name.trim().toLocaleUpperCase('tr') === 'ASELSAN';
+      const subAreaWrap = document.getElementById('projSubAreaWrap');
+      if (subAreaWrap) subAreaWrap.classList.toggle('hidden', !isAselsan);
+      if (isAselsan) renderProjectSubAreaChips();
+
       await renderExistingProjectsList();
       renderUrgencyRanking(cachedUrgencyRanking);
       // Sonucu hemen görsünler diye "Mevcut Projeler" ve "Aciliyet Sırası" panellerini otomatik aç
@@ -4334,6 +4550,28 @@
       const urgencyChevron = document.getElementById('urgencyRankingChevron');
       if (urgencyBody) urgencyBody.classList.remove('hidden');
       if (urgencyChevron) urgencyChevron.classList.add('rotate-180');
+    }
+
+    // ADIM 3: Alt Alan çipleri (sadece ASELSAN için) — "Tümü" varsayılan seçili gelir (firmaya ait
+    // tüm projeler gösterilir); bir alt alan seçilirse sadece o alana ait projeler gösterilir.
+    function renderProjectSubAreaChips() {
+      const el = document.getElementById('projSubAreaChips');
+      if (!el) return;
+      const options = [{ value: null, label: 'Tümü', icon: 'fa-layer-group' }, ...ASELSAN_SUB_AREAS.map(sa => ({ value: sa, label: sa, icon: 'fa-layer-group' }))];
+      el.innerHTML = options.map(o => {
+        const active = projSelectedSubArea === o.value;
+        return `<button onclick="selectProjectSubArea(${o.value ? `'${o.value}'` : 'null'})" class="shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${active
+          ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-500/20'
+          : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-500'}">
+          <i class="fa-solid ${o.icon} me-1.5"></i>${o.label}</button>`;
+      }).join('');
+    }
+
+    async function selectProjectSubArea(subArea) {
+      projSelectedSubArea = subArea;
+      renderProjectSubAreaChips();
+      await renderExistingProjectsList();
+      renderUrgencyRanking(cachedUrgencyRanking);
     }
 
     // "Projelerin Aciliyet & Önem Sırası" panelinin (Proje Gidişatı içinde) son çekilen tam listesi —
@@ -4396,16 +4634,16 @@
       const el = document.getElementById('urgencyRankingList');
       if (!el) return;
       const labelEl = document.getElementById('urgencyRankingCompanyLabel');
-      if (labelEl) {
-        const company = (projCompaniesCache || []).find(c => c.id === projSelectedCompany);
-        labelEl.innerText = company ? ` — ${company.name}` : '';
-      }
+      const company = (projCompaniesCache || []).find(c => c.id === projSelectedCompany);
+      if (labelEl) labelEl.innerText = company ? ` — ${company.name}` : '';
       if (!projSelectedCompany) {
         el.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Projeleri görmek için önce bir firma seçin.</p>`;
         return;
       }
-      const filtered = (projects || []).filter(p => p.company_id === projSelectedCompany);
-      if (filtered.length === 0) { el.innerHTML = emptyStateHtml('fa-diagram-project', 'Bu firmaya ait proje yok.'); return; }
+      const isAselsan = company && company.name.trim().toLocaleUpperCase('tr') === 'ASELSAN';
+      let filtered = (projects || []).filter(p => p.company_id === projSelectedCompany);
+      if (isAselsan && projSelectedSubArea) filtered = filtered.filter(p => p.sub_area === projSelectedSubArea);
+      if (filtered.length === 0) { el.innerHTML = emptyStateHtml('fa-diagram-project', (isAselsan && projSelectedSubArea) ? `Bu alt alanda (${projSelectedSubArea}) proje yok.` : 'Bu firmaya ait proje yok.'); return; }
       // Müdür kendi biriminin TÜM projelerini görür (en acilden en az acile);
       // Admin (çok departmanlı, potansiyel olarak uzun liste) ilk 10 ile sınırlı kalır.
       const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
@@ -4416,7 +4654,7 @@
         else if (p.urgency >= 40) { barCls = 'bg-amber-500'; lvl = 'Orta'; }
         const width = Math.min(100, Math.max(6, p.urgency));
         const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
-        return `<button onclick="jumpToProject(${p.id})" class="w-full text-left flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 hover:border-cyan-500 transition-all">
+        return `<button onclick="jumpToProject(${p.id}, 'adminPanelSection')" class="w-full text-left flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 hover:border-cyan-500 transition-all">
           <div class="w-6 h-6 shrink-0 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-600 dark:text-slate-300">${i + 1}</div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between gap-2">
@@ -4462,15 +4700,35 @@
     function renderEngineerProjectsPage() {
       const listEl = document.getElementById('engineerProjectsList');
       const rankEl = document.getElementById('engineerUrgencyRankingList');
+      const completedEl = document.getElementById('engineerCompletedProjectsList');
       if (!listEl || !rankEl) return;
 
-      if (engineerOwnedProjects.length === 0) {
-        listEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz proje yok.');
-        rankEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz proje yok.');
+      if (completedEl) {
+        const completed = engineerOwnedProjects.filter(p => p.status === 'COMPLETED');
+        completedEl.innerHTML = completed.length === 0
+          ? emptyStateHtml('fa-circle-check', 'Henüz tamamlanan proje yok.')
+          : completed.map(p => `
+            <button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-lg p-2.5 transition-all">
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+                <div class="text-[10px] text-slate-400">Bitiş: ${p.end_date} · %${p.actual ?? 0}</div>
+              </div>
+              <i class="fa-solid fa-circle-check text-emerald-500 shrink-0"></i>
+            </button>
+          `).join('');
+      }
+
+      // Tamamlanan projeler artık kendi bölümünde gösterildiğinden, ana liste ve aciliyet
+      // sırasında sadece aktif projeler yer alır (Admin/Müdür tarafındaki davranışla tutarlı).
+      const activeProjects = engineerOwnedProjects.filter(p => p.status !== 'COMPLETED');
+
+      if (activeProjects.length === 0) {
+        listEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz aktif proje yok.');
+        rankEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz aktif proje yok.');
         return;
       }
 
-      listEl.innerHTML = engineerOwnedProjects.map(p => {
+      listEl.innerHTML = activeProjects.map(p => {
         const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
         const daysCls = p.days_left < 0 ? 'text-rose-500' : p.days_left <= 3 ? 'text-amber-500' : 'text-emerald-500';
         return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
@@ -4488,7 +4746,7 @@
         </button>`;
       }).join('');
 
-      const ranked = engineerOwnedProjects
+      const ranked = activeProjects
         .map(p => ({ ...p, urgency: Math.round(computeProjectUrgency(p)) }))
         .sort((a, b) => b.urgency - a.urgency);
       rankEl.innerHTML = ranked.map((p, i) => {
@@ -4524,8 +4782,11 @@
       const upcomingEl = document.getElementById(isTechnicianView ? 'technicianUpcomingProjectsList' : 'engineerUpcomingProjectsList');
       if (!overdueEl || !upcomingEl) return;
 
-      const overdue = engineerOwnedProjects.filter(p => p.days_left < 0).sort((a, b) => a.days_left - b.days_left);
-      const upcoming = engineerOwnedProjects.filter(p => p.days_left >= 0 && p.days_left <= 3).sort((a, b) => a.days_left - b.days_left);
+      // Tamamlanan projeler artık geciken/yaklaşan sayılmaz (Admin/Müdür tarafı zaten sunucuda
+      // "status !== COMPLETED" ile filtreleniyor; burada client-side aynı kural uygulanır).
+      const activeOnly = engineerOwnedProjects.filter(p => p.status !== 'COMPLETED');
+      const overdue = activeOnly.filter(p => p.days_left < 0).sort((a, b) => a.days_left - b.days_left);
+      const upcoming = activeOnly.filter(p => p.days_left >= 0 && p.days_left <= 3).sort((a, b) => a.days_left - b.days_left);
 
       const homeSectionId = isTechnicianView ? 'technicianHomeSection' : 'engineerHomeSection';
       const cardHtml = (p, text) => `<button type="button" onclick="openProjectDetailPage(${p.id}, '${homeSectionId}')" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
@@ -4546,9 +4807,13 @@
 
     // Geciken/aciliyet listesinden projeye zıpla: doğrudan Proje Detay Sayfası'nı açar
     // (Mühendis/Teknisyen ana ekranındaki eşdeğer hatırlatıcı kartlarıyla aynı davranış).
-    async function jumpToProject(projectId) {
+    // returnTo verilmezse (ör. ana ekrandaki "Geciken/Yaklaşan Projeler" hatırlatıcı kartları)
+    // role göre ana ekrana döner. "Projelerin Aciliyet & Önem Sırası" listesi ise (Proje Gidişatı
+    // sayfası, admin ve müdür için ortak "adminPanelSection" içinde) kendi gerçek konumunu açıkça
+    // geçer — aksi halde yanlış bölüm gizlenip liste, proje detayının arkasında görünür kalıyordu.
+    async function jumpToProject(projectId, returnTo) {
       const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
-      await openProjectDetailPage(projectId, isManagerView ? 'leaderSection' : 'adminHomeSection');
+      await openProjectDetailPage(projectId, returnTo || (isManagerView ? 'leaderSection' : 'adminHomeSection'));
     }
 
     // ---- Aşama Şablonları Modalı: liste + builder (oluşturma/düzenleme) görünümleri ----
@@ -4755,7 +5020,7 @@
       if (sel) {
         sel.innerHTML = projCompaniesCache.length === 0
           ? `<option value="">Önce firma ekleyin</option>`
-          : projCompaniesCache.map(c => `<option value="${c.id}" data-dept="${c.department || ''}">${escapeHtmlProj(c.name)}</option>`).join('');
+          : projCompaniesCache.map(c => `<option value="${c.id}" data-dept="${c.department || ''}" data-name="${escapeHtmlProj(c.name)}">${escapeHtmlProj(c.name)}</option>`).join('');
         syncNewProjectDeptFromCompany();
       }
       // Sorumlu kişi select: Müdür için sadece kendi biriminden, Admin için herkesten (usersList'ten)
@@ -4779,29 +5044,44 @@
       const opt = sel.options[sel.selectedIndex];
       const dept = opt ? opt.getAttribute('data-dept') : '';
       if (dept) deptSel.value = dept;
+      // Alt Alan (AGS/MEOS) sadece firma ASELSAN ise gösterilir, diğer firmalarda gizli kalır.
+      const companyName = opt ? (opt.getAttribute('data-name') || '') : '';
+      const subAreaWrap = document.getElementById('newProjectSubAreaWrap');
+      if (subAreaWrap) subAreaWrap.classList.toggle('hidden', companyName.trim().toLocaleUpperCase('tr') !== 'ASELSAN');
     }
 
     // Artık firma seçimine bağlı: bir firma seçilmeden hiçbir proje listelenmez; seçilen firmaya
     // ait proje yoksa liste boş kalır (eskiden burada tüm projeler gösteriliyordu).
     async function renderExistingProjectsList() {
       const el = document.getElementById('projExistingProjectsList');
+      const completedEl = document.getElementById('completedProjectsList');
       if (!el) return;
       const labelEl = document.getElementById('projExistingProjectsCompanyLabel');
-      if (labelEl) {
-        const company = (projCompaniesCache || []).find(c => c.id === projSelectedCompany);
-        labelEl.innerText = company ? ` — ${company.name}` : '';
-      }
+      const completedLabelEl = document.getElementById('completedProjectsCompanyLabel');
+      const company = (projCompaniesCache || []).find(c => c.id === projSelectedCompany);
+      if (labelEl) labelEl.innerText = company ? ` — ${company.name}` : '';
+      if (completedLabelEl) completedLabelEl.innerText = company ? ` — ${company.name}` : '';
       if (!projSelectedCompany) {
         el.innerHTML = `<p class="text-xs text-slate-400">Projeleri görmek için önce bir firma seçin.</p>`;
+        if (completedEl) completedEl.innerHTML = `<p class="text-xs text-slate-400">Projeleri görmek için önce bir firma seçin.</p>`;
         return;
       }
+      // ASELSAN seçilince varsayılan olarak firmaya ait TÜM projeler gösterilir; bir alt alan
+      // (AGS/MEOS) seçilirse liste sadece o alana ait projelere daralır.
+      const isAselsan = company && company.name.trim().toLocaleUpperCase('tr') === 'ASELSAN';
       try {
         const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
         let url = `${API_BASE_URL}/api/projects?company_id=${projSelectedCompany}`;
         if (isManagerView) url += `&department=${encodeURIComponent(currentUser.department)}`;
         const res = await fetch(url);
-        const projects = await safeJson(res);
-        if (!projects.length) { el.innerHTML = emptyStateHtml('fa-diagram-project', 'Bu firmaya ait proje yok.'); return; }
+        let projects = await safeJson(res);
+        if (isAselsan && projSelectedSubArea) projects = (projects || []).filter(p => p.sub_area === projSelectedSubArea);
+        if (!projects.length) {
+          const emptyMsg = (isAselsan && projSelectedSubArea) ? `Bu alt alanda (${projSelectedSubArea}) proje yok.` : 'Bu firmaya ait proje yok.';
+          el.innerHTML = emptyStateHtml('fa-diagram-project', emptyMsg);
+          if (completedEl) completedEl.innerHTML = emptyStateHtml('fa-diagram-project', emptyMsg);
+          return;
+        }
         el.innerHTML = projects.map(p => `
           <div onclick="openProjectDetailPage(${p.id}, 'adminPanelSection')" class="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-2.5 cursor-pointer transition-all">
             <div class="min-w-0">
@@ -4811,7 +5091,25 @@
             <button onclick="event.stopPropagation(); handleDeleteProject(${p.id})" class="text-rose-500 hover:text-rose-600 p-1 shrink-0"><i class="fa-solid fa-trash-can"></i></button>
           </div>
         `).join('');
-      } catch (e) { el.innerHTML = `<p class="text-xs text-rose-400">Projeler yüklenemedi.</p>`; }
+
+        if (completedEl) {
+          const completed = projects.filter(p => p.status === 'COMPLETED');
+          completedEl.innerHTML = completed.length === 0
+            ? emptyStateHtml('fa-circle-check', 'Bu firmada henüz tamamlanan proje yok.')
+            : completed.map(p => `
+              <button type="button" onclick="openProjectDetailPage(${p.id}, 'adminPanelSection')" class="w-full text-left flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-lg p-2.5 transition-all">
+                <div class="min-w-0">
+                  <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+                  <div class="text-[10px] text-slate-400">${p.owner_name || 'Sorumlu yok'} · Bitiş: ${p.end_date} · %${p.actual ?? 0}</div>
+                </div>
+                <i class="fa-solid fa-circle-check text-emerald-500 shrink-0"></i>
+              </button>
+            `).join('');
+        }
+      } catch (e) {
+        el.innerHTML = `<p class="text-xs text-rose-400">Projeler yüklenemedi.</p>`;
+        if (completedEl) completedEl.innerHTML = `<p class="text-xs text-rose-400">Projeler yüklenemedi.</p>`;
+      }
     }
 
     async function handleAddCompany() {
@@ -4909,6 +5207,8 @@
       const company_id = document.getElementById('newProjectCompany').value;
       const name = document.getElementById('newProjectName').value.trim();
       const department = document.getElementById('newProjectDept').value;
+      const subAreaWrap = document.getElementById('newProjectSubAreaWrap');
+      const sub_area = (subAreaWrap && !subAreaWrap.classList.contains('hidden')) ? document.getElementById('newProjectSubArea').value : null;
       const owner_id = document.getElementById('newProjectOwner').value;
       const start_date = document.getElementById('newProjectStart').value;
       const end_date = document.getElementById('newProjectEnd').value;
@@ -4920,7 +5220,7 @@
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ company_id, name, department, owner_id: owner_id || null, start_date, end_date, priority, note, userRole: currentUser.role, userId: currentUser.id, createdBy: currentUser.name })
+          body: JSON.stringify({ company_id, name, department, sub_area, owner_id: owner_id || null, start_date, end_date, priority, note, userRole: currentUser.role, userId: currentUser.id, createdBy: currentUser.name })
         });
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Oluşturulamadı.', 'error'); return; }
@@ -5386,6 +5686,7 @@
       document.getElementById('pdSubView').classList.add('hidden');
       document.getElementById('pdGrid').classList.remove('hidden');
       if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
+      if (personProjectDonutInstance) { personProjectDonutInstance.destroy(); personProjectDonutInstance = null; }
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/person/${userId}/detail`);
@@ -5599,6 +5900,7 @@
     // (pdSubView) hem de genel Proje Detay Sayfası'nda (projectDetailSection) kullanılır.
     // Sahibi veya Admin/İK ise yeni ilerleme ekleyebilir.
     let personProjectChartInstance = null;
+    let personProjectDonutInstance = null; // Proje performansı simit grafiği (bkz. renderPersonProjectModal)
     let personProjectCurrentId = null;
     let personProjectOwnerId = null;
     let personProjectData = null; // son çekilen {project, progress} — yeniden fetch etmeden yeniden çizmek için
@@ -5614,6 +5916,7 @@
       document.getElementById('pdSubView').classList.add('hidden');
       document.getElementById('pdGrid').classList.remove('hidden');
       if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
+      if (personProjectDonutInstance) { personProjectDonutInstance.destroy(); personProjectDonutInstance = null; }
       scrollMainTo(0, true);
     }
 
@@ -5640,12 +5943,22 @@
 
     // Aktif görünüme (bağımsız pencere ya da Kişi Detayı içindeki satır-altı görünüm) göre
     // güncel projeyi yeniden çeker ve yeniden çizer — ekleme/düzenleme/silme sonrası ortak yenileme.
+    // Onayla/Geri Al/not ekleme-düzenleme-silme sonrası ortak yenileme: openProjectDetailPage /
+    // openPersonProjectInline'ın aksine sayfa görünürlüğüne dokunmaz ve kaydırma konumunu
+    // SIFIRLAMAZ — sadece veriyi tazeleyip olduğu yerde yeniden çizer.
     async function refreshPersonProjectView() {
-      if (ppIdPrefix === 'projDet') {
-        await openProjectDetailPage(personProjectCurrentId, projectDetailReturnTo);
-      } else {
-        await openPersonProjectInline(personProjectCurrentId, personProjectOwnerId);
-      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${personProjectCurrentId}`);
+        const data = await safeJson(res);
+        if (!res.ok) { showToast(data.error || 'Proje yüklenemedi.', 'error'); return; }
+        personProjectOwnerId = data.project.owner_id || null;
+        personProjectData = data;
+        if (ppIdPrefix === 'projDet') {
+          renderProjectDetailPage(data);
+        } else {
+          await renderPersonProjectModal(data);
+        }
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
     // ============================================================
@@ -5686,18 +5999,126 @@
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
+    // Proje Düzenle modalı: "Projeler" kutucuğu olan herkes (Admin/İK, Müdür, Ekip Lideri,
+    // Mühendis her zaman; bunların dışında sadece o projenin sorumlusu — bkz.
+    // canManageProjectStagesClient) projenin TÜM alanlarını (firma, birim, alt alan, sorumlu,
+    // tarihler, öncelik, durum, not) buradan düzenleyebilir.
+    async function openEditProjectModal() {
+      if (!personProjectData || !personProjectData.project) return;
+      const project = personProjectData.project;
+      const modal = document.getElementById('editProjectModal');
+      if (!modal) return;
+
+      const isManagerView = isProjectDeptLockedRole(currentUser.role);
+      let companies = [];
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/companies`);
+        const all = await safeJson(res);
+        companies = isManagerView ? (all || []).filter(c => !c.department || c.department === currentUser.department) : (all || []);
+      } catch (e) { companies = []; }
+
+      const companySel = document.getElementById('editProjectCompany');
+      companySel.innerHTML = companies.map(c => `<option value="${c.id}" data-dept="${c.department || ''}" data-name="${escapeHtmlProj(c.name)}">${escapeHtmlProj(c.name)}</option>`).join('');
+      companySel.value = project.company_id;
+
+      document.getElementById('editProjectName').value = project.name || '';
+      const deptSel = document.getElementById('editProjectDept');
+      deptSel.value = project.department || 'ELEKTRONIK';
+      deptSel.disabled = isManagerView; // Müdür/Ekip Lideri kendi biriminin dışına proje taşıyamaz
+      document.getElementById('editProjectStatus').value = project.status || 'ACTIVE';
+      document.getElementById('editProjectStart').value = project.start_date || '';
+      document.getElementById('editProjectEnd').value = project.end_date || '';
+      document.getElementById('editProjectPriority').value = project.priority || 'NORMAL';
+      document.getElementById('editProjectNote').value = project.note || '';
+
+      const ownerSel = document.getElementById('editProjectOwner');
+      const people = (usersList || []).filter(u =>
+        u.role !== 'ADMIN' && u.role !== 'HR' && (u.status === 'APPROVED' || !u.status) &&
+        (!isManagerView || u.department === currentUser.department)
+      );
+      ownerSel.innerHTML = `<option value="">Belirtilmemiş</option>` +
+        people.map(u => `<option value="${u.id}">${escapeHtmlProj(u.name)} (${ROLE_LABELS_TR[u.role] || u.role})</option>`).join('');
+      ownerSel.value = project.owner_id || '';
+
+      syncEditProjectSubAreaFromCompany();
+      if (project.sub_area) document.getElementById('editProjectSubArea').value = project.sub_area;
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeEditProjectModal() {
+      const modal = document.getElementById('editProjectModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    // Alt Alan (AGS/MEOS) sadece firma ASELSAN ise gösterilir; Birim de (yönetici değilse) o
+    // firmaya kayıtlı sabit birime göre eşitlenir.
+    function syncEditProjectSubAreaFromCompany() {
+      const sel = document.getElementById('editProjectCompany');
+      const deptSel = document.getElementById('editProjectDept');
+      if (!sel) return;
+      const opt = sel.options[sel.selectedIndex];
+      const dept = opt ? opt.getAttribute('data-dept') : '';
+      if (dept && deptSel && !deptSel.disabled) deptSel.value = dept;
+      const companyName = opt ? (opt.getAttribute('data-name') || '') : '';
+      const subAreaWrap = document.getElementById('editProjectSubAreaWrap');
+      if (subAreaWrap) subAreaWrap.classList.toggle('hidden', companyName.trim().toLocaleUpperCase('tr') !== 'ASELSAN');
+    }
+
+    async function submitEditProject(e) {
+      e.preventDefault();
+      if (!personProjectData || !personProjectData.project) return;
+      const pid = personProjectData.project.id;
+      const company_id = document.getElementById('editProjectCompany').value;
+      const name = document.getElementById('editProjectName').value.trim();
+      const department = document.getElementById('editProjectDept').value;
+      const subAreaWrap = document.getElementById('editProjectSubAreaWrap');
+      const sub_area = (subAreaWrap && !subAreaWrap.classList.contains('hidden')) ? document.getElementById('editProjectSubArea').value : null;
+      const owner_id = document.getElementById('editProjectOwner').value;
+      const status = document.getElementById('editProjectStatus').value;
+      const start_date = document.getElementById('editProjectStart').value;
+      const end_date = document.getElementById('editProjectEnd').value;
+      const priority = document.getElementById('editProjectPriority').value;
+      const note = document.getElementById('editProjectNote').value.trim();
+      if (!name) { showToast('Proje adı gerekli.', 'error'); return; }
+      if (!start_date || !end_date) { showToast('Başlangıç ve bitiş tarihi gerekli.', 'error'); return; }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${pid}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_id, name, department, sub_area, owner_id: owner_id || null, status, start_date, end_date, priority, note, userRole: currentUser.role, userId: currentUser.id })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); return; }
+        showToast('Proje güncellendi.', 'success');
+        closeEditProjectModal();
+        await refreshPersonProjectView();
+      } catch (err) { showToast('Hata: ' + err.message, 'error'); }
+    }
+
     function closeProjectDetailPage() {
       document.getElementById('projectDetailSection').classList.add('hidden');
       const returnSec = document.getElementById(projectDetailReturnTo);
       if (returnSec) returnSec.classList.remove('hidden');
       if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
+      if (personProjectDonutInstance) { personProjectDonutInstance.destroy(); personProjectDonutInstance = null; }
       currentProjectPlanTaskId = null;
       scrollMainTo(0, true);
+      // Projede durum/tarih/öncelik değişmiş olabilir (ör. "Tamamlandı" işaretlenmiş) — geri
+      // dönülen sayfadaki proje listelerini (Mevcut/Tamamlanan/Aciliyet Sırası) tazele, aksi halde
+      // eski (düzenlemeden önceki) hâliyle kalır.
+      if (projectDetailReturnTo === 'adminPanelSection') {
+        renderExistingProjectsList();
+        refreshDashboardSummary();
+      } else if (projectDetailReturnTo === 'engineerProjectsPageSection') {
+        loadEngineerOwnedProjects();
+      }
     }
 
     function renderProjectDetailPage(data) {
       const project = data.project;
       document.getElementById('projDetTitle').innerText = `${project.company_name || ''} — ${project.name}`;
+      const editBtn = document.getElementById('projDetEditBtn');
+      if (editBtn) editBtn.classList.toggle('hidden', !canEditProjectDetailsClient());
 
       document.getElementById('projDetMeta').innerHTML = `
         <span><i class="fa-solid fa-building me-1 text-slate-400"></i>${DEPARTMENT_LABELS[project.department] || project.department || '—'}</span>
@@ -5753,6 +6174,7 @@
       const canvas = document.getElementById(idp + 'Chart');
       const ctx = canvas.getContext('2d');
       if (personProjectChartInstance) { personProjectChartInstance.destroy(); personProjectChartInstance = null; }
+      if (personProjectDonutInstance) { personProjectDonutInstance.destroy(); personProjectDonutInstance = null; }
       // Çizginin altına hafif bir gradient dolgu (yukarıdan aşağı saydamlaşan cyan) —
       // düz "transparent" dolguya göre grafiği çok daha zengin/premium gösterir.
       const chartFill = ctx.createLinearGradient(0, 0, 0, 220);
@@ -5778,49 +6200,133 @@
         }
       });
 
-      // İlerleme notları (en yeni üstte). Admin/İK her notun tüm bilgilerini (tarih/plan/gerçek/not)
-      // düzenleyebilir ve notu silebilir — server tarafında da isAdmin ile aynı kural uygulanır.
-      const isAdminViewer = currentUser.role === 'ADMIN' || currentUser.role === 'HR';
-      const logsEl = document.getElementById(idp + 'Logs');
-      if (sorted.length === 0) {
-        logsEl.innerHTML = emptyStateHtml('fa-chart-line', 'Henüz ilerleme kaydı yok.');
-      } else {
-        logsEl.innerHTML = sorted.slice().reverse().map(p => {
-          if (isAdminViewer && ppEditingId == p.id) {
-            return `
-              <div class="bg-slate-100 dark:bg-slate-800/70 border border-cyan-500/50 rounded-lg p-2.5 text-xs space-y-1.5">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  <input type="date" id="${idp}EditDate_${p.id}" value="${p.log_date}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
-                  <input type="number" id="${idp}EditActual_${p.id}" min="0" max="100" value="${p.actual}" placeholder="Gerçekleşen %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
-                </div>
-                <input type="text" id="${idp}EditNote_${p.id}" value="${(p.note || '').replace(/"/g, '&quot;')}" placeholder="Not (opsiyonel)" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
-                <div class="flex gap-1.5">
-                  <button onclick="saveEditedProgressNote(${p.id})" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold py-1.5 rounded-lg">Kaydet</button>
-                  <button onclick="cancelEditProgressNote()" class="flex-1 bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold py-1.5 rounded-lg">Vazgeç</button>
-                </div>
-              </div>
-            `;
-          }
-          return `
-            <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-xs">
-              <div class="flex justify-between items-start gap-2">
-                <div class="flex justify-between flex-1 min-w-0 text-slate-500 dark:text-slate-400"><span>${p.log_date}</span><span>Gerçek %${p.actual}</span></div>
-                ${isAdminViewer ? `
-                  <div class="flex items-center gap-1 shrink-0">
-                    <button onclick="openEditProgressNote(${p.id})" title="Düzenle" class="text-amber-500 p-0.5"><i class="fa-solid fa-pen"></i></button>
-                    <button onclick="handleDeleteProgressNote(${p.id})" title="Sil" class="text-rose-500 p-0.5"><i class="fa-solid fa-trash-can"></i></button>
-                  </div>
-                ` : ''}
-              </div>
-              ${p.note ? `<div class="mt-1 text-slate-700 dark:text-slate-300">${escapeHtmlProj(p.note)}</div>` : ''}
-            </div>
-          `;
-        }).join('');
-      }
-
-      // Proje Aşamaları checklist'i (varsa şablon uygulanmış): yüklenip render edilir.
+      // Proje Aşamaları checklist'i (varsa şablon uygulanmış): "İlerleme Notları" alanının aşama
+      // checklist'i varken tamamlanan aşamaları göstermesi gerektiğinden, önce burada yüklenir.
       const stagesData = await loadAndRenderProjectStages(idp, project.id);
       const hasStages = !!(stagesData && stagesData.stages && stagesData.stages.length > 0);
+
+      const logsTitleEl = document.getElementById(idp + 'LogsTitle');
+      const perfWrapEl = document.getElementById(idp + 'PerfWrap');
+      const perfLabelEl = document.getElementById(idp + 'PerfLabel');
+      const logsEl = document.getElementById(idp + 'Logs');
+
+      if (hasStages) {
+        // Aşama checklist'i varken bu alan artık ham ilerleme kayıtları yerine, tamamlanan her
+        // ana/alt aşamayı (girildiyse notuyla birlikte) ve proje performansını gösteren bir
+        // simit grafiği gösterir.
+        if (logsTitleEl) logsTitleEl.innerText = 'Tamamlanan Aşamalar';
+        // En son onaylanan tek öğe hâlâ "Proje Aşamaları" kısmında göründüğü için burada
+        // tekrarlanmaz. Alt aşamalar, Proje Aşamaları'ndaki gibi kendi ana aşamasının altında
+        // gruplanır (tek tek ayrı satırlar yerine).
+        const lastCompleted = findLastCompletedStageKey(stagesData.stages);
+        // Admin/İK/Müdür/Ekip Lideri her zaman, projenin sorumlusu mühendis ise sadece kendi
+        // projesinde: buradaki (zaten tamamlanmış) aşamaları düzenleme/geri alma/silme yetkisi.
+        const canEditCompleted = canEditProjectDetailsClient();
+        const completedGroups = [];
+        stagesData.stages.forEach(main => {
+          if (!main.subItems || main.subItems.length === 0) {
+            const isLingering = lastCompleted && lastCompleted.mainId === main.id && lastCompleted.subId === null;
+            if (main.isDone && !isLingering) {
+              completedGroups.push({ leaf: true, id: main.id, title: main.title, note: main.note, completedAt: main.completedAt, completedBy: main.completedBy, _maxAt: main.completedAt || '' });
+            }
+          } else {
+            const doneSubs = main.subItems.filter(s => s.isDone && !(lastCompleted && lastCompleted.mainId === main.id && lastCompleted.subId === s.id));
+            if (doneSubs.length > 0) {
+              const sortedSubs = doneSubs.slice().sort((a, b) => String(b.completedAt || '').localeCompare(String(a.completedAt || '')));
+              completedGroups.push({ leaf: false, title: main.title, items: sortedSubs, _maxAt: sortedSubs[0].completedAt || '' });
+            }
+          }
+        });
+        completedGroups.sort((a, b) => String(b._maxAt).localeCompare(String(a._maxAt)));
+
+        const completedLeafHtml = (it, indent) => `
+          <div class="flex items-start gap-2 text-xs ${indent ? 'pl-2 border-l-2 border-emerald-200 dark:border-emerald-900/50' : ''}">
+            <i class="fa-solid fa-circle-check text-emerald-500 mt-0.5 shrink-0"></i>
+            <div class="flex-1 min-w-0">
+              <div class="${indent ? 'text-slate-700 dark:text-slate-300' : 'font-semibold text-slate-800 dark:text-slate-200'}">${escapeHtmlProj(it.title)}</div>
+              <div class="text-slate-400 text-[10px] mt-0.5">${it.completedAt ? escapeHtmlProj(String(it.completedAt).slice(0, 16).replace('T', ' ')) : ''}${it.completedBy ? ' · ' + escapeHtmlProj(it.completedBy) : ''}</div>
+              ${it.note ? `<div class="mt-0.5 text-slate-600 dark:text-slate-400">${escapeHtmlProj(it.note)}</div>` : ''}
+            </div>
+            ${canEditCompleted ? `
+              <div class="flex items-center gap-2 shrink-0">
+                <button type="button" data-note="${escapeHtmlProj(it.note || '')}" onclick="handleEditStageNote(${project.id}, ${it.id}, this.dataset.note)" title="Notu düzenle" class="text-cyan-500 hover:text-cyan-600"><i class="fa-solid fa-pen text-[11px]"></i></button>
+                <button type="button" onclick="handleToggleStage(${project.id}, ${it.id}, false)" title="Geri al" class="text-amber-500 hover:text-amber-600"><i class="fa-solid fa-rotate-left text-[11px]"></i></button>
+                <button type="button" onclick="handleDeleteStage(${project.id}, ${it.id})" title="Sil" class="text-rose-400 hover:text-rose-500"><i class="fa-solid fa-trash-can text-[11px]"></i></button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+
+        logsEl.innerHTML = completedGroups.length === 0
+          ? emptyStateHtml('fa-list-check', 'Henüz tamamlanan aşama yok.')
+          : completedGroups.map(g => {
+              if (g.leaf) {
+                return `<div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5">${completedLeafHtml(g, false)}</div>`;
+              }
+              return `
+                <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 space-y-2">
+                  <div class="font-semibold text-xs text-slate-800 dark:text-slate-200">${escapeHtmlProj(g.title)}</div>
+                  <div class="space-y-2">${g.items.map(s => completedLeafHtml(s, true)).join('')}</div>
+                </div>
+              `;
+            }).join('');
+
+        if (perfWrapEl) {
+          perfWrapEl.classList.remove('hidden');
+          if (perfLabelEl) perfLabelEl.innerText = `%${stagesData.percentage}`;
+          const donutCanvas = document.getElementById(idp + 'PerfDonut');
+          const donutCtx = donutCanvas.getContext('2d');
+          personProjectDonutInstance = new Chart(donutCtx, {
+            type: 'doughnut',
+            data: { datasets: [{ data: [stagesData.percentage, 100 - stagesData.percentage], backgroundColor: ['#06b6d4', 'rgba(148,163,184,0.25)'], borderWidth: 0 }] },
+            options: { cutout: '72%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 400 } }
+          });
+        }
+      }
+
+      if (!hasStages) {
+        if (logsTitleEl) logsTitleEl.innerText = 'İlerleme Notları';
+        if (perfWrapEl) perfWrapEl.classList.add('hidden');
+
+        // İlerleme notları (en yeni üstte). Admin/İK her notun tüm bilgilerini (tarih/plan/gerçek/not)
+        // düzenleyebilir ve notu silebilir — server tarafında da isAdmin ile aynı kural uygulanır.
+        const isAdminViewer = currentUser.role === 'ADMIN' || currentUser.role === 'HR';
+        if (sorted.length === 0) {
+          logsEl.innerHTML = emptyStateHtml('fa-chart-line', 'Henüz ilerleme kaydı yok.');
+        } else {
+          logsEl.innerHTML = sorted.slice().reverse().map(p => {
+            if (isAdminViewer && ppEditingId == p.id) {
+              return `
+                <div class="bg-slate-100 dark:bg-slate-800/70 border border-cyan-500/50 rounded-lg p-2.5 text-xs space-y-1.5">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    <input type="date" id="${idp}EditDate_${p.id}" value="${p.log_date}" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                    <input type="number" id="${idp}EditActual_${p.id}" min="0" max="100" value="${p.actual}" placeholder="Gerçekleşen %" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                  </div>
+                  <input type="text" id="${idp}EditNote_${p.id}" value="${(p.note || '').replace(/"/g, '&quot;')}" placeholder="Not (opsiyonel)" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
+                  <div class="flex gap-1.5">
+                    <button onclick="saveEditedProgressNote(${p.id})" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold py-1.5 rounded-lg">Kaydet</button>
+                    <button onclick="cancelEditProgressNote()" class="flex-1 bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold py-1.5 rounded-lg">Vazgeç</button>
+                  </div>
+                </div>
+              `;
+            }
+            return `
+              <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 text-xs">
+                <div class="flex justify-between items-start gap-2">
+                  <div class="flex justify-between flex-1 min-w-0 text-slate-500 dark:text-slate-400"><span>${p.log_date}</span><span>Gerçek %${p.actual}</span></div>
+                  ${isAdminViewer ? `
+                    <div class="flex items-center gap-1 shrink-0">
+                      <button onclick="openEditProgressNote(${p.id})" title="Düzenle" class="text-amber-500 p-0.5"><i class="fa-solid fa-pen"></i></button>
+                      <button onclick="handleDeleteProgressNote(${p.id})" title="Sil" class="text-rose-500 p-0.5"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                  ` : ''}
+                </div>
+                ${p.note ? `<div class="mt-1 text-slate-700 dark:text-slate-300">${escapeHtmlProj(p.note)}</div>` : ''}
+              </div>
+            `;
+          }).join('');
+        }
+      }
 
       // İlerleme ekleme formu: sadece projenin sahibi veya Admin görür (server de aynı kuralı uygular).
       // Bir aşama checklist'i varsa "Gerçekleşen %" artık checklist'ten otomatik geldiği için
@@ -5838,6 +6344,14 @@
     function canManageProjectStagesClient() {
       if (!currentUser) return false;
       if (['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role)) return true;
+      return !!(personProjectOwnerId && currentUser.id == personProjectOwnerId);
+    }
+
+    // Projenin TÜM alanlarını düzenleyebilme yetkisi — Mühendis burada YOK (sadece aşama
+    // işaretleyebilir, canManageProjectStagesClient'ta), kendi sorumlu olduğu proje hariç.
+    function canEditProjectDetailsClient() {
+      if (!currentUser) return false;
+      if (['ADMIN', 'HR', 'MANAGER', 'LEADER'].includes(currentUser.role)) return true;
       return !!(personProjectOwnerId && currentUser.id == personProjectOwnerId);
     }
 
@@ -5873,19 +6387,30 @@
     let expandedStageMains = new Set();
     let stagesLastRender = null;
 
+    // Sadece görünürlüğü (CSS class) değiştirir, hiçbir şeyi yeniden çizmez — bu sayede sayfa
+    // kaydırma konumu olduğu yerde kalır, en başa atmaz. Alt aşamalar zaten DOM'da (gizli) hazır
+    // bekliyor (bkz. renderProjectStagesSection), sadece açığa çıkarılıyor/gizleniyor.
     function toggleStageGroup(mainId) {
-      if (expandedStageMains.has(mainId)) expandedStageMains.delete(mainId);
-      else expandedStageMains.add(mainId);
-      if (stagesLastRender) renderProjectStagesSection(stagesLastRender.idp, stagesLastRender.projectId, stagesLastRender.data);
+      const subEl = document.getElementById(`stageSub_${mainId}`);
+      const chevronEl = document.getElementById(`stageChevron_${mainId}`);
+      if (!subEl) return;
+      const willExpand = subEl.classList.contains('hidden');
+      subEl.classList.toggle('hidden');
+      if (chevronEl) chevronEl.classList.toggle('rotate-90', willExpand);
+      if (willExpand) expandedStageMains.add(mainId);
+      else expandedStageMains.delete(mainId);
     }
 
     // Tamamlanmamış bir aşama satırı: opsiyonel not girilebilen bir metin kutusu + "Onayla" butonu
     // (Admin/İK/Müdür/Ekip Lideri/Mühendis/proje sorumlusu için) — anlık checkbox yerine, notu
     // yazıp bilerek onaylamak daha rahat. Tamamlanmışsa notu salt-okunur gösterir, "Geri Al" ile
     // tekrar aktif hale getirilebilir.
-    function renderStageLeafHtml(projectId, item, canManage, isMainLeaf) {
+    function renderStageLeafHtml(projectId, item, canManage, isMainLeaf, canEditCompleted) {
       const textCls = isMainLeaf ? 'font-semibold text-slate-800 dark:text-slate-200' : 'text-slate-700 dark:text-slate-300';
       if (item.isDone) {
+        // Tamamlanmış bir aşamayı düzenleme (not değiştirme/geri alma/silme) yetkisi, sıradan
+        // aşama yönetiminden (canManage — her mühendis) daha dar: sadece Admin/İK/Müdür/Ekip
+        // Lideri ve o projenin sorumlusu olan mühendis (canEditCompleted).
         return `
           <div class="flex items-start gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs">
             <i class="fa-solid fa-circle-check text-emerald-500 mt-0.5 shrink-0"></i>
@@ -5893,8 +6418,9 @@
               <div class="${textCls} line-through opacity-60">${escapeHtmlProj(item.title)}</div>
               ${item.note ? `<div class="mt-0.5 text-slate-500 dark:text-slate-400 no-underline">${escapeHtmlProj(item.note)}</div>` : ''}
             </div>
-            ${canManage ? `<button type="button" onclick="handleToggleStage(${projectId}, ${item.id}, false)" title="Geri al" class="text-amber-500 hover:text-amber-600 shrink-0"><i class="fa-solid fa-rotate-left text-[11px]"></i></button>` : ''}
-            ${canManage ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${item.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
+            ${canEditCompleted ? `<button type="button" data-note="${escapeHtmlProj(item.note || '')}" onclick="handleEditStageNote(${projectId}, ${item.id}, this.dataset.note)" title="Notu düzenle" class="text-cyan-500 hover:text-cyan-600 shrink-0"><i class="fa-solid fa-pen text-[11px]"></i></button>` : ''}
+            ${canEditCompleted ? `<button type="button" onclick="handleToggleStage(${projectId}, ${item.id}, false)" title="Geri al" class="text-amber-500 hover:text-amber-600 shrink-0"><i class="fa-solid fa-rotate-left text-[11px]"></i></button>` : ''}
+            ${canEditCompleted ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${item.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
           </div>
         `;
       }
@@ -5915,6 +6441,29 @@
       `;
     }
 
+    // stages ağacındaki TÜM tamamlanmış ana/alt aşamalar arasından completedAt'e göre en son
+    // onaylananı bulur. Bu tek öğe, tamamlanmış olsa da "Proje Aşamaları" kısmında görünmeye
+    // devam eder (kullanıcı az önce ne yaptığını görsün diye) — diğer tüm tamamlananlar
+    // "Tamamlanan Aşamalar" kısmına taşınır. Hem renderProjectStagesSection hem de
+    // renderPersonProjectModal aynı sonucu kullanır, ikisi de tutarlı kalsın diye.
+    function findLastCompletedStageKey(stages) {
+      let best = null;
+      (stages || []).forEach(main => {
+        if (!main.subItems || main.subItems.length === 0) {
+          if (main.isDone && main.completedAt && (!best || main.completedAt > best.completedAt)) {
+            best = { mainId: main.id, subId: null, completedAt: main.completedAt };
+          }
+        } else {
+          main.subItems.forEach(sub => {
+            if (sub.isDone && sub.completedAt && (!best || sub.completedAt > best.completedAt)) {
+              best = { mainId: main.id, subId: sub.id, completedAt: sub.completedAt };
+            }
+          });
+        }
+      });
+      return best;
+    }
+
     async function renderProjectStagesSection(idp, projectId, data) {
       const container = document.getElementById(idp + 'Stages');
       if (!container) return;
@@ -5922,6 +6471,8 @@
       const stages = data.stages || [];
       const percentage = data.percentage || 0;
       const canManage = canManageProjectStagesClient();
+      const canEditCompleted = canEditProjectDetailsClient();
+      const lastCompleted = findLastCompletedStageKey(stages);
 
       let applyBtnHtml = '';
       if (canManage) {
@@ -5953,31 +6504,39 @@
 
       const stagesHtml = stages.map(main => {
         if (main.subItems.length === 0) {
-          return renderStageLeafHtml(projectId, main, canManage, true);
+          // Tamamlanmış bir ana aşama, en son onaylanan o değilse artık burada değil "Tamamlanan
+          // Aşamalar" kısmında gösterilir.
+          const isLingering = lastCompleted && lastCompleted.mainId === main.id && lastCompleted.subId === null;
+          if (main.isDone && !isLingering) return '';
+          return renderStageLeafHtml(projectId, main, canManage, true, canEditCompleted);
         }
+        // Gruptaki alt aşamalardan sadece tamamlanmamış olanlar + (varsa) en son onaylanan
+        // gösterilir; diğer tamamlananlar "Tamamlanan Aşamalar" kısmına taşınmıştır.
+        const visibleSubs = main.subItems.filter(s => !s.isDone || (lastCompleted && lastCompleted.mainId === main.id && lastCompleted.subId === s.id));
+        if (visibleSubs.length === 0) return '';
         const doneCount = main.subItems.filter(s => s.isDone).length;
         const isExpanded = expandedStageMains.has(main.id);
-        const subsHtml = main.subItems.map(s => renderStageLeafHtml(projectId, s, canManage, false)).join('');
+        const subsHtml = visibleSubs.map(s => renderStageLeafHtml(projectId, s, canManage, false, canEditCompleted)).join('');
         return `
           <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <button type="button" onclick="toggleStageGroup(${main.id})" class="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
               <span class="flex items-center gap-2 min-w-0">
-                <i class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}"></i>
+                <i id="stageChevron_${main.id}" class="fa-solid fa-chevron-right text-[10px] text-slate-400 transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}"></i>
                 <span class="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">${escapeHtmlProj(main.title)}</span>
               </span>
               <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${doneCount === main.subItems.length ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'}">${doneCount}/${main.subItems.length}</span>
             </button>
-            ${isExpanded ? `
+            <div id="stageSub_${main.id}" class="${isExpanded ? '' : 'hidden'}">
               <div class="px-3 pb-2 space-y-1.5">${subsHtml}</div>
               ${canManage ? `
                 <div class="px-3 pb-2">
                   <button type="button" onclick="handleAddSubStage(${projectId}, ${main.id})" class="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Alt Aşama Ekle</button>
                 </div>
               ` : ''}
-            ` : ''}
+            </div>
           </div>
         `;
-      }).join('');
+      }).filter(Boolean).join('');
 
       container.innerHTML = `
         <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
@@ -5987,7 +6546,7 @@
           <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
             <div class="h-full bg-cyan-500 rounded-full" style="width:${Math.min(100, Math.max(0, percentage))}%"></div>
           </div>
-          <div class="space-y-2 max-h-80 overflow-y-auto pr-1">${stagesHtml}</div>
+          <div class="space-y-2 max-h-80 overflow-y-auto pr-1">${stagesHtml || `<p class="text-xs text-emerald-500 font-semibold text-center py-2">🎉 Tüm aşamalar tamamlandı!</p>`}</div>
           ${canManage ? `
             <button type="button" onclick="handleAddMainStage(${projectId})" class="text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Yeni Ana Aşama Ekle</button>
           ` : ''}
@@ -6022,6 +6581,22 @@
         });
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Onaylanamadı.', 'error'); return; }
+        await refreshPersonProjectView();
+      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
+    }
+
+    // Tamamlanmış bir aşamanın notunu, geri alıp yeniden onaylamaya gerek kalmadan doğrudan
+    // düzenler (sadece Admin/İK/Müdür/Ekip Lideri ve o projenin sorumlusu mühendis).
+    async function handleEditStageNote(projectId, stageId, currentNote) {
+      const newNote = await showPrompt('Not:', currentNote || '');
+      if (newNote === null) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages/${stageId}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: newNote, userRole: currentUser.role, userId: currentUser.id, userName: currentUser.name })
+        });
+        const out = await safeJson(res);
+        if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); return; }
         await refreshPersonProjectView();
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
@@ -6485,7 +7060,7 @@
       // Reddedilen talepler ise ayrıca Admin/İK tarafından her zaman silinebilir.
       const showDelete = m.status === 'REJECTED' && (currentUser.role === 'ADMIN' || currentUser.role === 'HR');
       return `
-      <div class="bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
+      <div id="meetingCard_${m.id}" class="bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
         <div class="flex justify-between items-start gap-2 mb-1.5">
           <div>
             <div class="font-semibold text-sm text-slate-900 dark:text-slate-100">${m.subject}</div>
@@ -6521,7 +7096,7 @@
         ? m.target_roles.split(',').map(r => ROLE_LABELS_TR[r.trim()] || r.trim()).join(', ')
         : '';
       return `
-      <div class="bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
+      <div id="meetingCard_${m.id}" class="bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
         <div class="flex justify-between items-start gap-2 mb-1.5">
           <div>
             <div class="font-semibold text-sm text-slate-900 dark:text-slate-100">${m.subject}</div>
@@ -8204,6 +8779,16 @@
       icon.className = isHidden ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
     }
 
+    // "Kullanıcı Yönetimi" kutucuğu olanların "Yeni Kullanıcı Ekle" formunda şifreyi görebilmesi için.
+    function toggleNewUserPasswordVisibility() {
+      const input = document.getElementById('newUserPassword');
+      const icon = document.getElementById('newUserPasswordToggleIcon');
+      if (!input || !icon) return;
+      const isHidden = input.type === 'password';
+      input.type = isHidden ? 'text' : 'password';
+      icon.className = isHidden ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+    }
+
     async function handleLogin(e) {
       e.preventDefault();
       const username = document.getElementById('loginUsername').value;
@@ -9780,6 +10365,18 @@
       if (home) home.classList.add('hidden');
       const section = document.getElementById('lioxerpTalepFormPageSection');
       if (section) section.classList.remove('hidden');
+      // Ana menüden her girişte tamamen temiz bir görünüm: eski arama/filtre seçimleri ve
+      // sıralama sıfırlanıp veri LioXERP'ten yeniden çekilir.
+      const searchInput = document.getElementById('lioxerpSearchInput');
+      if (searchInput) searchInput.value = '';
+      const branchSel = document.getElementById('lioxerpBranchFilter');
+      if (branchSel) branchSel.value = '';
+      const birimSel = document.getElementById('lioxerpBirimFilter');
+      if (birimSel) { birimSel.value = ''; birimSel.disabled = true; birimSel.innerHTML = '<option value="">2. Birim Seçin</option>'; }
+      const projeSel = document.getElementById('lioxerpProjeFilter');
+      if (projeSel) { projeSel.value = ''; projeSel.disabled = true; projeSel.innerHTML = '<option value="">3. Proje Kodu Seçin</option>'; }
+      lioxerpSortField = 'DocDate';
+      lioxerpSortDir = 'desc';
       loadLioxerpTalepFormlari();
     }
 
@@ -12025,6 +12622,10 @@
     }
 
     const IS_PLANI_YETKILI_ROLLER = ['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'];
+    // "Sıfırla" (iş planını tamamen silme) daha geri döndürülemez bir işlem olduğundan, sadece
+    // yöneticilere (Admin, Müdür, Ekip Lideri) açık — Mühendis "Bitişi Güncelle"yi görebilir
+    // ama Sıfırla'yı göremez.
+    const IS_PLANI_SIFIRLAMA_YETKILI_ROLLER = ['ADMIN', 'MANAGER', 'LEADER'];
     const IS_PLANI_DURUM_ETIKET = {
       bekliyor: { label: 'Bekliyor', cls: 'bg-slate-500/10 text-slate-500 border-slate-500/30' },
       devam: { label: 'Devam Ediyor', cls: 'bg-amber-500/10 text-amber-500 border-amber-500/30' },
@@ -12333,7 +12934,7 @@
             ${IS_PLANI_YETKILI_ROLLER.includes(currentUser.role) ? `
               <div class="flex gap-1.5">
                 <button onclick="handleIsPlaniGuncelle(${task.id})" class="text-[10px] text-cyan-600 dark:text-cyan-400 font-semibold hover:underline">Bitişi Güncelle</button>
-                <button onclick="handleIsPlaniSifirla(${task.id})" class="text-[10px] text-rose-500 font-semibold hover:underline">Sıfırla</button>
+                ${IS_PLANI_SIFIRLAMA_YETKILI_ROLLER.includes(currentUser.role) ? `<button onclick="handleIsPlaniSifirla(${task.id})" class="text-[10px] text-rose-500 font-semibold hover:underline">Sıfırla</button>` : ''}
               </div>
             ` : ''}
           </div>

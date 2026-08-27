@@ -34,6 +34,9 @@ function yabanciKarakterVar(metin) {
 
 // İş planı oluşturma/düzenleme yetkisi olan roller
 const IS_PLANI_YETKILI = ['ADMIN', 'MANAGER', 'LEADER', 'ENGINEER'];
+// İş planını sıfırlama (silme) geri döndürülemez bir işlem olduğundan sadece yöneticilere
+// (Admin, Müdür, Ekip Lideri) açık — Mühendis planı güncelleyebilir ama sıfırlayamaz.
+const IS_PLANI_SIFIRLAMA_YETKILI = ['ADMIN', 'MANAGER', 'LEADER'];
 
 const IS_ADIMLARI = [
   { ad: 'Şematik İnceleme', yuzde: 10 },
@@ -519,7 +522,7 @@ TOPLAM SÜRE: ${gunSayisi} gün (${dokumanTarihi} → ${bitisTarihi})
   router.post('/tasks/:id/is-plani-sil', async (req, res) => {
     try {
       const { userRole } = req.body;
-      if (!IS_PLANI_YETKILI.includes(userRole)) {
+      if (!IS_PLANI_SIFIRLAMA_YETKILI.includes(userRole)) {
         return res.status(403).json({ error: 'İş planı silme yetkiniz yok.' });
       }
       await db.execute({
