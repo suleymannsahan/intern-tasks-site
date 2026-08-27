@@ -547,6 +547,10 @@
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-stamp"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
               </button>
+              <button type="button" onclick="openLioxerpTalepFormPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-invoice"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Talep Formları (LioXERP)</span>
+              </button>
             </div>
 
             <!-- SAĞ TARAF: hatırlatıcılar (mobilde en üstte / admin-İK'de çalışan sayılarının hemen altında görünür) -->
@@ -1413,7 +1417,7 @@
           </div>
         </section>
 
-        <!-- ADMİN/İK: LioXERP TALEP FORMLARI (Uyumsoft ERP'den çekilen liste) -->
+        <!-- ADMİN/İK/MÜDÜR/EKİP LİDERİ/MÜHENDİS: LioXERP TALEP FORMLARI (Uyumsoft ERP'den çekilen liste) -->
         <section id="lioxerpTalepFormPageSection" class="hidden space-y-6">
           <div class="flex items-center justify-between gap-3">
             <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-3">
@@ -1422,7 +1426,17 @@
               </button>
               <span class="flex items-center gap-2"><i class="fa-solid fa-file-invoice text-cyan-500"></i> Talep Formları (LioXERP)</span>
             </h3>
-            <button type="button" onclick="loadLioxerpTalepFormlari()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shrink-0"><i class="fa-solid fa-rotate me-1.5"></i>Yenile</button>
+            <div class="flex items-center gap-2 shrink-0">
+              <div class="relative">
+                <button type="button" onclick="lioxerpToggleExportMenu()" class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:border-cyan-500 text-slate-700 dark:text-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition-all"><i class="fa-solid fa-file-export me-1.5"></i>Dışa Aktar <i class="fa-solid fa-chevron-down ms-1 text-[10px]"></i></button>
+                <div id="lioxerpExportMenu" class="hidden absolute right-0 mt-1.5 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 overflow-hidden">
+                  <button type="button" onclick="lioxerpExportPdf()" class="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"><i class="fa-solid fa-file-pdf text-rose-500 w-4"></i>PDF</button>
+                  <button type="button" onclick="lioxerpExportWord()" class="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"><i class="fa-solid fa-file-word text-blue-500 w-4"></i>Word</button>
+                  <button type="button" onclick="lioxerpExportExcel()" class="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"><i class="fa-solid fa-file-excel text-emerald-500 w-4"></i>Excel</button>
+                </div>
+              </div>
+              <button type="button" onclick="loadLioxerpTalepFormlari()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all"><i class="fa-solid fa-rotate me-1.5"></i>Yenile</button>
+            </div>
           </div>
           <p class="text-xs text-slate-500 dark:text-slate-400">LioXERP sisteminden (Uyumsoft ERP) canlı olarak çekilen Talep Formu kayıtları — son ~25 yıllık kayıtlar arasından, sistemde bulunan tüm kayıtlar listelenir.</p>
           <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-wrap gap-2 items-center">
@@ -1532,6 +1546,90 @@
               <div class="sm:col-span-2 flex justify-end gap-2 mt-1">
                 <button type="button" onclick="closeEditProjectModal()" class="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-4 py-2 rounded-xl transition-all">Vazgeç</button>
                 <button type="submit" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-5 py-2 rounded-xl text-sm transition-all shadow-lg shadow-cyan-500/20">Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- PROJE AŞAMASI/ALT AŞAMASI İÇİN "GÖREVİ ATA": sadece Admin/İK/Müdür/Ekip Lideri
+             (bkz. canAssignStageTaskClient). Birim(+Elektronik'te Alt Alan)/Rol/Kişi kademeli
+             filtresi ve çoklu kişi seçimi "Yeni Görev Atama" sayfasıyla aynı mantığı kullanır. -->
+        <div id="stageTaskAssignModal" onclick="if(event.target===this) closeStageTaskAssignModal();" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div class="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+            <div class="flex justify-between items-center">
+              <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-user-plus text-indigo-500"></i> Görevi Ata
+              </h3>
+              <button onclick="closeStageTaskAssignModal()" class="text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Aşama: <strong id="stageAssignStageTitle" class="text-slate-700 dark:text-slate-200"></strong></p>
+
+            <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
+              <label class="block text-xs font-semibold mb-2 text-slate-700 dark:text-slate-300">Kime Atanacak?</label>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Birim <span class="text-slate-400 normal-case font-normal">(çoklu seçilebilir)</span></label>
+                  <div id="stageAssignDeptToggle" class="flex flex-wrap gap-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1"></div>
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Alt Alan</label>
+                  <select id="stageAssignSubArea" onchange="populateStageAssigneeOptions()" class="hidden w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                    <option value="">Tüm Alanlar</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] text-slate-500 mb-1">Rol</label>
+                  <select id="stageAssignRole" onchange="populateStageAssigneeOptions()" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-cyan-500">
+                    <option value="">Tüm Roller</option>
+                    <option value="INTERN">Stajyer</option>
+                    <option value="TECHNICIAN">Teknisyen</option>
+                    <option value="ENGINEER">Mühendis</option>
+                    <option value="LEADER">Ekip Lideri</option>
+                  </select>
+                </div>
+              </div>
+              <div class="relative mb-2">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                <input type="text" id="stageAssigneeSearch" oninput="populateStageAssigneeOptions()" placeholder="Tüm sistemde isme göre ara..." class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+              </div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-[10px] text-slate-500">Kişi(ler) <span class="text-rose-500">*</span> <span id="stageAssigneeSelectedCount" class="hidden text-cyan-600 dark:text-cyan-400 font-semibold"></span></label>
+                <label class="flex items-center gap-1.5 text-[10px] font-semibold text-cyan-600 dark:text-cyan-400 cursor-pointer select-none">
+                  <input type="checkbox" id="stageAssigneeSelectAll" onchange="toggleAllStageAssignees(this.checked)" class="accent-cyan-600 w-3.5 h-3.5">
+                  Listedekilerin Tümünü Seç
+                </label>
+              </div>
+              <div id="stageAssigneeList" class="max-h-40 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 space-y-0.5"></div>
+              <p id="stageAssigneeEmptyHint" class="hidden text-[10px] text-slate-400 text-center py-2">Bu filtreye uygun kişi yok.</p>
+            </div>
+
+            <form onsubmit="handleCreateStageTask(event)" class="space-y-3">
+              <div id="stageAssignTitleWrap" class="hidden">
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Görev Tanımı</label>
+                <input type="text" id="stageAssignTitle" class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Not / Görev Açıklaması <span class="text-rose-500">*</span></label>
+                <textarea id="stageAssignDescription" required rows="3" placeholder="Atanan kişinin bu aşamada tam olarak ne yapması gerektiğini yazın..." class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500"></textarea>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Alan / Departman</label>
+                  <select id="stageAssignCategory" class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                    <option value="Yazılım">Yazılım</option>
+                    <option value="Donanım">Donanım</option>
+                    <option value="Ağ & Sistem">Ağ & Sistem</option>
+                    <option value="Test / Dokümantasyon">Test / Dokümantasyon</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Görevin Bitiş Tarihi</label>
+                  <input type="date" id="stageAssignEndDate" required onchange="updateStageAssignCalculatedWorkDays()" class="w-full bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
+                </div>
+              </div>
+              <div class="flex justify-between items-center bg-slate-100 dark:bg-slate-950/70 p-3.5 rounded-xl border border-slate-300 dark:border-slate-800">
+                <span class="text-xs text-slate-500 dark:text-slate-400">Hesaplanan Net İş Günü: <strong id="stageAssignCalculatedDaysText" class="text-cyan-600 dark:text-cyan-400 text-sm">0 gün</strong></span>
+                <button type="submit" class="bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold px-5 py-2 rounded-xl text-sm transition-all shadow-lg shadow-cyan-500/20">Görevi Ata</button>
               </div>
             </form>
           </div>
@@ -1909,6 +2007,10 @@
               <button type="button" data-doc-audit-tile onclick="openDokDenetimModal()" class="hidden group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
                 <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-stamp"></i></div>
                 <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Doküman Denetimi</span>
+              </button>
+              <button type="button" onclick="openLioxerpTalepFormPage()" class="group bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col items-center justify-center gap-3 text-center hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-2xl hover:-translate-y-0.5 transition-all">
+                <div class="h-12 w-12 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-xl group-hover:bg-cyan-500 group-hover:text-white transition-all"><i class="fa-solid fa-file-invoice"></i></div>
+                <span class="font-bold text-sm text-slate-900 dark:text-slate-100">Talep Formları (LioXERP)</span>
               </button>
             </div>
 
@@ -3876,7 +3978,8 @@
       if (clickedInsideChildModal) return;
 
       const dropdownConfigs = [
-        { dropdownId: 'notificationsPanel', buttonSelector: '#notifBellBtn' }
+        { dropdownId: 'notificationsPanel', buttonSelector: '#notifBellBtn' },
+        { dropdownId: 'lioxerpExportMenu', buttonSelector: '[onclick="lioxerpToggleExportMenu()"]' }
       ];
 
       dropdownConfigs.forEach(({ dropdownId, buttonSelector }) => {
@@ -6355,6 +6458,13 @@
       return !!(personProjectOwnerId && currentUser.id == personProjectOwnerId);
     }
 
+    // Bir proje aşaması/alt aşaması için "Görevi Ata" butonunu kimin görebileceği — sadece
+    // Admin/İK/Müdür/Ekip Lideri; Mühendis (proje sorumlusu olsa bile)/Teknisyen/Stajyer için
+    // bu buton hiç gösterilmez (owner-fallback YOK, canEditProjectDetailsClient'tan farklı olarak).
+    function canAssignStageTaskClient() {
+      return !!(currentUser && ['ADMIN', 'HR', 'MANAGER', 'LEADER'].includes(currentUser.role));
+    }
+
     let stageTemplatesCache = null;
     async function loadStageTemplatesCache(force) {
       if (stageTemplatesCache && !force) return stageTemplatesCache;
@@ -6401,42 +6511,72 @@
       else expandedStageMains.delete(mainId);
     }
 
-    // Tamamlanmamış bir aşama satırı: opsiyonel not girilebilen bir metin kutusu + "Onayla" butonu
-    // (Admin/İK/Müdür/Ekip Lideri/Mühendis/proje sorumlusu için) — anlık checkbox yerine, notu
-    // yazıp bilerek onaylamak daha rahat. Tamamlanmışsa notu salt-okunur gösterir, "Geri Al" ile
+    // Tamamlanmamış bir aşama satırı: "Not Ekle"/"Notu Düzenle" butonu sadece not eklemek/düzenlemek
+    // için, "Tamamla" butonu ise aşamayı doğrudan sonlandırmak için kullanılır (Admin/İK/Müdür/Ekip
+    // Lideri/Mühendis/proje sorumlusu için). Tamamlanmışsa notu salt-okunur gösterir, "Geri Al" ile
     // tekrar aktif hale getirilebilir.
-    function renderStageLeafHtml(projectId, item, canManage, isMainLeaf, canEditCompleted) {
+    function renderStageLeafHtml(projectId, item, canManage, isMainLeaf, canEditCompleted, canAssignStageTask) {
       const textCls = isMainLeaf ? 'font-semibold text-slate-800 dark:text-slate-200' : 'text-slate-700 dark:text-slate-300';
+      // Henüz alt aşaması olmayan bir ana aşamaya alt aşama eklenebilsin diye — sadece en üst
+      // seviye (isMainLeaf) satırlarda gösterilir, aynı gri kartın içine entegre edilir.
+      const addSubBtnHtml = (isMainLeaf && canManage) ? `
+        <div class="pt-1.5 mt-0.5 border-t border-slate-200 dark:border-slate-700">
+          <button type="button" onclick="handleAddSubStage(${projectId}, ${item.id})" class="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Alt Aşama Ekle</button>
+        </div>
+      ` : '';
+      // Bu aşamaya/alt aşamaya doğrultan "Görevi Ata" ile daha önce atanmış görev(ler) varsa,
+      // kime/hangi durumda/ne zamana kadar atandığı aşamanın hemen yanında gösterilir.
+      const assignedTasksHtml = (item.assignedTasks && item.assignedTasks.length > 0) ? `
+        <div class="pt-1 mt-0.5 border-t border-slate-200 dark:border-slate-700 space-y-1">
+          ${item.assignedTasks.map(t => `
+            <div class="flex items-center flex-wrap gap-1.5 text-[10.5px] text-slate-500 dark:text-slate-400">
+              <i class="fa-solid fa-user-check text-indigo-500"></i>
+              <span class="font-semibold text-slate-600 dark:text-slate-300">${escapeHtmlProj(t.assigneeName)}</span>
+              <span class="px-1.5 py-0.5 rounded-full text-[9.5px] font-bold ${t.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : (t.status === 'REVISION_REQUESTED' ? 'bg-rose-500/10 text-rose-500' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400')}">${TASK_STATUS_LABELS_TR[t.status] || t.status}</span>
+              <span class="text-slate-400">${escapeHtmlProj(t.endDate || '')}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '';
+      const assignBtnHtml = canAssignStageTask ? `<button type="button" data-stage-title="${escapeHtmlProj(item.title)}" onclick="openStageTaskAssignModal(${projectId}, ${item.id}, this.dataset.stageTitle)" title="Görevi Ata" class="text-indigo-500 hover:text-indigo-600 shrink-0"><i class="fa-solid fa-user-plus text-[11px]"></i></button>` : '';
       if (item.isDone) {
         // Tamamlanmış bir aşamayı düzenleme (not değiştirme/geri alma/silme) yetkisi, sıradan
         // aşama yönetiminden (canManage — her mühendis) daha dar: sadece Admin/İK/Müdür/Ekip
         // Lideri ve o projenin sorumlusu olan mühendis (canEditCompleted).
         return `
-          <div class="flex items-start gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs">
-            <i class="fa-solid fa-circle-check text-emerald-500 mt-0.5 shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <div class="${textCls} line-through opacity-60">${escapeHtmlProj(item.title)}</div>
-              ${item.note ? `<div class="mt-0.5 text-slate-500 dark:text-slate-400 no-underline">${escapeHtmlProj(item.note)}</div>` : ''}
+          <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs space-y-1.5">
+            <div class="flex items-start gap-2">
+              <i class="fa-solid fa-circle-check text-emerald-500 mt-0.5 shrink-0"></i>
+              <div class="flex-1 min-w-0">
+                <div class="${textCls} line-through opacity-60">${escapeHtmlProj(item.title)}</div>
+                ${item.note ? `<div class="mt-0.5 text-slate-500 dark:text-slate-400 no-underline">${escapeHtmlProj(item.note)}</div>` : ''}
+              </div>
+              ${assignBtnHtml}
+              ${canEditCompleted ? `<button type="button" data-note="${escapeHtmlProj(item.note || '')}" onclick="handleEditStageNote(${projectId}, ${item.id}, this.dataset.note)" title="Notu düzenle" class="text-cyan-500 hover:text-cyan-600 shrink-0"><i class="fa-solid fa-pen text-[11px]"></i></button>` : ''}
+              ${canEditCompleted ? `<button type="button" onclick="handleToggleStage(${projectId}, ${item.id}, false)" title="Geri al" class="text-amber-500 hover:text-amber-600 shrink-0"><i class="fa-solid fa-rotate-left text-[11px]"></i></button>` : ''}
+              ${canEditCompleted ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${item.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
             </div>
-            ${canEditCompleted ? `<button type="button" data-note="${escapeHtmlProj(item.note || '')}" onclick="handleEditStageNote(${projectId}, ${item.id}, this.dataset.note)" title="Notu düzenle" class="text-cyan-500 hover:text-cyan-600 shrink-0"><i class="fa-solid fa-pen text-[11px]"></i></button>` : ''}
-            ${canEditCompleted ? `<button type="button" onclick="handleToggleStage(${projectId}, ${item.id}, false)" title="Geri al" class="text-amber-500 hover:text-amber-600 shrink-0"><i class="fa-solid fa-rotate-left text-[11px]"></i></button>` : ''}
-            ${canEditCompleted ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${item.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
+            ${assignedTasksHtml}
+            ${addSubBtnHtml}
           </div>
         `;
       }
-      const inputId = `stageNoteInput_${item.id}`;
       return `
         <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs space-y-1.5">
           <div class="flex items-center gap-2">
             <span class="flex-1 ${textCls}">${escapeHtmlProj(item.title)}</span>
+            ${assignBtnHtml}
             ${canManage ? `<button type="button" onclick="handleDeleteStage(${projectId}, ${item.id})" title="Sil" class="text-rose-400 hover:text-rose-500 shrink-0"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
           </div>
+          ${item.note ? `<div class="text-slate-500 dark:text-slate-400">${escapeHtmlProj(item.note)}</div>` : ''}
           ${canManage ? `
             <div class="flex items-center gap-1.5">
-              <input type="text" id="${inputId}" placeholder="Not (opsiyonel)" class="flex-1 min-w-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500">
-              <button type="button" onclick="handleConfirmStage(${projectId}, ${item.id}, '${inputId}')" class="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all"><i class="fa-solid fa-check me-1"></i>Onayla</button>
+              <button type="button" data-note="${escapeHtmlProj(item.note || '')}" onclick="handleEditStageNote(${projectId}, ${item.id}, this.dataset.note)" class="shrink-0 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 hover:border-cyan-500 text-slate-600 dark:text-slate-300 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all"><i class="fa-solid fa-note-sticky me-1"></i>${item.note ? 'Notu Düzenle' : 'Not Ekle'}</button>
+              <button type="button" onclick="handleToggleStage(${projectId}, ${item.id}, true)" class="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all"><i class="fa-solid fa-check me-1"></i>Tamamla</button>
             </div>
           ` : ''}
+          ${assignedTasksHtml}
+          ${addSubBtnHtml}
         </div>
       `;
     }
@@ -6467,11 +6607,17 @@
     async function renderProjectStagesSection(idp, projectId, data) {
       const container = document.getElementById(idp + 'Stages');
       if (!container) return;
+      // Aşama listesi (checklist kutusu) her render'da innerHTML ile tamamen yenilendiği için
+      // kendi kaydırma konumunu kaybeder — alt aşama ekleme/onaylama gibi işlemlerden sonra
+      // kullanıcı listenin ortasındaysa en başa atılmasın diye burada saklanıp geri yüklenir.
+      const prevListEl = document.getElementById(idp + 'StagesList');
+      const prevScrollTop = prevListEl ? prevListEl.scrollTop : 0;
       stagesLastRender = { idp, projectId, data };
       const stages = data.stages || [];
       const percentage = data.percentage || 0;
       const canManage = canManageProjectStagesClient();
       const canEditCompleted = canEditProjectDetailsClient();
+      const canAssignStageTask = canAssignStageTaskClient();
       const lastCompleted = findLastCompletedStageKey(stages);
 
       let applyBtnHtml = '';
@@ -6508,7 +6654,7 @@
           // Aşamalar" kısmında gösterilir.
           const isLingering = lastCompleted && lastCompleted.mainId === main.id && lastCompleted.subId === null;
           if (main.isDone && !isLingering) return '';
-          return renderStageLeafHtml(projectId, main, canManage, true, canEditCompleted);
+          return renderStageLeafHtml(projectId, main, canManage, true, canEditCompleted, canAssignStageTask);
         }
         // Gruptaki alt aşamalardan sadece tamamlanmamış olanlar + (varsa) en son onaylanan
         // gösterilir; diğer tamamlananlar "Tamamlanan Aşamalar" kısmına taşınmıştır.
@@ -6516,7 +6662,7 @@
         if (visibleSubs.length === 0) return '';
         const doneCount = main.subItems.filter(s => s.isDone).length;
         const isExpanded = expandedStageMains.has(main.id);
-        const subsHtml = visibleSubs.map(s => renderStageLeafHtml(projectId, s, canManage, false, canEditCompleted)).join('');
+        const subsHtml = visibleSubs.map(s => renderStageLeafHtml(projectId, s, canManage, false, canEditCompleted, canAssignStageTask)).join('');
         return `
           <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <button type="button" onclick="toggleStageGroup(${main.id})" class="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
@@ -6546,13 +6692,15 @@
           <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
             <div class="h-full bg-cyan-500 rounded-full" style="width:${Math.min(100, Math.max(0, percentage))}%"></div>
           </div>
-          <div class="space-y-2 max-h-80 overflow-y-auto pr-1">${stagesHtml || `<p class="text-xs text-emerald-500 font-semibold text-center py-2">🎉 Tüm aşamalar tamamlandı!</p>`}</div>
+          <div id="${idp}StagesList" class="space-y-2 max-h-80 overflow-y-auto pr-1">${stagesHtml || `<p class="text-xs text-emerald-500 font-semibold text-center py-2">🎉 Tüm aşamalar tamamlandı!</p>`}</div>
           ${canManage ? `
             <button type="button" onclick="handleAddMainStage(${projectId})" class="text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"><i class="fa-solid fa-plus me-1"></i>Yeni Ana Aşama Ekle</button>
           ` : ''}
           ${applyBtnHtml}
         </div>
       `;
+      const newListEl = document.getElementById(idp + 'StagesList');
+      if (newListEl) newListEl.scrollTop = prevScrollTop;
     }
 
     // Bir aşama işaretlenip/kaldırıldığında sunucu hem checklist durumunu hem de otomatik yeni bir
@@ -6566,27 +6714,13 @@
         });
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); }
+        else if (isDone) { showToast('Aşama tamamlandı.', 'success'); }
         await refreshPersonProjectView();
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
 
-    // Bir aşamayı, girilen (opsiyonel) notla birlikte tamamlanmış olarak onaylar.
-    async function handleConfirmStage(projectId, stageId, inputId) {
-      const noteEl = document.getElementById(inputId);
-      const note = noteEl ? noteEl.value.trim() : '';
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages/${stageId}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isDone: true, note, userRole: currentUser.role, userId: currentUser.id, userName: currentUser.name })
-        });
-        const out = await safeJson(res);
-        if (!res.ok) { showToast(out.error || 'Onaylanamadı.', 'error'); return; }
-        await refreshPersonProjectView();
-      } catch (e) { showToast('Hata: ' + e.message, 'error'); }
-    }
-
-    // Tamamlanmış bir aşamanın notunu, geri alıp yeniden onaylamaya gerek kalmadan doğrudan
-    // düzenler (sadece Admin/İK/Müdür/Ekip Lideri ve o projenin sorumlusu mühendis).
+    // Bir aşamanın notunu ekler/düzenler — aşamanın tamamlanma durumuna dokunmaz. Henüz tamamlanmamış
+    // bir aşamada "Not Ekle" butonu, zaten tamamlanmış bir aşamada ise "Notu Düzenle" butonu bunu çağırır.
     async function handleEditStageNote(projectId, stageId, currentNote) {
       const newNote = await showPrompt('Not:', currentNote || '');
       if (newNote === null) return;
@@ -6597,6 +6731,7 @@
         });
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); return; }
+        showToast('Not kaydedildi.', 'success');
         await refreshPersonProjectView();
       } catch (e) { showToast('Hata: ' + e.message, 'error'); }
     }
@@ -9868,6 +10003,14 @@
       return getProjectNameById(task && task.project_id) || 'Görev';
     }
 
+    // Görev bir Proje Aşaması/Alt Aşaması üzerinden ("Görevi Ata" ile) atandıysa, hangi ana aşama
+    // altındaki hangi alt aşama olduğunu tek satırda gösterir (bkz. server.js /api/tasks — stage_title
+    // ve stage_parent_title alanları).
+    function getTaskStageBreadcrumb(task) {
+      if (!task || !task.stage_title) return '';
+      return task.stage_parent_title ? `${task.stage_parent_title} › ${task.stage_title}` : task.stage_title;
+    }
+
     async function populateTaskProjectSelect(selectId, selectedId) {
       const sel = document.getElementById(selectId);
       if (!sel) return;
@@ -10361,8 +10504,12 @@
     // "Talep Formu" listesini çeker (bkz. server.js /api/lioxerp/talep-formlari) — kullanıcının
     // kendi LioXERP bilgilerine ihtiyaç yoktur.
     function openLioxerpTalepFormPage() {
-      const home = document.getElementById('adminHomeSection');
-      if (home) home.classList.add('hidden');
+      // Admin/İK/Müdür/Ekip Lideri/Mühendis ana ekranlarının hepsinden açılabildiği için,
+      // sadece adminHomeSection değil, o anki kullanıcının ana ekranı hangisiyse hepsi gizlenir.
+      ['adminHomeSection', 'leaderSection', 'engineerHomeSection'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
       const section = document.getElementById('lioxerpTalepFormPageSection');
       if (section) section.classList.remove('hidden');
       // Ana menüden her girişte tamamen temiz bir görünüm: eski arama/filtre seçimleri ve
@@ -10380,6 +10527,16 @@
       loadLioxerpTalepFormlari();
     }
 
+    // Tabloda gösterilen ve "Dışa Aktar" (PDF/Word/Excel) ile aktarılan kolonlar — tek ortak
+    // tanım, ikisi asla birbirinden farklı görünmesin diye.
+    const LIOXERP_TABLE_COLUMNS = [
+      { field: 'DocNo', label: 'Belge No' },
+      { field: 'DocDate', label: 'Belge Tarihi' },
+      { field: 'BranchDesc', label: 'İşyeri' },
+      { field: 'DocTraDesc', label: 'Hareket' },
+      { field: 'RequestUserName', label: 'Talep Eden' },
+      { field: 'WhouseDesc', label: 'Depo' }
+    ];
     let lioxerpAllRows = [];
     let lioxerpSortField = 'DocDate';
     let lioxerpSortDir = 'desc';
@@ -10544,15 +10701,10 @@
       lioxerpRenderTalepFormTable();
     }
 
-    function lioxerpRenderTalepFormTable() {
-      const container = document.getElementById('lioxerpTalepFormTable');
-      if (!container) return;
-
-      if (lioxerpAllRows.length === 0) {
-        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Kayıt bulunamadı.</p>`;
-        return;
-      }
-
+    // Ekrandaki Birim/Alt Alan(Proje Kodu)/Rol/arama filtrelerini ve sıralamayı uygulayıp sonucu
+    // döner — hem tabloyu çizen hem de "Dışa Aktar"ın kullandığı TEK ortak kaynak, ikisi de her
+    // zaman birebir aynı kayıt kümesini görsün diye (sayfalama burada YOK, tüm filtrelenmiş kayıtlar).
+    function lioxerpGetFilteredSortedRows() {
       const search = (document.getElementById('lioxerpSearchInput')?.value || '').toLocaleLowerCase('tr');
       const branchFilter = document.getElementById('lioxerpBranchFilter')?.value || '';
       const birimFilter = document.getElementById('lioxerpBirimFilter')?.value || '';
@@ -10584,6 +10736,20 @@
         return 0;
       });
 
+      return rows;
+    }
+
+    function lioxerpRenderTalepFormTable() {
+      const container = document.getElementById('lioxerpTalepFormTable');
+      if (!container) return;
+
+      if (lioxerpAllRows.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Kayıt bulunamadı.</p>`;
+        return;
+      }
+
+      const rows = lioxerpGetFilteredSortedRows();
+
       if (rows.length === 0) {
         container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Filtreyle eşleşen kayıt bulunamadı.</p>`;
         return;
@@ -10594,14 +10760,7 @@
       const startIdx = (lioxerpPage - 1) * LIOXERP_PAGE_SIZE;
       const pageRows = rows.slice(startIdx, startIdx + LIOXERP_PAGE_SIZE);
 
-      const columns = [
-        { field: 'DocNo', label: 'Belge No' },
-        { field: 'DocDate', label: 'Belge Tarihi' },
-        { field: 'BranchDesc', label: 'İşyeri' },
-        { field: 'DocTraDesc', label: 'Hareket' },
-        { field: 'RequestUserName', label: 'Talep Eden' },
-        { field: 'WhouseDesc', label: 'Depo' }
-      ];
+      const columns = LIOXERP_TABLE_COLUMNS;
       const theadHtml = columns.map(c => {
         const isActive = lioxerpSortField === c.field;
         const arrow = isActive ? (lioxerpSortDir === 'asc' ? '<i class="fa-solid fa-arrow-up-short-wide ms-1"></i>' : '<i class="fa-solid fa-arrow-down-wide-short ms-1"></i>') : '';
@@ -10635,6 +10794,110 @@
           </div>
         </div>
       `;
+    }
+
+    // ============================================================
+    // LioXERP "DIŞA AKTAR": o an ekranda Birim/Alt Alan/Rol/arama filtreleriyle daralan TÜM kayıtları
+    // (sayfalama yok, filtrelenmiş kayıtların tamamı) PDF/Word/Excel olarak indirir — üçü de aynı
+    // lioxerpGetFilteredSortedRows()'u kullanır, böylece ekranda görünenle dışa aktarılan birebir aynıdır.
+    // ============================================================
+    function lioxerpToggleExportMenu() {
+      const menu = document.getElementById('lioxerpExportMenu');
+      if (menu) menu.classList.toggle('hidden');
+    }
+
+    // Word için basit bir HTML tablo üretir — Word, "application/msword" ile indirilen HTML
+    // içeriği doğrudan açabildiğinden, ayrı bir dosya formatı kütüphanesine gerek kalmaz.
+    // (PDF artık burada değil, sunucuda pdfkit ile gerçek bir .pdf olarak üretiliyor — bkz.
+    // lioxerpExportPdf ve server.js /api/lioxerp/export-pdf.)
+    function lioxerpBuildExportHtml(rows, title) {
+      const theadHtml = LIOXERP_TABLE_COLUMNS.map(c => `<th style="border:1px solid #ccc;padding:6px 8px;background:#f1f5f9;font-size:11px;text-align:left;">${escapeHtmlProj(c.label)}</th>`).join('');
+      const rowsHtml = rows.map(r => `
+        <tr>${LIOXERP_TABLE_COLUMNS.map(c => `<td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;">${escapeHtmlProj(r[c.field] || '-')}</td>`).join('')}</tr>
+      `).join('');
+      return `
+        <html><head><meta charset="utf-8"><title>${escapeHtmlProj(title)}</title></head>
+        <body style="font-family:Arial,sans-serif;">
+          <h3 style="margin-bottom:4px;">${escapeHtmlProj(title)}</h3>
+          <p style="font-size:11px;color:#64748b;margin-top:0;">${rows.length} kayıt — ${new Date().toLocaleDateString('tr-TR')}</p>
+          <table style="border-collapse:collapse;width:100%;">
+            <thead><tr>${theadHtml}</tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </body></html>
+      `;
+    }
+
+    function lioxerpDownloadBlob(blob, filename) {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+    }
+
+    // Excel ile aynı mantık: filtrelenmiş kayıtlar sunucuya gönderilir, gömülü Türkçe destekli
+    // fontla gerçek bir .pdf oluşturulup indirilir — yazdırma penceresi açılmaz, diğer formatlar
+    // gibi doğrudan "Farklı Kaydet" indirmesi tetiklenir.
+    async function lioxerpExportPdf() {
+      document.getElementById('lioxerpExportMenu')?.classList.add('hidden');
+      const rows = lioxerpGetFilteredSortedRows();
+      if (rows.length === 0) { showToast('Dışa aktarılacak kayıt yok.', 'error'); return; }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/lioxerp/export-pdf`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userRole: currentUser.role, rows })
+        });
+        if (!res.ok) {
+          const data = await safeJson(res);
+          showToast((data && data.error) || 'PDF dosyası oluşturulamadı.', 'error');
+          return;
+        }
+        const pdfBlob = await res.blob();
+        // Bazı tarayıcılar "application/pdf" tipindeki blob:URL'leri "download" özniteliğini yok
+        // sayıp yeni bir sekmede kendi PDF görüntüleyicisinde açar. Tipi nötr bir ikili türe
+        // çevirmek bu davranışı devre dışı bırakıp doğrudan "Farklı Kaydet" penceresini açtırır
+        // (dosyanın kendisi/uzantısı değişmez, sadece indirme anındaki tarayıcı tipi ipucu).
+        const blob = new Blob([pdfBlob], { type: 'application/octet-stream' });
+        lioxerpDownloadBlob(blob, `talep_formlari_${new Date().toISOString().slice(0, 10)}.pdf`);
+        showToast(`${rows.length} kayıt PDF olarak indirildi.`, 'success');
+      } catch (err) {
+        showToast('Hata: ' + err.message, 'error');
+      }
+    }
+
+    function lioxerpExportWord() {
+      document.getElementById('lioxerpExportMenu')?.classList.add('hidden');
+      const rows = lioxerpGetFilteredSortedRows();
+      if (rows.length === 0) { showToast('Dışa aktarılacak kayıt yok.', 'error'); return; }
+      const html = lioxerpBuildExportHtml(rows, 'Talep Formları');
+      const blob = new Blob(['﻿' + html], { type: 'application/msword' });
+      lioxerpDownloadBlob(blob, `talep_formlari_${new Date().toISOString().slice(0, 10)}.doc`);
+      showToast(`${rows.length} kayıt Word olarak indirildi.`, 'success');
+    }
+
+    async function lioxerpExportExcel() {
+      document.getElementById('lioxerpExportMenu')?.classList.add('hidden');
+      const rows = lioxerpGetFilteredSortedRows();
+      if (rows.length === 0) { showToast('Dışa aktarılacak kayıt yok.', 'error'); return; }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/lioxerp/export-excel`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userRole: currentUser.role, rows })
+        });
+        if (!res.ok) {
+          const data = await safeJson(res);
+          showToast((data && data.error) || 'Excel dosyası oluşturulamadı.', 'error');
+          return;
+        }
+        const blob = await res.blob();
+        lioxerpDownloadBlob(blob, `talep_formlari_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        showToast(`${rows.length} kayıt Excel olarak indirildi.`, 'success');
+      } catch (err) {
+        showToast('Hata: ' + err.message, 'error');
+      }
     }
 
     // Bir Talep Formu kaydının satır (ürün/hizmet) detaylarını LioXERP'ten çekip modalda gösterir.
@@ -11536,6 +11799,273 @@
       return Array.from(taskAssignSelectedIds);
     }
 
+    // ============================================================
+    // PROJE AŞAMASI İÇİN "GÖREVİ ATA" MODALI: "Yeni Görev Atama" sayfasıyla aynı Birim(+Alt
+    // Alan)/Rol/Kişi kademeli filtre ve çoklu kişi seçimi mantığını kullanır, ama kendi bağımsız
+    // durumuyla (stageAssign*) — aynı anda "Yeni Görev Atama" sayfasıyla state çakışmasın diye.
+    // Sadece canAssignStageTaskClient() true olan roller (Admin/İK/Müdür/Ekip Lideri) açabilir.
+    // ============================================================
+    let stageAssignContext = null; // { projectId, stageId }
+    let stageAssignSelectedDepts = [];
+    let stageAssignSelectedIds = new Set();
+
+    function openStageTaskAssignModal(projectId, stageId, stageTitle) {
+      if (!canAssignStageTaskClient()) return;
+      stageAssignContext = { projectId, stageId };
+      const titleEl = document.getElementById('stageAssignStageTitle');
+      if (titleEl) titleEl.innerText = stageTitle || '';
+      resetStageAssignFilter();
+      document.getElementById('stageAssignDescription').value = '';
+      document.getElementById('stageAssignEndDate').value = '';
+      document.getElementById('stageAssignCalculatedDaysText').innerText = '0 gün';
+      document.getElementById('stageTaskAssignModal').classList.remove('hidden');
+    }
+
+    function closeStageTaskAssignModal() {
+      document.getElementById('stageTaskAssignModal').classList.add('hidden');
+      stageAssignContext = null;
+    }
+
+    function renderStageAssignDeptToggle() {
+      const toggle = document.getElementById('stageAssignDeptToggle');
+      if (!toggle) return;
+      const validKeys = (PROJECT_DEPTS || []).map(d => d.key);
+      stageAssignSelectedDepts = stageAssignSelectedDepts.filter(d => validKeys.includes(d));
+      toggle.innerHTML = ['<button type="button" data-dept="" onclick="toggleStageAssignDept(\'\')" class="px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all">Tüm Birimler</button>']
+        .concat((PROJECT_DEPTS || []).map(d => `<button type="button" data-dept="${d.key}" onclick="toggleStageAssignDept('${d.key}')" class="px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all">${escapeHtmlProj(d.label)}</button>`))
+        .join('');
+      updateStageAssignDeptToggleStyles();
+    }
+
+    function updateStageAssignDeptToggleStyles() {
+      const toggle = document.getElementById('stageAssignDeptToggle');
+      if (!toggle) return;
+      const activeCls = ['bg-cyan-600', 'text-white'];
+      const passiveCls = ['text-slate-500', 'dark:text-slate-400'];
+      toggle.querySelectorAll('button[data-dept]').forEach(btn => {
+        const d = btn.dataset.dept;
+        const isActive = d === '' ? stageAssignSelectedDepts.length === 0 : stageAssignSelectedDepts.includes(d);
+        if (isActive) { btn.classList.add(...activeCls); btn.classList.remove(...passiveCls); }
+        else { btn.classList.remove(...activeCls); btn.classList.add(...passiveCls); }
+      });
+    }
+
+    async function toggleStageAssignDept(dept) {
+      if (dept === '') {
+        stageAssignSelectedDepts = [];
+      } else if (stageAssignSelectedDepts.includes(dept)) {
+        stageAssignSelectedDepts = stageAssignSelectedDepts.filter(d => d !== dept);
+      } else {
+        stageAssignSelectedDepts = [...stageAssignSelectedDepts, dept];
+      }
+      updateStageAssignDeptToggleStyles();
+      await renderStageAssignSubAreaOptions();
+      populateStageAssigneeOptions();
+    }
+
+    async function resetStageAssignFilter() {
+      const roleSel = document.getElementById('stageAssignRole');
+      const searchInput = document.getElementById('stageAssigneeSearch');
+      if (searchInput) searchInput.value = '';
+      if (roleSel) roleSel.value = '';
+      stageAssignSelectedDepts = [];
+      stageAssignSelectedIds = new Set();
+      renderStageAssignDeptToggle();
+      await renderStageAssignSubAreaOptions();
+      populateStageAssigneeOptions();
+    }
+
+    // adminTaskFilterSubareas: "Yeni Görev Atama" ile paylaşılan alt alan önbelleği (aynı veri,
+    // ayrı bir kopyasını tutmaya gerek yok).
+    async function renderStageAssignSubAreaOptions() {
+      const subSel = document.getElementById('stageAssignSubArea');
+      if (!subSel) return;
+
+      if (adminTaskFilterSubareas === null) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/subareas`);
+          adminTaskFilterSubareas = await res.json();
+        } catch (e) { adminTaskFilterSubareas = []; }
+      }
+
+      const depts = stageAssignSelectedDepts;
+      const rawSubs = depts.length > 0 ? (adminTaskFilterSubareas || []).filter(s => depts.includes(s.department_key)) : [];
+      const seenLabels = new Set();
+      const subs = rawSubs.filter(s => { if (seenLabels.has(s.label)) return false; seenLabels.add(s.label); return true; });
+
+      if (subs.length > 0) {
+        subSel.innerHTML = ['<option value="">Tüm Alanlar</option>']
+          .concat(subs.map(s => `<option value="${s.label}">${s.label}</option>`))
+          .join('');
+        subSel.classList.remove('hidden');
+      } else {
+        subSel.innerHTML = '<option value="">Tüm Alanlar</option>';
+        subSel.value = '';
+        subSel.classList.add('hidden');
+      }
+    }
+
+    function populateStageAssigneeOptions() {
+      const listEl = document.getElementById('stageAssigneeList');
+      const emptyHint = document.getElementById('stageAssigneeEmptyHint');
+      const selectAllBox = document.getElementById('stageAssigneeSelectAll');
+      if (!listEl) return;
+
+      const depts = stageAssignSelectedDepts;
+      const subArea = document.getElementById('stageAssignSubArea')?.value || '';
+      const role = document.getElementById('stageAssignRole')?.value || '';
+      const searchVal = (document.getElementById('stageAssigneeSearch')?.value || '').trim().toLowerCase();
+
+      const people = usersList.filter(u => {
+        if (!TASK_ASSIGNABLE_ROLES.includes(u.role)) return false;
+        if (u.status && u.status !== 'APPROVED') return false;
+        if (searchVal) {
+          return (u.name || '').toLowerCase().includes(searchVal) || (u.username || '').toLowerCase().includes(searchVal);
+        }
+        return (depts.length === 0 || depts.includes(u.department)) &&
+          (!subArea || u.sub_area === subArea) &&
+          (!role || u.role === role);
+      }).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
+
+      if (people.length === 0) {
+        listEl.innerHTML = '';
+        if (emptyHint) emptyHint.classList.remove('hidden');
+        if (selectAllBox) selectAllBox.checked = false;
+        updateStageAssignTitleFieldVisibility();
+        updateStageAssigneeSelectedCount();
+        return;
+      }
+      if (emptyHint) emptyHint.classList.add('hidden');
+
+      listEl.innerHTML = people.map(p => `
+        <label class="flex items-center gap-2 text-xs px-1.5 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+          <input type="checkbox" class="stage-assignee-checkbox accent-cyan-600 w-3.5 h-3.5 shrink-0" value="${p.id}" data-role="${p.role}" ${stageAssignSelectedIds.has(String(p.id)) ? 'checked' : ''} onchange="onStageAssigneeCheckboxChange(this)">
+          <span class="text-slate-700 dark:text-slate-200">${p.name} — ${ROLE_LABELS_TR[p.role] || p.role} (${DEPARTMENT_LABELS[p.department] || p.department || '—'})</span>
+        </label>
+      `).join('');
+      if (selectAllBox) selectAllBox.checked = Array.from(listEl.querySelectorAll('.stage-assignee-checkbox')).every(cb => cb.checked);
+      updateStageAssignTitleFieldVisibility();
+      updateStageAssigneeSelectedCount();
+    }
+
+    function onStageAssigneeCheckboxChange(cb) {
+      if (cb.checked) stageAssignSelectedIds.add(cb.value);
+      else stageAssignSelectedIds.delete(cb.value);
+
+      const boxes = document.querySelectorAll('#stageAssigneeList .stage-assignee-checkbox');
+      const selectAllBox = document.getElementById('stageAssigneeSelectAll');
+      if (selectAllBox && boxes.length > 0) selectAllBox.checked = Array.from(boxes).every(b => b.checked);
+
+      updateStageAssignTitleFieldVisibility();
+      updateStageAssigneeSelectedCount();
+    }
+
+    function toggleAllStageAssignees(checked) {
+      document.querySelectorAll('#stageAssigneeList .stage-assignee-checkbox').forEach(cb => {
+        cb.checked = checked;
+        if (checked) stageAssignSelectedIds.add(cb.value);
+        else stageAssignSelectedIds.delete(cb.value);
+      });
+      updateStageAssignTitleFieldVisibility();
+      updateStageAssigneeSelectedCount();
+    }
+
+    function updateStageAssigneeSelectedCount() {
+      const el = document.getElementById('stageAssigneeSelectedCount');
+      if (!el) return;
+      const count = stageAssignSelectedIds.size;
+      el.classList.toggle('hidden', count === 0);
+      el.textContent = count > 0 ? `(${count} kişi seçili)` : '';
+    }
+
+    // "Görev Tanımı" alanı sadece seçili kişi(ler) arasında en az bir Stajyer varsa görünür ve
+    // zorunlu olur (bkz. updateTaskTitleFieldVisibility'deki aynı mantık).
+    function updateStageAssignTitleFieldVisibility() {
+      const wrap = document.getElementById('stageAssignTitleWrap');
+      const input = document.getElementById('stageAssignTitle');
+      if (!wrap || !input) return;
+      const hasIntern = Array.from(stageAssignSelectedIds).some(id => {
+        const u = usersList.find(x => String(x.id) === String(id));
+        return u && u.role === 'INTERN';
+      });
+      wrap.classList.toggle('hidden', !hasIntern);
+      input.toggleAttribute('required', hasIntern);
+      if (!hasIntern) input.value = '';
+    }
+
+    function getSelectedStageAssigneeIds() {
+      return Array.from(stageAssignSelectedIds);
+    }
+
+    function updateStageAssignCalculatedWorkDays() {
+      const endDateVal = document.getElementById('stageAssignEndDate').value;
+      if (!endDateVal) return;
+      const today = new Date().toISOString().split('T')[0];
+      const days = calculateWorkDays(today, endDateVal);
+      document.getElementById('stageAssignCalculatedDaysText').innerText = `${days} iş günü`;
+    }
+
+    // Aynı görevi işaretlenen herkese ayrı ayrı atar (bkz. handleCreateTask'taki aynı mantık),
+    // ama her satır ayrıca stage_id taşır — böylece proje aşamasının yanında görünür ve atanan
+    // kişiye e-posta/bildirimde hangi proje/aşama için olduğu belirtilir (bkz. server.js).
+    async function handleCreateStageTask(e) {
+      e.preventDefault();
+      if (!stageAssignContext) return;
+      const description = document.getElementById('stageAssignDescription').value;
+      const typedTitle = (document.getElementById('stageAssignTitle')?.value || '').trim();
+      const title = typedTitle || deriveTaskTitleFromDescription(description);
+      const assigneeIds = getSelectedStageAssigneeIds();
+      const category = document.getElementById('stageAssignCategory').value;
+      const endDate = document.getElementById('stageAssignEndDate').value;
+      const today = new Date().toISOString().split('T')[0];
+      const workDays = calculateWorkDays(today, endDate);
+
+      if (assigneeIds.length === 0) {
+        showToast('En az bir kişi seçmelisiniz.', 'error');
+        return;
+      }
+
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+
+      const batchId = (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+      const { projectId, stageId } = stageAssignContext;
+
+      let successCount = 0;
+      let errorCount = 0;
+      let lastError = '';
+      for (const assignedTo of assigneeIds) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/tasks`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, description, assignedTo, category, endDate, workDays, projectId, stageId, createdBy: currentUser.name, userRole: currentUser.role, userId: currentUser.id, batchId })
+          });
+          if (res.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+            const data = await safeJson(res);
+            lastError = (data && data.error) || 'Görev atanamadı.';
+          }
+        } catch (err) {
+          errorCount++;
+          lastError = err.message;
+        }
+      }
+
+      if (submitBtn) submitBtn.disabled = false;
+
+      if (successCount > 0) {
+        const msg = successCount === 1 ? 'Görev atandı!' : `Görev ${successCount} kişiye atandı!`;
+        showToast(errorCount > 0 ? `${msg} (${errorCount} kişiye atanamadı: ${lastError})` : msg, errorCount > 0 ? 'info' : 'success');
+        closeStageTaskAssignModal();
+        await refreshPersonProjectView();
+      } else {
+        showToast('Hata: ' + lastError, 'error');
+      }
+    }
+
     // "Durum ve İş Yükü" rol toggle'ı (INTERN / ENGINEER) - mevcut seçim
     let statusRoleFilterValue = 'INTERN';
 
@@ -12315,6 +12845,7 @@
           ${statusBadge}
         </div>
         <p class="mt-1 text-xs text-slate-600 dark:text-slate-300 break-words line-clamp-2">${escapeHtmlProj(task.description || 'Açıklama girilmemiş.')}</p>
+        ${task.stage_title ? `<div class="mt-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 break-words"><i class="fa-solid fa-list-check me-1"></i>${escapeHtmlProj(getTaskStageBreadcrumb(task))}</div>` : ''}
         <div class="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span><i class="fa-regular fa-user me-1"></i>${task.assignee_name || 'Bilinmiyor'}</span>
           <span class="${isOverdue ? 'text-rose-500 font-bold' : ''}"><i class="fa-regular fa-calendar me-1"></i>${task.end_date || '-'}</span>
@@ -12411,7 +12942,8 @@
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-500 dark:text-slate-400">
-          ${getProjectNameById(task.project_id) ? `<div class="sm:col-span-2"><i class="fa-solid fa-diagram-project text-cyan-500 me-1"></i> Proje Adı: <b class="text-slate-800 dark:text-slate-200">${escapeHtmlProj(getProjectNameById(task.project_id))}</b></div>` : ''}
+          ${(task.project_name || getProjectNameById(task.project_id)) ? `<div class="sm:col-span-2"><i class="fa-solid fa-diagram-project text-cyan-500 me-1"></i> Proje Adı: <b class="text-slate-800 dark:text-slate-200">${escapeHtmlProj(task.project_name || getProjectNameById(task.project_id))}</b></div>` : ''}
+          ${task.stage_title ? `<div class="sm:col-span-2"><i class="fa-solid fa-list-check text-indigo-500 me-1"></i> Proje Aşaması: <b class="text-slate-800 dark:text-slate-200">${escapeHtmlProj(getTaskStageBreadcrumb(task))}</b></div>` : ''}
           <div><i class="fa-solid fa-user-check text-cyan-500 me-1"></i> Görevi Veren: <b class="text-slate-800 dark:text-slate-200">${task.created_by || 'Sistem'}</b></div>
           <div><i class="fa-regular fa-user me-1"></i> Atanan: <b class="text-slate-800 dark:text-slate-200">${task.assignee_name || 'Bilinmiyor'}</b></div>
           <div><i class="fa-solid fa-tag me-1"></i> Kategori: <b class="text-slate-800 dark:text-slate-200">${task.category || '-'}</b></div>

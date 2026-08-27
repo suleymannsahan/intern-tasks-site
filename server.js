@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const path = require('path');
 const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
 const gcal = require('./googleCalendar');
 const ai = require('./ai');
 const http = require('http');
@@ -221,6 +222,9 @@ async function initDb() {
     // işaretlemek için paylaşılan bir kimlik — takvimde tek bir etkinlik olarak birleştirmek için
     // kullanılır (bkz. loadCalendarData). Eski (bu sütundan önce oluşturulmuş) görevlerde NULL kalır.
     try { await db.execute(`ALTER TABLE tasks ADD COLUMN assign_batch_id TEXT`); } catch (e) {}
+    // Görev, bir Proje Aşaması checklist maddesinden ("Görevi Ata" butonuyla) doğrudan atandıysa,
+    // hangi aşamaya bağlı olduğunu tutar — proje detay sayfasında aşamanın yanında gösterilir.
+    try { await db.execute(`ALTER TABLE tasks ADD COLUMN stage_id INTEGER`); } catch (e) {}
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS daily_logs (
@@ -1403,7 +1407,7 @@ app.put('/api/users/:id/intern-dates', async (req, res) => {
 // Görev Oluşturma
 app.post('/api/tasks', async (req, res) => {
   try {
-    const { title, description, assignedTo, category, endDate, workDays, createdBy, userRole, userId, projectId, isKartPlaniTask, batchId } = req.body;
+    const { title, description, assignedTo, category, endDate, workDays, createdBy, userRole, userId, projectId, isKartPlaniTask, batchId, stageId } = req.body;
 
     if (!['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER', 'INTERN'].includes(userRole)) {
       return res.status(403).json({ error: 'Görev atamaya yetkiniz yok!' });
@@ -1423,9 +1427,22 @@ app.post('/api/tasks', async (req, res) => {
       return res.status(400).json({ error: 'Geçersiz görev atama hedefi.' });
     }
 
+    // Bir Proje Aşaması checklist maddesinden doğrudan atanan görevler: sadece Admin/İK/Müdür/Ekip
+    // Lideri kullanabilir (Mühendis/Teknisyen/Stajyer'de bu buton zaten hiç görünmez, ama uçtan
+    // uca doğrulama burada da yapılır).
+    let stageForTask = null;
+    if (stageId) {
+      if (!['ADMIN', 'HR', 'MANAGER', 'LEADER'].includes(userRole)) {
+        return res.status(403).json({ error: 'Aşamaya görev atama yetkiniz yok.' });
+      }
+      const stageRes = await db.execute({ sql: `SELECT id, title, project_id FROM project_stages WHERE id = ?`, args: [stageId] });
+      if (stageRes.rows.length === 0) return res.status(404).json({ error: 'Aşama bulunamadı.' });
+      stageForTask = stageRes.rows[0];
+    }
+
     const result = await db.execute({
-      sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status, project_id, is_kart_plani_task, assign_batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?, ?)`,
-      args: [title, description || '', assignedTo, category, endDate, workDays, createdBy, projectId || null, isKartPlaniTask ? 1 : 0, batchId || null]
+      sql: `INSERT INTO tasks (title, description, assigned_to, category, end_date, work_days, created_by, status, project_id, is_kart_plani_task, assign_batch_id, stage_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, ?, ?, ?)`,
+      args: [title, description || '', assignedTo, category, endDate, workDays, createdBy, projectId || (stageForTask ? stageForTask.project_id : null), isKartPlaniTask ? 1 : 0, batchId || null, stageId || null]
     });
     const newTaskId = Number(result.lastInsertRowid);
 
@@ -1443,19 +1460,32 @@ app.post('/api/tasks', async (req, res) => {
 
     const intern = userResult.rows[0];
 
+    // Aşamadan atandıysa e-posta/bildirime proje ve aşama adını da ekle — atanan kişi hangi proje
+    // aşamasıyla ilgili olduğunu ve ne yapması gerektiğini (Açıklama alanından) net görsün.
+    let projectNameForTask = null;
+    if (stageForTask) {
+      const projRes = await db.execute({ sql: `SELECT name FROM projects WHERE id = ?`, args: [stageForTask.project_id] });
+      projectNameForTask = projRes.rows[0] ? projRes.rows[0].name : null;
+    }
+
     if (intern && intern.email && SETTINGS_CACHE.email_task_assigned) {
+      const emailRows = [
+        ['Görev Başlığı', title],
+        ['Kategori', category],
+        ['Son Teslim', `${endDate} (${workDays} İş Günü)`],
+        ['Atayan Lider', createdBy]
+      ];
+      if (stageForTask) {
+        emailRows.push(['Proje', projectNameForTask || '-']);
+        emailRows.push(['Proje Aşaması', stageForTask.title]);
+      }
+      emailRows.push(['Açıklama', description || 'Açıklama bulunmuyor.']);
       await sendDetailsEmail(
         intern.email, intern.name,
         `Yeni Görev Atandı: ${title}`,
         'Yeni Görev Bildirimi',
         `Merhaba <strong style="color: #38bdf8;">${intern.name}</strong>, <strong style="color: #0284c7;">${createdBy}</strong> tarafından tarafınıza yeni bir görev atandı. Detaylar aşağıda yer almaktadır:`,
-        [
-          ['Görev Başlığı', title],
-          ['Kategori', category],
-          ['Son Teslim', `${endDate} (${workDays} İş Günü)`],
-          ['Atayan Lider', createdBy],
-          ['Açıklama', description || 'Açıklama bulunmuyor.']
-        ],
+        emailRows,
         'Görevi İncele'
       );
     }
@@ -1464,7 +1494,10 @@ app.post('/api/tasks', async (req, res) => {
     syncTaskToGoogle(newTaskId).catch(e => console.error('Task sync:', e.message));
 
     // Atanan kişiye bildirim düşür
-    createNotification(assignedTo, 'TASK_ASSIGNED', 'TASKS', 'Yeni Görev Atandı', `${createdBy} size "${title}" görevini atadı.`, newTaskId)
+    const notifMessage = stageForTask
+      ? `${createdBy} size "${projectNameForTask || 'proje'}" projesinin "${stageForTask.title}" aşaması için "${title}" görevini atadı.`
+      : `${createdBy} size "${title}" görevini atadı.`;
+    createNotification(assignedTo, 'TASK_ASSIGNED', 'TASKS', 'Yeni Görev Atandı', notifMessage, newTaskId)
       .catch(e => console.error('Görev bildirimi hatası:', e.message));
 
     res.json({ id: newTaskId, message: "Görev oluşturuldu ve e-posta bildirimi gönderildi." });
@@ -1789,12 +1822,14 @@ async function lioxerpPrefetchDetailsInBackground(ids) {
 const isAdmin = (role) => role === 'ADMIN' || role === 'HR';
 // Firma/Proje yönetiminde kendi biriminle sınırlı erişimi olan roller (Müdür, Ekip Lideri)
 const isDeptLockedRole = (role) => role === 'MANAGER' || role === 'LEADER';
+// LioXERP Talep Formları kutucuğuna erişebilen roller: Admin/İK/Müdür/Ekip Lideri/Mühendis
+const canAccessLioxerp = (role) => isAdmin(role) || isDeptLockedRole(role) || role === 'ENGINEER';
 
-// LioXERP "Talep Formu" listesini döner — Admin/İK.
+// LioXERP "Talep Formu" listesini döner — Admin/İK/Müdür/Ekip Lideri/Mühendis.
 app.get('/api/lioxerp/talep-formlari', async (req, res) => {
   try {
     const { userRole } = req.query;
-    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+    if (!canAccessLioxerp(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
     const rows = await lioxerpFetchTalepFormlari();
     res.json(rows);
     // Liste yanıtı gönderildikten sonra, arama kutusunun satır/ürün detaylarını da kapsayabilmesi
@@ -1810,7 +1845,7 @@ app.get('/api/lioxerp/talep-formlari', async (req, res) => {
 // kutusu bu indeksi liste verisiyle birleştirerek "dosya içindeki" kısımları da tarar.
 app.get('/api/lioxerp/talep-formlari-arama-indeksi', (req, res) => {
   const { userRole } = req.query;
-  if (!isAdmin(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+  if (!canAccessLioxerp(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
   const index = {};
   const projects = {};
   for (const id of lioxerpDetailCache.keys()) {
@@ -1822,11 +1857,11 @@ app.get('/api/lioxerp/talep-formlari-arama-indeksi', (req, res) => {
   res.json({ index, projects, progress: { ...lioxerpDetailPrefetch } });
 });
 
-// Tek bir Talep Formu kaydının satır detaylarını döner — Admin/İK.
+// Tek bir Talep Formu kaydının satır detaylarını döner — Admin/İK/Müdür/Ekip Lideri/Mühendis.
 app.get('/api/lioxerp/talep-formlari/:id', async (req, res) => {
   try {
     const { userRole } = req.query;
-    if (!isAdmin(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+    if (!canAccessLioxerp(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
     const cached = lioxerpDetailCache.get(req.params.id);
     const rows = cached && cached.length > 0 ? cached : await lioxerpFetchTalepFormuDetay(req.params.id);
     if (!lioxerpDetailCache.has(req.params.id)) lioxerpDetailCache.set(req.params.id, rows);
@@ -1834,6 +1869,120 @@ app.get('/api/lioxerp/talep-formlari/:id', async (req, res) => {
   } catch (error) {
     console.error('LioXERP detay çekme hatası:', error.message);
     res.status(502).json({ error: 'LioXERP detayı alınamadı: ' + error.message });
+  }
+});
+
+// Ekranda o an filtrelenmiş/sıralanmış Talep Formu satırlarını (istemci gönderir, tekrar LioXERP'e
+// gidilmez) tek sayfalık bir .xlsx dosyasına yazar — "Dışa Aktar" > Excel.
+app.post('/api/lioxerp/export-excel', async (req, res) => {
+  try {
+    const { userRole, rows } = req.body;
+    if (!canAccessLioxerp(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'Geçersiz veri.' });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Intern Panel';
+    workbook.created = new Date();
+    const sheet = workbook.addWorksheet('Talep Formları');
+    sheet.columns = [
+      { header: 'Belge No', key: 'DocNo', width: 18 },
+      { header: 'Belge Tarihi', key: 'DocDate', width: 16 },
+      { header: 'İşyeri', key: 'BranchDesc', width: 24 },
+      { header: 'Hareket', key: 'DocTraDesc', width: 24 },
+      { header: 'Talep Eden', key: 'RequestUserName', width: 24 },
+      { header: 'Depo', key: 'WhouseDesc', width: 20 }
+    ];
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
+    rows.forEach(r => sheet.addRow({
+      DocNo: r.DocNo || '', DocDate: r.DocDate || '', BranchDesc: r.BranchDesc || '',
+      DocTraDesc: r.DocTraDesc || '', RequestUserName: r.RequestUserName || '', WhouseDesc: r.WhouseDesc || ''
+    }));
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="talep_formlari_${dateStr}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('LioXERP Excel dışa aktarma hatası:', error.message);
+    res.status(500).json({ error: 'Excel dosyası oluşturulurken hata: ' + error.message });
+  }
+});
+
+// LioXERP tabloda kullanılan kolonlar — hem PDF hem Excel dışa aktarma bunu paylaşır.
+const LIOXERP_EXPORT_COLUMNS = [
+  { field: 'DocNo', label: 'Belge No', width: 95 },
+  { field: 'DocDate', label: 'Belge Tarihi', width: 75 },
+  { field: 'BranchDesc', label: 'İşyeri', width: 150 },
+  { field: 'DocTraDesc', label: 'Hareket', width: 150 },
+  { field: 'RequestUserName', label: 'Talep Eden', width: 150 },
+  { field: 'WhouseDesc', label: 'Depo', width: 130 }
+];
+
+// Ekranda o an filtrelenmiş/sıralanmış Talep Formu satırlarını gerçek bir .pdf dosyasına yazar —
+// "Dışa Aktar" > PDF. Excel/Word ile aynı şekilde doğrudan indirilir (yazdırma penceresi açılmaz).
+// Türkçe karakterler (ğ/ı/ş/İ/Ğ/Ş vb.) için gömülü DejaVu Sans fontu kullanılır — pdfkit'in
+// varsayılan standart fontları (Helvetica) bu karakterleri desteklemez.
+app.post('/api/lioxerp/export-pdf', async (req, res) => {
+  try {
+    const { userRole, rows } = req.body;
+    if (!canAccessLioxerp(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'Geçersiz veri.' });
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="talep_formlari_${dateStr}.pdf"`);
+
+    const doc = new PDFDocument({ margin: 36, size: 'A4', layout: 'landscape' });
+    doc.pipe(res);
+    doc.registerFont('Body', path.join(__dirname, 'fonts/DejaVuSans.ttf'));
+    doc.registerFont('Heading', path.join(__dirname, 'fonts/DejaVuSans-Bold.ttf'));
+
+    const tableLeft = doc.page.margins.left;
+    const tableWidth = LIOXERP_EXPORT_COLUMNS.reduce((s, c) => s + c.width, 0);
+    const rowHeight = 20;
+    const bottomLimit = doc.page.height - doc.page.margins.bottom;
+
+    function drawTableHeader(y) {
+      let x = tableLeft;
+      doc.font('Heading').fontSize(9);
+      LIOXERP_EXPORT_COLUMNS.forEach(c => {
+        doc.rect(x, y, c.width, rowHeight).fillAndStroke('#e2e8f0', '#cbd5e1');
+        doc.fillColor('#1e293b').text(c.label, x + 5, y + 6, { width: c.width - 10 });
+        x += c.width;
+      });
+      return y + rowHeight;
+    }
+
+    doc.font('Heading').fontSize(16).fillColor('#0f172a').text('Talep Formları', tableLeft, doc.y);
+    doc.font('Body').fontSize(9).fillColor('#64748b').text(`${rows.length} kayıt — ${new Date().toLocaleDateString('tr-TR')}`);
+    doc.moveDown(0.6);
+
+    let y = drawTableHeader(doc.y);
+    doc.font('Body').fontSize(8.5);
+
+    rows.forEach((r, i) => {
+      if (y + rowHeight > bottomLimit) {
+        doc.addPage();
+        y = drawTableHeader(doc.page.margins.top);
+        doc.font('Body').fontSize(8.5);
+      }
+      if (i % 2 === 1) doc.rect(tableLeft, y, tableWidth, rowHeight).fill('#f8fafc');
+      let x = tableLeft;
+      doc.fillColor('#1e293b');
+      LIOXERP_EXPORT_COLUMNS.forEach(c => {
+        doc.text(String(r[c.field] || '-'), x + 5, y + 5, { width: c.width - 10, height: rowHeight - 5, ellipsis: true });
+        x += c.width;
+      });
+      y += rowHeight;
+    });
+
+    doc.end();
+  } catch (error) {
+    console.error('LioXERP PDF dışa aktarma hatası:', error.message);
+    if (!res.headersSent) res.status(500).json({ error: 'PDF dosyası oluşturulurken hata: ' + error.message });
   }
 });
 
@@ -1870,6 +2019,15 @@ function computeStagePercentage(stageRows) {
       const childWeight = mainWeight / children.length;
       total += children.filter(c => c.is_done).length * childWeight;
     }
+  }
+  // "Ön Doğrulama + Doğrulama > Üretim Teslim" aşaması tamamlandığında, önceki aşamalardan bazıları
+  // henüz bitmemiş olsa bile proje ilerlemesi en az %95 gösterilir (üretim fiilen teslim edildiyse
+  // kalan Dosya/Yedek Teslimi gibi adımlar formalite sayılır).
+  const deliveryMain = mains.find(m => m.title === 'Ön Doğrulama + Doğrulama > Üretim Teslim');
+  if (deliveryMain) {
+    const deliveryChildren = stageRows.filter(s => s.parent_id === deliveryMain.id);
+    const isDeliveryDone = deliveryChildren.length > 0 ? deliveryChildren.every(c => c.is_done) : !!deliveryMain.is_done;
+    if (isDeliveryDone) total = Math.max(total, 95);
   }
   return Math.round(total * 100) / 100;
 }
@@ -2420,9 +2578,15 @@ app.get('/api/tasks', async (req, res) => {
       SELECT tasks.*, users.name as assignee_name,
         users.department as assignee_department,
         users.sub_area as assignee_sub_area,
-        users.role as assignee_role
+        users.role as assignee_role,
+        projects.name as project_name,
+        stage.title as stage_title,
+        parent_stage.title as stage_parent_title
       FROM tasks
       LEFT JOIN users ON tasks.assigned_to = users.id
+      LEFT JOIN projects ON tasks.project_id = projects.id
+      LEFT JOIN project_stages stage ON tasks.stage_id = stage.id
+      LEFT JOIN project_stages parent_stage ON stage.parent_id = parent_stage.id
     `;
     let conditions = [];
     let args = [];
@@ -4618,6 +4782,15 @@ app.post('/api/projects', async (req, res) => {
       return res.status(400).json({ error: 'Firma, proje adı ve tarihler zorunludur.' });
     }
 
+    // SQLite'ın LOWER()'ı sadece ASCII harfleri küçültür (Ü/Ç/Ö/Ş/İ gibi Türkçe karakterleri
+    // değiştirmez), bu yüzden karşılaştırma SQL'de değil JS'de Türkçe locale ile yapılır.
+    const existingNamesRes = await db.execute({ sql: `SELECT name FROM projects` });
+    const normalizedName = name.trim().toLocaleLowerCase('tr-TR');
+    const isDuplicateName = existingNamesRes.rows.some(r => String(r.name || '').trim().toLocaleLowerCase('tr-TR') === normalizedName);
+    if (isDuplicateName) {
+      return res.status(400).json({ error: 'Bu isimde bir proje zaten mevcut. Lütfen farklı bir isim girin.' });
+    }
+
     let finalDepartment;
     if (isAdmin(userRole)) {
       if (!department) return res.status(400).json({ error: 'Birim zorunludur.' });
@@ -4923,11 +5096,27 @@ app.get('/api/projects/:id/stages', async (req, res) => {
       args: [req.params.id]
     });
     const rows = rowsRes.rows;
+
+    // "Görevi Ata" ile doğrudan bir aşamaya bağlanan görevler — aşamanın yanında atama bilgisi
+    // (kime, hangi durumda, ne zamana kadar) gösterebilmek için aşama id'sine göre gruplanır.
+    const stageTasksRes = await db.execute({
+      sql: `SELECT t.id, t.stage_id, t.status, t.end_date, u.name AS assignee_name
+            FROM tasks t JOIN users u ON t.assigned_to = u.id
+            WHERE t.project_id = ? AND t.stage_id IS NOT NULL`,
+      args: [req.params.id]
+    });
+    const tasksByStage = {};
+    stageTasksRes.rows.forEach(t => {
+      if (!tasksByStage[t.stage_id]) tasksByStage[t.stage_id] = [];
+      tasksByStage[t.stage_id].push({ id: t.id, assigneeName: t.assignee_name, status: t.status, endDate: t.end_date });
+    });
+
     const mains = rows.filter(r => r.parent_id == null).map(m => ({
       id: m.id, title: m.title, isDone: !!m.is_done, completedAt: m.completed_at, completedBy: m.completed_by, note: m.note,
+      assignedTasks: tasksByStage[m.id] || [],
       subItems: rows
         .filter(s => s.parent_id === m.id)
-        .map(s => ({ id: s.id, title: s.title, isDone: !!s.is_done, completedAt: s.completed_at, completedBy: s.completed_by, note: s.note }))
+        .map(s => ({ id: s.id, title: s.title, isDone: !!s.is_done, completedAt: s.completed_at, completedBy: s.completed_by, note: s.note, assignedTasks: tasksByStage[s.id] || [] }))
     }));
     res.json({ stages: mains, percentage: computeStagePercentage(rows) });
   } catch (e) {
@@ -5031,7 +5220,7 @@ app.put('/api/projects/:id/stages/:stageId', async (req, res) => {
     await db.execute({ sql: `UPDATE project_stages SET ${updates.join(', ')} WHERE id = ?`, args });
 
     if (isDone !== undefined) {
-      const allRowsRes = await db.execute({ sql: `SELECT id, parent_id, is_done FROM project_stages WHERE project_id = ?`, args: [pid] });
+      const allRowsRes = await db.execute({ sql: `SELECT id, parent_id, title, is_done FROM project_stages WHERE project_id = ?`, args: [pid] });
       const percentage = computeStagePercentage(allRowsRes.rows);
       const today = todayISO();
       const noteText = `${stage.title} ${isDone ? 'tamamlandı' : 'geri alındı'}${isDone && note && note.trim() ? ' — ' + note.trim() : ''}`;
