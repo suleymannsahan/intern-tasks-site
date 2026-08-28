@@ -1520,6 +1520,7 @@
                 <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Durum</label>
                 <select id="editProjectStatus" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
                   <option value="ACTIVE">Aktif</option>
+                  <option value="PENDING">Beklemede</option>
                   <option value="COMPLETED">Tamamlandı</option>
                 </select>
               </div>
@@ -1915,6 +1916,13 @@
                 <div id="projDetMeta" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 flex flex-wrap gap-x-4 gap-y-1"></div>
               </div>
               <div id="projDetBadges" class="flex flex-wrap gap-1.5 shrink-0"></div>
+            </div>
+            <div id="projDetPendingBanner" class="hidden mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-xl p-3.5 flex items-start gap-2.5">
+              <i class="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 shrink-0"></i>
+              <div class="text-xs text-amber-700 dark:text-amber-300">
+                <div class="font-bold">Bu proje Beklemede (Pending) durumunda.</div>
+                <div class="mt-0.5">Aşama işaretleme/düzenleme, ilerleme ekleme ve görev atama gibi tüm işlemler durduruldu; e-posta/hatırlatıcı/bildirimler gönderilmiyor. Devam etmek için durumu "Düzenle" kısmından tekrar Aktif yapın.</div>
+              </div>
             </div>
             <div id="projDetNoteRow" class="hidden mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300"></div>
           </div>
@@ -4821,23 +4829,29 @@
           `).join('');
       }
 
-      // Tamamlanan projeler artık kendi bölümünde gösterildiğinden, ana liste ve aciliyet
-      // sırasında sadece aktif projeler yer alır (Admin/Müdür tarafındaki davranışla tutarlı).
-      const activeProjects = engineerOwnedProjects.filter(p => p.status !== 'COMPLETED');
+      // Tamamlanan projeler artık kendi bölümünde gösterildiğinden, ana listede sadece
+      // Aktif+Beklemede projeler yer alır (Admin/Müdür tarafındaki davranışla tutarlı). Aciliyet
+      // sırası ise Beklemede olanları da dışlar — o proje tüm işlemleri donduruğu için sıralamaya girmez.
+      const visibleProjects = engineerOwnedProjects.filter(p => p.status !== 'COMPLETED');
+      const rankableProjects = visibleProjects.filter(p => p.status === 'ACTIVE');
 
-      if (activeProjects.length === 0) {
+      if (visibleProjects.length === 0) {
         listEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz aktif proje yok.');
         rankEl.innerHTML = emptyStateHtml('fa-diagram-project', 'Sorumlu olduğunuz aktif proje yok.');
         return;
       }
 
-      listEl.innerHTML = activeProjects.map(p => {
+      listEl.innerHTML = visibleProjects.map(p => {
+        const isPending = p.status === 'PENDING';
         const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
         const daysCls = p.days_left < 0 ? 'text-rose-500' : p.days_left <= 3 ? 'text-amber-500' : 'text-emerald-500';
-        return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
+        return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left ${isPending ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 hover:border-amber-500' : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500'} border hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
           <div class="flex items-center justify-between gap-2">
-            <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
-            <span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>
+            <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-1.5">
+              ${isPending ? '<span class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400"><i class="fa-solid fa-triangle-exclamation"></i>BEKLEMEDE</span>' : ''}
+              <span class="truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</span>
+            </div>
+            ${isPending ? '' : `<span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>`}
           </div>
           <div class="flex items-center gap-2 mt-2">
             <div class="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
@@ -4849,10 +4863,10 @@
         </button>`;
       }).join('');
 
-      const ranked = activeProjects
+      const ranked = rankableProjects
         .map(p => ({ ...p, urgency: Math.round(computeProjectUrgency(p)) }))
         .sort((a, b) => b.urgency - a.urgency);
-      rankEl.innerHTML = ranked.map((p, i) => {
+      rankEl.innerHTML = ranked.length === 0 ? emptyStateHtml('fa-diagram-project', 'Sıralanacak aktif proje yok.') : ranked.map((p, i) => {
         let barCls = 'bg-emerald-500', lvl = 'Düşük';
         if (p.urgency >= 70) { barCls = 'bg-rose-500'; lvl = 'Kritik'; }
         else if (p.urgency >= 40) { barCls = 'bg-amber-500'; lvl = 'Orta'; }
@@ -4885,9 +4899,10 @@
       const upcomingEl = document.getElementById(isTechnicianView ? 'technicianUpcomingProjectsList' : 'engineerUpcomingProjectsList');
       if (!overdueEl || !upcomingEl) return;
 
-      // Tamamlanan projeler artık geciken/yaklaşan sayılmaz (Admin/Müdür tarafı zaten sunucuda
-      // "status !== COMPLETED" ile filtreleniyor; burada client-side aynı kural uygulanır).
-      const activeOnly = engineerOwnedProjects.filter(p => p.status !== 'COMPLETED');
+      // Tamamlanan ve Beklemede projeler geciken/yaklaşan sayılmaz (Beklemede projenin tüm
+      // işlemleri, dolayısıyla hatırlatıcıları da donduruldu) — Admin/Müdür tarafı zaten sunucuda
+      // "status === ACTIVE" ile filtreleniyor; burada client-side aynı kural uygulanır.
+      const activeOnly = engineerOwnedProjects.filter(p => p.status === 'ACTIVE');
       const overdue = activeOnly.filter(p => p.days_left < 0).sort((a, b) => a.days_left - b.days_left);
       const upcoming = activeOnly.filter(p => p.days_left >= 0 && p.days_left <= 3).sort((a, b) => a.days_left - b.days_left);
 
@@ -5185,15 +5200,27 @@
           if (completedEl) completedEl.innerHTML = emptyStateHtml('fa-diagram-project', emptyMsg);
           return;
         }
-        el.innerHTML = projects.map(p => `
-          <div onclick="openProjectDetailPage(${p.id}, 'adminPanelSection')" class="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 rounded-lg p-2.5 cursor-pointer transition-all">
+        // Tamamlanan projeler burada değil, sadece aşağıdaki "Tamamlanan Projeler" panelinde
+        // gösterilir. Beklemede (PENDING) olanlar burada KALIR ama uyarı stiliyle ayırt edilir
+        // (bkz. renderProjectTileWarningBadge) — proje tekrar Aktif olana kadar tüm işlemleri donuk.
+        const visibleProjects = projects.filter(p => p.status !== 'COMPLETED');
+        el.innerHTML = visibleProjects.length === 0
+          ? emptyStateHtml('fa-diagram-project', 'Bu firmaya ait aktif proje yok.')
+          : visibleProjects.map(p => {
+            const isPending = p.status === 'PENDING';
+            return `
+          <div onclick="openProjectDetailPage(${p.id}, 'adminPanelSection')" class="flex items-center justify-between gap-2 ${isPending ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 hover:border-amber-500' : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500'} border rounded-lg p-2.5 cursor-pointer transition-all">
             <div class="min-w-0">
-              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-1.5">
+                ${isPending ? '<span class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400"><i class="fa-solid fa-triangle-exclamation"></i>BEKLEMEDE</span>' : ''}
+                <span class="truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</span>
+              </div>
               <div class="text-[10px] text-slate-400">${DEPARTMENT_LABELS[p.department] || p.department} · ${p.owner_name || 'Sorumlu yok'} · Bitiş: ${p.end_date} · Öncelik: ${p.priority || 'NORMAL'}</div>
             </div>
             <button onclick="event.stopPropagation(); handleDeleteProject(${p.id})" class="text-rose-500 hover:text-rose-600 p-1 shrink-0"><i class="fa-solid fa-trash-can"></i></button>
           </div>
-        `).join('');
+        `;
+          }).join('');
 
         if (completedEl) {
           const completed = projects.filter(p => p.status === 'COMPLETED');
@@ -6233,10 +6260,18 @@
         : project.priority === 'DÜŞÜK' ? 'bg-slate-500/10 text-slate-500 border-slate-500/30'
         : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
       const isCompleted = project.status === 'COMPLETED';
+      const isPending = project.status === 'PENDING';
+      let statusCls = 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30';
+      let statusLabel = 'Aktif';
+      if (isCompleted) { statusCls = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'; statusLabel = 'Tamamlandı'; }
+      else if (isPending) { statusCls = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'; statusLabel = 'Beklemede'; }
       document.getElementById('projDetBadges').innerHTML = `
         <span class="px-2.5 py-1 text-xs rounded-md font-bold border ${priorityCls}">Öncelik: ${project.priority || 'NORMAL'}</span>
-        <span class="px-2.5 py-1 text-xs rounded-md font-bold border ${isCompleted ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/30'}">${isCompleted ? 'Tamamlandı' : 'Aktif'}</span>
+        <span class="px-2.5 py-1 text-xs rounded-md font-bold border ${statusCls}">${isPending ? '<i class="fa-solid fa-triangle-exclamation me-1"></i>' : ''}${statusLabel}</span>
       `;
+
+      const pendingBanner = document.getElementById('projDetPendingBanner');
+      if (pendingBanner) pendingBanner.classList.toggle('hidden', !isPending);
 
       const noteRow = document.getElementById('projDetNoteRow');
       if (project.note) {
@@ -6305,7 +6340,7 @@
 
       // Proje Aşamaları checklist'i (varsa şablon uygulanmış): "İlerleme Notları" alanının aşama
       // checklist'i varken tamamlanan aşamaları göstermesi gerektiğinden, önce burada yüklenir.
-      const stagesData = await loadAndRenderProjectStages(idp, project.id);
+      const stagesData = await loadAndRenderProjectStages(idp, project.id, project.status === 'PENDING');
       const hasStages = !!(stagesData && stagesData.stages && stagesData.stages.length > 0);
 
       const logsTitleEl = document.getElementById(idp + 'LogsTitle');
@@ -6435,7 +6470,7 @@
       // Bir aşama checklist'i varsa "Gerçekleşen %" artık checklist'ten otomatik geldiği için
       // manuel giriş formu gizlenir (ikisi çakışmasın diye).
       const addForm = document.getElementById(idp + 'AddForm');
-      const canAdd = currentUser.role === 'ADMIN' || currentUser.role === 'HR' || (personProjectOwnerId && currentUser.id == personProjectOwnerId);
+      const canAdd = (currentUser.role === 'ADMIN' || currentUser.role === 'HR' || (personProjectOwnerId && currentUser.id == personProjectOwnerId)) && project.status !== 'PENDING';
       addForm.classList.toggle('hidden', !canAdd || hasStages);
       const dEl = document.getElementById(idp + 'Date');
       if (dEl) dEl.value = today;
@@ -6476,14 +6511,14 @@
     }
 
     // Bir projenin aşama checklist'ini çekip ilgili container'a (${idp}Stages) render eder.
-    async function loadAndRenderProjectStages(idp, projectId) {
+    async function loadAndRenderProjectStages(idp, projectId, isPending) {
       const container = document.getElementById(idp + 'Stages');
       if (!container) return { stages: [], percentage: 0 };
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects/${projectId}/stages`);
         const data = await safeJson(res);
         if (!res.ok) { container.innerHTML = ''; return { stages: [], percentage: 0 }; }
-        await renderProjectStagesSection(idp, projectId, data);
+        await renderProjectStagesSection(idp, projectId, data, isPending);
         return data;
       } catch (e) {
         container.innerHTML = '';
@@ -6604,7 +6639,7 @@
       return best;
     }
 
-    async function renderProjectStagesSection(idp, projectId, data) {
+    async function renderProjectStagesSection(idp, projectId, data, isPending) {
       const container = document.getElementById(idp + 'Stages');
       if (!container) return;
       // Aşama listesi (checklist kutusu) her render'da innerHTML ile tamamen yenilendiği için
@@ -6615,9 +6650,11 @@
       stagesLastRender = { idp, projectId, data };
       const stages = data.stages || [];
       const percentage = data.percentage || 0;
-      const canManage = canManageProjectStagesClient();
-      const canEditCompleted = canEditProjectDetailsClient();
-      const canAssignStageTask = canAssignStageTaskClient();
+      // Proje Beklemede (PENDING) ise rol ne olursa olsun hiçbir aşama işlemi yapılamaz —
+      // sunucu tarafı zaten reddediyor, burada butonlar hiç gösterilmeyerek tutarlı kalınır.
+      const canManage = canManageProjectStagesClient() && !isPending;
+      const canEditCompleted = canEditProjectDetailsClient() && !isPending;
+      const canAssignStageTask = canAssignStageTaskClient() && !isPending;
       const lastCompleted = findLastCompletedStageKey(stages);
 
       let applyBtnHtml = '';

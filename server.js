@@ -1438,6 +1438,10 @@ app.post('/api/tasks', async (req, res) => {
       const stageRes = await db.execute({ sql: `SELECT id, title, project_id FROM project_stages WHERE id = ?`, args: [stageId] });
       if (stageRes.rows.length === 0) return res.status(404).json({ error: 'Aşama bulunamadı.' });
       stageForTask = stageRes.rows[0];
+      const stageProjRes = await db.execute({ sql: `SELECT status FROM projects WHERE id = ?`, args: [stageForTask.project_id] });
+      if (stageProjRes.rows[0] && stageProjRes.rows[0].status === 'PENDING') {
+        return res.status(400).json({ error: 'Bu proje beklemede (Pending) olduğu için aşamasına görev atanamaz.' });
+      }
     }
 
     const result = await db.execute({
@@ -2030,6 +2034,42 @@ function computeStagePercentage(stageRows) {
     if (isDeliveryDone) total = Math.max(total, 95);
   }
   return Math.round(total * 100) / 100;
+}
+
+// Bir proje aşamasını/alt aşamasını tamamlanmış (ya da geri alınmış) işaretler ve genel ilerlemeyi
+// yeniden hesaplayıp bir "Gerçekleşen %" kaydı düşer — hem manuel PUT /stages/:stageId endpoint'i
+// hem de "Görevi Ata" ile bağlanan bir görev tamamlandığında/revize edildiğinde OTOMATİK tetiklenen
+// bu fonksiyon aynı davranışı sergiler. Ana aşamanın alt aşamaları varsa (durumu onlardan hesaplandığı
+// için) sessizce atlanır — elle düzenlemedeki aynı kural burada da geçerli.
+async function setProjectStageDone(projectId, stageId, isDone, completedByName, note) {
+  // Proje Beklemede (PENDING) ise görev tamamlama/revize gibi otomatik tetikleyiciler de dahil
+  // hiçbir aşama durumu değişmez — proje tekrar Aktif olana kadar her şey donmuş kalır.
+  const projRes = await db.execute({ sql: `SELECT status FROM projects WHERE id = ?`, args: [projectId] });
+  if (projRes.rows.length === 0 || projRes.rows[0].status === 'PENDING') return;
+
+  const stageRes = await db.execute({ sql: `SELECT * FROM project_stages WHERE id = ? AND project_id = ?`, args: [stageId, projectId] });
+  if (stageRes.rows.length === 0) return;
+  const stage = stageRes.rows[0];
+  if (!!stage.is_done === !!isDone) return; // zaten istenen durumda, tekrar loglamaya gerek yok
+
+  if (stage.parent_id == null) {
+    const childCountRes = await db.execute({ sql: `SELECT COUNT(*) AS c FROM project_stages WHERE parent_id = ?`, args: [stageId] });
+    if (Number(childCountRes.rows[0].c) > 0) return;
+  }
+
+  await db.execute({
+    sql: `UPDATE project_stages SET is_done = ?, completed_at = ?, completed_by = ? WHERE id = ?`,
+    args: [isDone ? 1 : 0, isDone ? new Date().toISOString() : null, isDone ? (completedByName || null) : null, stageId]
+  });
+
+  const allRowsRes = await db.execute({ sql: `SELECT id, parent_id, title, is_done FROM project_stages WHERE project_id = ?`, args: [projectId] });
+  const percentage = computeStagePercentage(allRowsRes.rows);
+  const today = todayISO();
+  const noteText = `${stage.title} ${isDone ? 'tamamlandı' : 'geri alındı'}${isDone && note ? ' — ' + note : ''}`;
+  await db.execute({
+    sql: `INSERT INTO project_progress (project_id, log_date, actual, note, created_at) VALUES (?, ?, ?, ?, ?)`,
+    args: [projectId, today, Math.round(percentage), noteText, new Date().toISOString()]
+  });
 }
 
 // Bir şablon (oluşturma/düzenleme) isteğindeki {title, subItems:[...]} dizisini stage_template_items
@@ -3114,6 +3154,13 @@ app.put('/api/tasks/:id/complete', async (req, res) => {
           );
         }
       }
+
+      // Bu görev "Görevi Ata" ile bir proje aşamasına/alt aşamasına doğrudan bağlıysa, atanan kişi
+      // görevi tamamlayınca o aşama da otomatik olarak tamamlanmış işaretlenir.
+      if (task.stage_id && task.project_id) {
+        setProjectStageDone(task.project_id, task.stage_id, true, task.assignee_name, `"${task.title}" görevi tamamlanarak otomatik kapatıldı.`)
+          .catch(e => console.error('Aşama otomatik tamamlama hatası:', e.message));
+      }
     }
 
     res.json({ message: 'Görev tamamlandı olarak işaretlendi ve bildirim e-postası gönderildi.' });
@@ -3182,12 +3229,19 @@ app.put('/api/tasks/:id/review', async (req, res) => {
     // Görevin sahibine (atanan kişiye) sonucu bildir
     try {
       const taskRes = await db.execute({
-        sql: `SELECT tasks.assigned_to, tasks.title, tasks.category, users.name as assignee_name, users.email as assignee_email
+        sql: `SELECT tasks.assigned_to, tasks.title, tasks.category, tasks.stage_id, tasks.project_id,
+                     users.name as assignee_name, users.email as assignee_email
               FROM tasks JOIN users ON tasks.assigned_to = users.id WHERE tasks.id = ?`,
         args: [taskId]
       });
       const t = taskRes.rows[0];
       if (t) {
+        // Aşamaya bağlı bir görev revize edilirse, görev henüz gerçekten bitmemiş demektir —
+        // "Görevi Tamamla" ile otomatik kapatılmış olabilecek aşama da tekrar açılır.
+        if (isRevision && t.stage_id && t.project_id) {
+          setProjectStageDone(t.project_id, t.stage_id, false, null, null)
+            .catch(e => console.error('Aşama otomatik geri alma hatası:', e.message));
+        }
         if (isRevision) {
           createNotification(t.assigned_to, 'TASK_REVISION', 'TASKS', 'Revize İstendi', `"${t.title}" göreviniz için revize istendi: ${comment || ''}`, Number(taskId));
           if (t.assignee_email && SETTINGS_CACHE.email_task_revision) {
@@ -4737,7 +4791,9 @@ app.get('/api/projects', async (req, res) => {
       const last = rows.length ? rows[rows.length - 1] : null;
       const actual = last ? Number(last.actual) : 0;
       const daysLeft = daysBetween(today, p.end_date);
-      const isOverdue = (p.status !== 'COMPLETED') && daysLeft < 0;
+      // Sadece Aktif projeler gecikmiş sayılır — Tamamlanan zaten bitmiş, Beklemede (PENDING) ise
+      // tüm işlemleri (ve dolayısıyla gecikme uyarısı) donduruldu.
+      const isOverdue = (p.status === 'ACTIVE') && daysLeft < 0;
       enriched.push({
         ...p,
         actual,
@@ -4929,11 +4985,12 @@ app.post('/api/projects/:id/progress', async (req, res) => {
   try {
     const { log_date, actual, note, userRole, userId } = req.body;
     const pid = req.params.id;
-    const cur = await db.execute({ sql: `SELECT owner_id, name FROM projects WHERE id = ?`, args: [pid] });
+    const cur = await db.execute({ sql: `SELECT owner_id, name, status FROM projects WHERE id = ?`, args: [pid] });
     if (cur.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
     const project = cur.rows[0];
     const isOwner = userId && Number(project.owner_id) === Number(userId);
     if (!isAdmin(userRole) && !isOwner) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (project.status === 'PENDING') return res.status(400).json({ error: 'Bu proje beklemede (Pending) olduğu için bu işlem yapılamaz.' });
     if (!log_date) return res.status(400).json({ error: 'Tarih gerekli.' });
     await db.execute({
       sql: `INSERT INTO project_progress (project_id, log_date, actual, note, created_at) VALUES (?, ?, ?, ?, ?)`,
@@ -5128,9 +5185,10 @@ app.post('/api/projects/:id/stages/apply-template', async (req, res) => {
   try {
     const { templateId, userRole, userId } = req.body;
     const pid = req.params.id;
-    const pRes = await db.execute({ sql: `SELECT owner_id FROM projects WHERE id = ?`, args: [pid] });
+    const pRes = await db.execute({ sql: `SELECT owner_id, status FROM projects WHERE id = ?`, args: [pid] });
     if (pRes.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
     if (!canManageProjectStages(userRole, userId, pRes.rows[0])) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (pRes.rows[0].status === 'PENDING') return res.status(400).json({ error: 'Bu proje beklemede (Pending) olduğu için bu işlem yapılamaz.' });
     if (!templateId) return res.status(400).json({ error: 'Şablon seçiniz.' });
     const tRes = await db.execute({ sql: `SELECT id, name FROM stage_templates WHERE id = ?`, args: [templateId] });
     if (tRes.rows.length === 0) return res.status(404).json({ error: 'Şablon bulunamadı.' });
@@ -5146,9 +5204,10 @@ app.post('/api/projects/:id/stages', async (req, res) => {
   try {
     const { parentId, title, userRole, userId } = req.body;
     const pid = req.params.id;
-    const pRes = await db.execute({ sql: `SELECT owner_id FROM projects WHERE id = ?`, args: [pid] });
+    const pRes = await db.execute({ sql: `SELECT owner_id, status FROM projects WHERE id = ?`, args: [pid] });
     if (pRes.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
     if (!canManageProjectStages(userRole, userId, pRes.rows[0])) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (pRes.rows[0].status === 'PENDING') return res.status(400).json({ error: 'Bu proje beklemede (Pending) olduğu için bu işlem yapılamaz.' });
     if (!title || !title.trim()) return res.status(400).json({ error: 'Başlık gerekli.' });
 
     let parentIdVal = null;
@@ -5198,6 +5257,7 @@ app.put('/api/projects/:id/stages/:stageId', async (req, res) => {
     // aşamayı ilk kez onaylamak ise eskisi gibi her mühendise açık kalır.
     const requiredCheck = stage.is_done ? canEditProjectDetails(userRole, userId, project) : canManageProjectStages(userRole, userId, project);
     if (!requiredCheck) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (project.status === 'PENDING') return res.status(400).json({ error: 'Bu proje beklemede (Pending) olduğu için bu işlem yapılamaz.' });
 
     if (isDone !== undefined && stage.parent_id == null) {
       const childCountRes = await db.execute({ sql: `SELECT COUNT(*) AS c FROM project_stages WHERE parent_id = ?`, args: [stageId] });
@@ -5241,13 +5301,14 @@ app.delete('/api/projects/:id/stages/:stageId', async (req, res) => {
     const { userRole, userId } = req.body;
     const pid = req.params.id;
     const stageId = req.params.stageId;
-    const pRes = await db.execute({ sql: `SELECT owner_id FROM projects WHERE id = ?`, args: [pid] });
+    const pRes = await db.execute({ sql: `SELECT owner_id, status FROM projects WHERE id = ?`, args: [pid] });
     if (pRes.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
     const stageRes = await db.execute({ sql: `SELECT is_done FROM project_stages WHERE id = ? AND project_id = ?`, args: [stageId, pid] });
     if (stageRes.rows.length === 0) return res.status(404).json({ error: 'Aşama bulunamadı.' });
     // Zaten tamamlanmış bir aşamayı silmek daha dar yetki gerektirir, bkz. PUT endpoint'indeki açıklama.
     const requiredCheck = stageRes.rows[0].is_done ? canEditProjectDetails(userRole, userId, pRes.rows[0]) : canManageProjectStages(userRole, userId, pRes.rows[0]);
     if (!requiredCheck) return res.status(403).json({ error: 'Yetkisiz erişim.' });
+    if (pRes.rows[0].status === 'PENDING') return res.status(400).json({ error: 'Bu proje beklemede (Pending) olduğu için bu işlem yapılamaz.' });
 
     await db.execute({ sql: `DELETE FROM project_stages WHERE parent_id = ? AND project_id = ?`, args: [stageId, pid] });
     await db.execute({ sql: `DELETE FROM project_stages WHERE id = ? AND project_id = ?`, args: [stageId, pid] });
@@ -5369,7 +5430,9 @@ app.get('/api/admin/dashboard', async (req, res) => {
       const last = prog.rows[0];
       const actual = last ? Number(last.actual) : 0;
       const daysLeft = daysBetween(today, p.end_date);
-      const overdue = (p.status !== 'COMPLETED') && daysLeft < 0;
+      // Sadece Aktif projeler gecikmiş sayılır — Tamamlanan zaten bitmiş, Beklemede (PENDING)
+      // projenin tüm işlemleri (gecikme uyarısı dahil) donduruldu.
+      const overdue = (p.status === 'ACTIVE') && daysLeft < 0;
       // Aciliyet skoru: son teslim tarihine az gün kalması ve öncelik artırır
       const urgency = (daysLeft < 0 ? 60 : Math.max(0, 30 - daysLeft * 2)) +
         (p.priority === 'YÜKSEK' || p.priority === 'HIGH' ? 20 : (p.priority === 'DÜŞÜK' || p.priority === 'LOW' ? -10 : 0));
@@ -5383,7 +5446,9 @@ app.get('/api/admin/dashboard', async (req, res) => {
 
     const overdue = all.filter(p => p.is_overdue)
       .sort((a, b) => a.days_left - b.days_left);
-    const byUrgency = all.filter(p => p.status !== 'COMPLETED')
+    // Aciliyet & Önem Sırası sadece Aktif projeleri kapsar — Beklemede (PENDING) projeler tüm
+    // işlemleri donduruldu için sıralamaya dahil edilmez, Tamamlanan zaten hiç girmez.
+    const byUrgency = all.filter(p => p.status === 'ACTIVE')
       .sort((a, b) => b.urgency - a.urgency);
 
     // Yaklaşan toplantılar ve onay bekleyen kayıtlar: yalnızca Admin'e özel bilgilendirme
@@ -5427,7 +5492,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
       recentMeetings: upcomingMeetings,
       pendingUsers: recentUsers,
       totalProjects: all.length,
-      activeProjects: all.filter(p => p.status !== 'COMPLETED').length
+      activeProjects: all.filter(p => p.status === 'ACTIVE').length
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
