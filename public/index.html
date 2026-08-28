@@ -3202,7 +3202,12 @@
         </div>
         <div>
           <label class="block text-xs font-semibold mb-1">Yeni Şifre (değiştirmek istemiyorsanız boş bırakın)</label>
-          <input type="password" id="editUserFullPassword" placeholder="Yeni şifre" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm">
+          <div class="relative">
+            <input type="password" id="editUserFullPassword" placeholder="Yeni şifre" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 pr-10 text-sm">
+            <button type="button" onclick="toggleEditUserFullPasswordVisibility()" tabindex="-1" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+              <i id="editUserFullPasswordToggleIcon" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
         </div>
         <div>
           <label class="block text-xs font-semibold mb-1">Birim</label>
@@ -8955,6 +8960,15 @@
     function toggleNewUserPasswordVisibility() {
       const input = document.getElementById('newUserPassword');
       const icon = document.getElementById('newUserPasswordToggleIcon');
+      if (!input || !icon) return;
+      const isHidden = input.type === 'password';
+      input.type = isHidden ? 'text' : 'password';
+      icon.className = isHidden ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+    }
+
+    function toggleEditUserFullPasswordVisibility() {
+      const input = document.getElementById('editUserFullPassword');
+      const icon = document.getElementById('editUserFullPasswordToggleIcon');
       if (!input || !icon) return;
       const isHidden = input.type === 'password';
       input.type = isHidden ? 'text' : 'password';
