@@ -42,6 +42,45 @@
     @media (prefers-reduced-motion: reduce) {
       [id$="Section"]:not(.hidden) { animation: none; }
     }
+    /* "Günlük Bilgilendirme Notu Girilmedi" — BEYES Asistan avatarının hemen üstünde bir konuşma
+       balonu olarak, sanki avatarın içinden çıkıyormuş gibi küçülüp büyüyerek belirir (transform-
+       origin köşesi kuyruğun/avatarın olduğu sağ-alt köşede) + ikon rozetinin arkasında nazikçe
+       genişleyip kaybolan bir halka (dikkat çeker ama "hata" gibi hissettirmez). */
+    #dailyWarningBanner {
+      transform-origin: bottom right;
+    }
+    #dailyWarningBanner:not(.hidden) {
+      animation: dailyBannerEnter 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes dailyBannerEnter {
+      from { opacity: 0; transform: scale(0.25); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    /* Kapatılırken (× veya not eklenince) aynı köşeye doğru küçülerek kaybolur — beliriminin
+       tam tersi, avatarın içine geri çekiliyormuş hissi verir (bkz. hideDailyWarningBanner). */
+    #dailyWarningBanner.daily-warning-closing {
+      animation: dailyBannerExit 0.26s ease-in forwards;
+    }
+    @keyframes dailyBannerExit {
+      from { opacity: 1; transform: scale(1); }
+      to { opacity: 0; transform: scale(0.25); }
+    }
+    .daily-warning-icon-ring {
+      position: absolute;
+      inset: -6px;
+      border-radius: 9999px;
+      background: rgba(245, 158, 11, 0.35);
+      animation: dailyWarningPulse 2.2s ease-in-out infinite;
+    }
+    @keyframes dailyWarningPulse {
+      0%, 100% { transform: scale(0.85); opacity: 0.6; }
+      50% { transform: scale(1.3); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #dailyWarningBanner:not(.hidden) { animation: none; }
+      #dailyWarningBanner.daily-warning-closing { animation: none; }
+      .daily-warning-icon-ring { animation: none; }
+    }
     /* Skeleton loader: içerik yüklenirken düz "Yükleniyor..." metni yerine nabız gibi atan
        gri bloklar gösterir (gerçek içeriğin yaklaşık şeklini taklit eder). */
     .skeleton-block {
@@ -499,11 +538,29 @@
       <main id="mainScrollArea" class="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
         <div class="max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-6">
         
-        <div id="dailyWarningBanner" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-4 text-amber-600 dark:text-amber-300 backdrop-blur-md">
-          <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
-          <div class="flex-1">
-            <h4 class="font-bold text-sm">Günlük Bilgilendirme Notu Girilmedi!</h4>
-            <p class="text-xs opacity-90">Bugün henüz yaptığınız çalışmalarla ilgili bir not düşmediniz.</p>
+        <!-- BEYES Asistan avatarının (aiChatWidgetBtn) hemen üstünde, ondan "çıkıyormuş" gibi
+             görünen bir konuşma balonu — konum sabit Tailwind class'larıyla değil, JS'te
+             positionDailyWarningNearAssistant() ile avatarın O ANKİ (sürüklenmiş olabilir)
+             gerçek konumuna göre hesaplanır. Kuyruk (küçük döndürülmüş kare) balonu avatara bağlar. -->
+        <div id="dailyWarningBanner" class="hidden fixed z-[65] w-[calc(100%-2.5rem)] max-w-xs bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-amber-300/60 dark:border-amber-800/50 rounded-2xl p-4 shadow-2xl">
+          <span class="absolute -bottom-2 right-6 w-4 h-4 bg-white/95 dark:bg-slate-900/95 border-r border-b border-amber-300/60 dark:border-amber-800/50 rotate-45"></span>
+          <button type="button" onclick="dismissDailyWarning()" title="Kapat" class="absolute top-2 right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+            <i class="fa-solid fa-xmark text-xs"></i>
+          </button>
+          <div class="flex items-start gap-3 pr-4">
+            <div class="relative shrink-0">
+              <span class="daily-warning-icon-ring"></span>
+              <div class="relative h-10 w-10 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30">
+                <i class="fa-solid fa-pen-to-square text-sm"></i>
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100">Günlük notunu henüz eklemedin</h4>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Bugün yaptığın çalışmalarla ilgili kısa bir not bırak.</p>
+              <button type="button" onclick="handleDailyWarningCtaClick()" class="mt-2.5 bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5">
+                <i class="fa-solid fa-plus text-[10px]"></i>Not Ekle
+              </button>
+            </div>
           </div>
         </div>
 
@@ -629,13 +686,23 @@
             </div>
 
             <div class="space-y-4">
-              <section>
-                <h4 class="font-bold text-xs mb-3 text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-spinner text-cyan-500"></i>Aktif Görevler <span id="leaderActiveTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">0</span></h4>
-                <div id="leaderTaskListActive" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
+              <section class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                <button type="button" onclick="toggleLeaderTaskSection('active')" class="w-full flex items-center justify-between mb-3">
+                  <h4 class="font-bold text-xs text-slate-900 dark:text-slate-100 flex items-center gap-2"><i class="fa-solid fa-spinner text-cyan-500"></i>Aktif Görevler <span id="leaderActiveTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">0</span></h4>
+                  <i id="leaderActiveTaskChevron" class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                </button>
+                <div id="leaderActiveTaskBody">
+                  <div id="leaderTaskListActive" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
+                </div>
               </section>
-              <section>
-                <h4 class="font-bold text-xs mb-3 text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left"></i>Geçmiş / Tamamlanan <span id="leaderPastTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">0</span></h4>
-                <div id="leaderTaskListPast" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
+              <section class="bg-slate-100/80 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-xl p-4">
+                <button type="button" onclick="toggleLeaderTaskSection('past')" class="w-full flex items-center justify-between mb-3">
+                  <h4 class="font-bold text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left"></i>Geçmiş / Tamamlanan <span id="leaderPastTaskCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">0</span></h4>
+                  <i id="leaderPastTaskChevron" class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                </button>
+                <div id="leaderPastTaskBody" class="hidden">
+                  <div id="leaderTaskListPast" class="grid grid-cols-1 gap-4 scroll-panel max-h-[420px] pr-1"></div>
+                </div>
               </section>
             </div>
           </div>
@@ -865,7 +932,7 @@
             <!-- İKİ BÖLÜM: AKTİF | GEÇMİŞ — varsayılan kapalı gelir; bir filtre seçildikçe
                  (proje/birim/kişi, arama, durum, stajyer/rol) otomatik açılır; başlığa tıklanarak
                  da elle açılıp kapanabilir (bkz. toggleTaskSection). -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div id="taskSectionsGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <!-- SOL: AKTİF GÖREVLER -->
               <section class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
                 <button type="button" onclick="toggleTaskSection('active')" class="w-full flex items-center justify-between mb-3">
@@ -1760,7 +1827,7 @@
         <section id="teamProgressSection" class="hidden space-y-6">
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-md space-y-5">
             <div class="flex items-center gap-3">
-              <button type="button" id="teamProgressBackBtn" onclick="closeLeaderSubPage()" class="hidden w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-500 hover:border-cyan-500 transition-all">
+              <button type="button" id="teamProgressBackBtn" onclick="handleTeamProgressBackBtn()" class="hidden w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-500 hover:border-cyan-500 transition-all">
                 <i class="fa-solid fa-arrow-left"></i>
               </button>
               <h2 class="font-bold text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -1771,20 +1838,15 @@
             <!-- ADIM 1: BİRİM LİSTESİ -->
             <div id="teamProgressDeptList" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 scroll-panel max-h-[420px] pr-1"></div>
 
-            <!-- ADIM 1.5: ALT ALAN SEÇİMİ (birimde alt alan tanımlıysa) -->
+            <!-- ADIM 1.5: ALT ALAN SEÇİMİ (birimde alt alan tanımlıysa) — geri dönüş artık üstteki
+                 tek geri okuyla (handleTeamProgressBackBtn) yapılıyor, ayrı bir metin linkine gerek yok. -->
             <div id="teamProgressSubareaWrap" class="hidden space-y-3">
-              <button onclick="backToDeptProgressList()" class="text-xs text-cyan-600 dark:text-cyan-400 font-semibold flex items-center gap-1.5 hover:underline">
-                <i class="fa-solid fa-arrow-left"></i> Birimlere Dön
-              </button>
               <h4 id="teamProgressSubareaTitle" class="font-bold text-sm text-slate-800 dark:text-slate-100"></h4>
               <div id="teamProgressSubareaList" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 scroll-panel max-h-[420px] pr-1"></div>
             </div>
 
             <!-- ADIM 2: SEÇİLEN BİRİMDEKİ ROL/KİŞİ LİSTESİ -->
             <div id="teamProgressPeopleList" class="hidden space-y-4">
-              <button onclick="backFromPeopleList()" class="text-xs text-cyan-600 dark:text-cyan-400 font-semibold flex items-center gap-1.5 hover:underline">
-                <i class="fa-solid fa-arrow-left"></i> <span id="peopleBackLabel">Birimlere Dön</span>
-              </button>
               <h4 id="teamProgressDeptTitle" class="font-bold text-sm text-slate-800 dark:text-slate-100"></h4>
               <div id="teamProgressRoleGroups" class="space-y-4 scroll-panel max-h-[640px] pr-1"></div>
             </div>
@@ -1845,9 +1907,10 @@
                 <div id="pdProjects" class="space-y-2 scroll-panel max-h-80 pr-1"></div>
               </div>
               <div id="pdTasksCard" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-                <h3 class="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-3">
-                  <i class="fa-solid fa-list-check text-emerald-500"></i> Üzerindeki Görevler
-                </h3>
+                <div class="flex items-center gap-2 mb-3 flex-wrap">
+                  <i class="fa-solid fa-list-check text-emerald-500"></i>
+                  <div id="pdTaskFilterToggle" class="inline-flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-300 dark:border-slate-800"></div>
+                </div>
                 <div id="pdTasks" class="space-y-2 scroll-panel max-h-96 pr-1"></div>
               </div>
             </div>
@@ -3565,11 +3628,14 @@
             if (attempt < 15) setTimeout(() => tryJumpToMeeting(attempt + 1), 200);
             return;
           }
+          // Tarihi geçmiş bir toplantı, durumu ne olursa olsun (gerçekleşmemiş olsa bile) artık
+          // Geçmiş Toplantılar'da — bkz. loadMeetings()'teki aynı isPastMeeting mantığı.
           const nowIso = new Date().toISOString();
+          const isPast = m.preferred_date && m.preferred_date < nowIso;
           let bodyId = null;
-          if (m.status === 'PENDING') bodyId = 'meetingPendingBody';
+          if (isPast) bodyId = 'meetingHistoryBody';
+          else if (m.status === 'PENDING') bodyId = 'meetingPendingBody';
           else if (m.status === 'REJECTED') bodyId = 'meetingRejectedBody';
-          else if (m.status === 'APPROVED' && m.preferred_date && m.preferred_date < nowIso) bodyId = 'meetingHistoryBody';
           if (bodyId) {
             const body = document.getElementById(bodyId);
             if (body) body.classList.remove('hidden');
@@ -5673,9 +5739,6 @@
       if (peopleWrap) peopleWrap.classList.remove('hidden');
 
       const subs = getSubareasForDept(dept);
-      // Geri butonu etiketi
-      const backLabel = document.getElementById('peopleBackLabel');
-      if (backLabel) backLabel.innerText = subs.length > 0 ? 'Alt Alanlara Dön' : 'Birimlere Dön';
 
       let title = (DEPARTMENT_LABELS[dept] || dept);
       if (subLabel) title += ' · ' + subLabel;
@@ -5706,6 +5769,10 @@
         const key = u.role || 'DİĞER';
         if (!byRole[key]) byRole[key] = [];
         byRole[key].push(u);
+      });
+      // Her rol grubu içinde kişiler isme göre alfabetik sıralanır (rütbe ağacındaki gösterim sırası).
+      Object.keys(byRole).forEach(key => {
+        byRole[key].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
       });
 
       const roleKeys = Object.keys(byRole).sort((a, b) => {
@@ -5779,6 +5846,18 @@
       renderProgressDeptList();
     }
 
+    // Ekip Gidişatı/Ekip Yapılandırılması üst başlığındaki geri oku: bir birim (ve varsa alt alan)
+    // seçilmişken artık ana ekrana değil, tam olarak bir önceki adıma döner (Kişi Listesi ->
+    // Alt Alan/Birim Listesi -> Birim Listesi -> [buradan sonrası gerçekten ana ekrana çıkar,
+    // çünkü geri gidilecek başka bir adım kalmadı).
+    function handleTeamProgressBackBtn() {
+      const peopleWrap = document.getElementById('teamProgressPeopleList');
+      if (peopleWrap && !peopleWrap.classList.contains('hidden')) { backFromPeopleList(); return; }
+      const subWrap = document.getElementById('teamProgressSubareaWrap');
+      if (subWrap && !subWrap.classList.contains('hidden')) { backToDeptProgressList(); return; }
+      closeLeaderSubPage();
+    }
+
     // ============================================================
     // KİŞİ DETAY SAYFASI (tam ekran)
     // ============================================================
@@ -5841,6 +5920,63 @@
       const returnSec = document.getElementById(personDetailReturnTo);
       if (returnSec) returnSec.classList.remove('hidden');
       scrollMainTo(0, true);
+    }
+
+    // "Üzerindeki Görevler" 3'lü toggle'ı (Kişi Detayı sayfası): hangi kişi gösteriliyor ve
+    // hangi durum grubu seçili — toggle değişince tasksList zaten bellekte olduğundan ağa
+    // gitmeden yeniden filtrelenip çizilir.
+    let pdCurrentUserId = null;
+    let pdTaskFilterStatus = 'ACTIVE';
+    const PD_TASK_FILTER_GROUPS = {
+      ACTIVE: { label: 'Aktif Görevler', match: s => s === 'IN_PROGRESS' || s === 'REVISION_REQUESTED' },
+      PENDING_APPROVAL: { label: 'Onay Bekleyen Görevler', match: s => s === 'COMPLETED' },
+      DONE: { label: 'Tamamlanan Görevler', match: s => s === 'APPROVED' }
+    };
+
+    function renderPdTaskFilterToggle() {
+      const toggle = document.getElementById('pdTaskFilterToggle');
+      if (!toggle) return;
+      toggle.innerHTML = Object.keys(PD_TASK_FILTER_GROUPS).map(key => `
+        <button type="button" data-key="${key}" onclick="setPdTaskFilterStatus('${key}')" class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all">${PD_TASK_FILTER_GROUPS[key].label}</button>
+      `).join('');
+      updatePdTaskFilterToggleStyles();
+    }
+
+    function updatePdTaskFilterToggleStyles() {
+      const toggle = document.getElementById('pdTaskFilterToggle');
+      if (!toggle) return;
+      const activeCls = ['bg-cyan-600', 'text-white'];
+      const passiveCls = ['text-slate-500', 'dark:text-slate-400'];
+      toggle.querySelectorAll('button[data-key]').forEach(btn => {
+        if (btn.dataset.key === pdTaskFilterStatus) { btn.classList.add(...activeCls); btn.classList.remove(...passiveCls); }
+        else { btn.classList.remove(...activeCls); btn.classList.add(...passiveCls); }
+      });
+    }
+
+    function setPdTaskFilterStatus(key) {
+      pdTaskFilterStatus = key;
+      updatePdTaskFilterToggleStyles();
+      renderPdTasksList();
+    }
+
+    // Görevler: kart olarak gösterilir, tıklanınca aynı görev detay modalı açılır. Seçili toggle
+    // grubuna (Aktif/Onay Bekleyen/Tamamlanan) göre daraltılır — bkz. PD_TASK_FILTER_GROUPS.
+    function renderPdTasksList() {
+      const taskEl = document.getElementById('pdTasks');
+      if (!taskEl || pdCurrentUserId == null) return;
+      taskEl.innerHTML = '';
+      const group = PD_TASK_FILTER_GROUPS[pdTaskFilterStatus] || PD_TASK_FILTER_GROUPS.ACTIVE;
+      const personTasks = (tasksList || []).filter(t => t.assigned_to == pdCurrentUserId && group.match(t.status))
+        .slice().sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
+      if (personTasks.length === 0) {
+        taskEl.innerHTML = emptyStateHtml('fa-list-check', 'Bu grupta görev yok.');
+        return;
+      }
+      const isManagerView = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && pdCurrentUserId != currentUser.id;
+      personTasks.forEach(t => {
+        const isPast = t.status === 'APPROVED' || t.status === 'COMPLETED';
+        taskEl.appendChild(createTaskCard(t, isPast, isManagerView, () => openPersonTaskInline(t.id, isManagerView)));
+      });
     }
 
     function renderPersonDetail(data) {
@@ -5976,21 +6112,13 @@
         }).join('');
       }
 
-      // Görevler: kart olarak gösterilir, tıklanınca aynı görev detay modalı açılır
-      const taskEl = document.getElementById('pdTasks');
-      taskEl.innerHTML = '';
-      const personTasks = (tasksList || []).filter(t => t.assigned_to == u.id)
-        .slice().sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
-      if (personTasks.length === 0) {
-        taskEl.innerHTML = emptyStateHtml('fa-list-check', 'Bu kişide görev yok.');
-      } else {
-        const isManagerView = ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role) && u.id != currentUser.id;
-        personTasks.forEach(t => {
-          const isPast = t.status === 'APPROVED' || t.status === 'COMPLETED';
-          // Kişi Detayı sayfasında: ayrı pencere yerine aynı sayfa içinde (pdSubView) açılır
-          taskEl.appendChild(createTaskCard(t, isPast, isManagerView, () => openPersonTaskInline(t.id, isManagerView)));
-        });
-      }
+      // Görevler: "Aktif/Onay Bekleyen/Tamamlanan" 3'lü toggle'ıyla filtrelenir (bkz.
+      // renderPdTaskFilterToggle/renderPdTasksList) — her kişi detayı açılışında varsayılan
+      // olarak "Aktif Görevler" seçili gelir.
+      pdCurrentUserId = u.id;
+      pdTaskFilterStatus = 'ACTIVE';
+      renderPdTaskFilterToggle();
+      renderPdTasksList();
 
       // Günlük loglar
       const logEl = document.getElementById('pdLogs');
@@ -7403,13 +7531,16 @@
         const sortKey = (m) => m.preferred_date || m.created_at || '';
         const sortFn = (a, b) => sortKey(b).localeCompare(sortKey(a));
 
-        const pending = meetingsListCache.filter(m => m.status === 'PENDING').sort(sortFn);
-        const rejected = meetingsListCache.filter(m => m.status === 'REJECTED').sort(sortFn);
-        // Geçmiş: onaylanmış (gerçekleşmiş) VE tarihi geçmiş toplantılar
+        // Tarihi geçmiş bir toplantı — onaylanmış/reddedilmiş/hâlâ karar bekleyen fark etmeksizin
+        // (toplantı fiilen gerçekleşmemiş olsa bile) artık "Bekleyen"/"Reddedilen" listelerinde
+        // değil, doğrudan Geçmiş Toplantılar'da gösterilir; kartın kendi durum rozeti (Bekliyor/
+        // Onaylandı/Reddedildi) gerçek durumu göstermeye devam eder.
         const nowIso = new Date().toISOString();
-        const history = meetingsListCache
-          .filter(m => m.status === 'APPROVED' && m.preferred_date && m.preferred_date < nowIso)
-          .sort(sortFn);
+        const isPastMeeting = (m) => !!(m.preferred_date && m.preferred_date < nowIso);
+
+        const pending = meetingsListCache.filter(m => m.status === 'PENDING' && !isPastMeeting(m)).sort(sortFn);
+        const rejected = meetingsListCache.filter(m => m.status === 'REJECTED' && !isPastMeeting(m)).sort(sortFn);
+        const history = meetingsListCache.filter(isPastMeeting).sort(sortFn);
 
         updateMeetingsBadge(pending.length);
         if (pendingCountEl) pendingCountEl.textContent = pending.length;
@@ -9993,18 +10124,88 @@
       } catch (err) { console.error("Görevler alınamadı:", err); }
     }
 
+    // Banner'daki "Not Ekle" butonu: kullanıcıyı formu aramaya göndermek yerine, en yakın son
+    // teslim tarihine sahip aktif görevi için doğrudan not modalını açar.
+    function handleDailyWarningCtaClick() {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const activeTasks = (tasksList || []).filter(t => t.assigned_to === currentUser.id && t.status !== 'APPROVED' && t.end_date >= todayStr)
+        .slice().sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
+      if (activeTasks.length === 0) return;
+      openLogModal(activeTasks[0].id, getTaskDisplayHeading(activeTasks[0]));
+    }
+
+    // Balon kaybolurken (× ile kapatma veya not eklenip uyarının kendiliğinden gitmesi) her
+    // zaman aynı küçülerek-kaybolma animasyonuyla kapanır — animasyon süresi kadar bekleyip
+    // ondan sonra 'hidden' eklenir (aksi halde display:none animasyonu anında keserdi).
+    function hideDailyWarningBanner() {
+      const el = document.getElementById('dailyWarningBanner');
+      if (!el || el.classList.contains('hidden')) return;
+      const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReduced) { el.classList.add('hidden'); return; }
+      el.classList.add('daily-warning-closing');
+      setTimeout(() => {
+        el.classList.add('hidden');
+        el.classList.remove('daily-warning-closing');
+      }, 260);
+    }
+
+    // Kart sağ üstündeki × ile kapatılınca, not eklenene kadar tekrar tekrar açılıp kullanıcıyı
+    // rahatsız etmesin diye bu oturumda bir daha gösterilmez (sayfa yenilenince veya not
+    // eklenip tekrar eksik hale gelince sıfırlanır).
+    let dailyWarningDismissed = false;
+    function dismissDailyWarning() {
+      dailyWarningDismissed = true;
+      hideDailyWarningBanner();
+    }
+
+    // Balonu, BEYES Asistan avatarının O ANKİ ekran konumuna göre konumlar (avatar sürüklenerek
+    // taşınmış olabilir — bkz. initAiChatDrag/positionAiChatPanel'daki aynı desen). Balonun sağ
+    // kenarı avatarın sağ kenarıyla hizalanır (kuyruk avatara denk gelsin diye), ekrandan taşarsa
+    // kenarlara göre kelepçelenir; üstte yer yoksa avatarın altına döner.
+    function positionDailyWarningNearAssistant() {
+      const btn = document.getElementById('aiChatWidgetBtn');
+      const bubble = document.getElementById('dailyWarningBanner');
+      if (!btn || !bubble) return;
+      const wasHidden = bubble.classList.contains('hidden');
+      if (wasHidden) bubble.classList.remove('hidden');
+      const btnRect = btn.getBoundingClientRect();
+      const bubbleW = bubble.offsetWidth, bubbleH = bubble.offsetHeight;
+      const kenar = 12, gap = 14;
+
+      let top = btnRect.top - bubbleH - gap;
+      if (top < kenar) top = btnRect.bottom + gap;
+      top = Math.max(kenar, Math.min(top, window.innerHeight - bubbleH - kenar));
+
+      let left = btnRect.right - bubbleW;
+      left = Math.max(kenar, Math.min(left, window.innerWidth - bubbleW - kenar));
+
+      bubble.style.left = left + 'px';
+      bubble.style.top = top + 'px';
+      bubble.style.right = 'auto';
+      bubble.style.bottom = 'auto';
+      if (wasHidden) bubble.classList.add('hidden');
+    }
+    window.addEventListener('resize', () => {
+      const bubble = document.getElementById('dailyWarningBanner');
+      if (bubble && !bubble.classList.contains('hidden')) positionDailyWarningNearAssistant();
+    });
+
     function checkDailyLogWarning() {
       const todayStr = new Date().toISOString().split('T')[0];
       const activeTasks = tasksList.filter(t => t.assigned_to === currentUser.id && t.status !== 'APPROVED' && t.end_date >= todayStr);
       if (activeTasks.length === 0) {
-        document.getElementById('dailyWarningBanner').classList.add('hidden');
+        hideDailyWarningBanner();
         return;
       }
       const hasLoggedToday = dailyLogsList.some(log => log.intern_id === currentUser.id && log.log_date === todayStr);
       if (!hasLoggedToday) {
-        document.getElementById('dailyWarningBanner').classList.remove('hidden');
+        if (!dailyWarningDismissed) {
+          positionDailyWarningNearAssistant();
+          document.getElementById('dailyWarningBanner').classList.remove('hidden');
+        }
       } else {
-        document.getElementById('dailyWarningBanner').classList.add('hidden');
+        dailyWarningDismissed = false;
+        hideDailyWarningBanner();
       }
     }
 
@@ -10381,7 +10582,7 @@
         if (typeof loadTasks === 'function') loadTasks();
         if (typeof populateAdminTaskFilters === 'function') populateAdminTaskFilters();
         if (typeof populateLeaderTaskFilter === 'function') populateLeaderTaskFilter();
-        if (typeof collapseTaskSections === 'function') collapseTaskSections();
+        if (typeof applyTaskSectionsDefaults === 'function') applyTaskSectionsDefaults(true);
       }, 'leaderSection');
     }
 
@@ -11006,7 +11207,7 @@
         if (typeof loadTasks === 'function') loadTasks();
         if (typeof populateAdminTaskFilters === 'function') populateAdminTaskFilters();
         if (typeof populateLeaderTaskFilter === 'function') populateLeaderTaskFilter();
-        if (typeof collapseTaskSections === 'function') collapseTaskSections();
+        if (typeof applyTaskSectionsDefaults === 'function') applyTaskSectionsDefaults(false);
       }, 'adminHomeSection');
     }
 
@@ -11084,6 +11285,8 @@
       if (section) section.classList.remove('hidden');
       populateTaskBoxPersonToggle();
       renderLeaderTasksPage();
+      setLeaderTaskSectionOpen('active', true);
+      setLeaderTaskSectionOpen('past', false);
     }
 
     function openEngineerMeetingsPage() {
@@ -12729,9 +12932,38 @@
       setTaskSectionOpen(which, !isOpen);
     }
 
+    // Mühendis'in "Görevler" sayfasındaki (leaderTasksPageSection) Aktif/Geçmiş açılır-kapanır
+    // bölümleri — yukarıdaki tasksDropdown'daki (Admin/Müdür/Ekip Lideri) aynı desenin ayrı bir
+    // kopyası, çünkü farklı bir DOM/id kümesi kullanıyor.
+    function setLeaderTaskSectionOpen(which, open) {
+      const body = document.getElementById(which === 'active' ? 'leaderActiveTaskBody' : 'leaderPastTaskBody');
+      const chevron = document.getElementById(which === 'active' ? 'leaderActiveTaskChevron' : 'leaderPastTaskChevron');
+      if (body) body.classList.toggle('hidden', !open);
+      if (chevron) chevron.classList.toggle('rotate-180', open);
+    }
+    function toggleLeaderTaskSection(which) {
+      const body = document.getElementById(which === 'active' ? 'leaderActiveTaskBody' : 'leaderPastTaskBody');
+      const isOpen = body && !body.classList.contains('hidden');
+      setLeaderTaskSectionOpen(which, !isOpen);
+    }
+
     function collapseTaskSections() {
       setTaskSectionOpen('active', false);
       setTaskSectionOpen('past', false);
+    }
+
+    // Müdür/Ekip Lideri için: "Aktif Görevler" ve "Geçmiş/Tamamlanan" yan yana değil alt alta,
+    // ve varsayılan olarak Aktif açık/Geçmiş kapalı gelir (Admin'de bu değişmiyor — hâlâ yan yana
+    // ve ikisi de kapalı başlar, bkz. openAdminTasksPage).
+    function applyTaskSectionsDefaults(stackedWithActiveOpen) {
+      const grid = document.getElementById('taskSectionsGrid');
+      if (grid) grid.classList.toggle('lg:grid-cols-2', !stackedWithActiveOpen);
+      if (stackedWithActiveOpen) {
+        setTaskSectionOpen('active', true);
+        setTaskSectionOpen('past', false);
+      } else {
+        collapseTaskSections();
+      }
     }
 
     function expandTaskSections() {
@@ -14684,10 +14916,10 @@
     }
 
     // BEYES Asistan yuvarlağını fare/dokunmatikle ekranın her yerine sürüklenebilir yapar.
-    // Konum localStorage'da tutulur, bir sonraki oturumda aynı yerden açılır. Panel açıkken
+    // Site her açıldığında (sayfa yenilense bile) varsayılan olarak sağ-alt köşeden başlar —
+    // sürükleme sadece o oturum/görünüm için geçerlidir, kalıcı olarak saklanmaz. Panel açıkken
     // sürüklenirse panel de yeni konuma göre yeniden yerleşir.
     (function initAiChatDrag() {
-      const STORAGE_KEY = 'aiChatBtnPos';
       let surukleniyor = false, tasindi = false, suppressClick = false;
       let basX = 0, basY = 0, basLeft = 0, basTop = 0;
 
@@ -14704,13 +14936,6 @@
       }
 
       function konumGeriYukle(btn) {
-        try {
-          const kayit = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-          if (kayit && Number.isFinite(kayit.left) && Number.isFinite(kayit.top)) {
-            konumUygula(btn, kayit.left, kayit.top);
-            return;
-          }
-        } catch (e) {}
         const w = btn.offsetWidth || 56, h = btn.offsetHeight || 56;
         konumUygula(btn, window.innerWidth - w - 20, window.innerHeight - h - 20);
       }
@@ -14742,6 +14967,8 @@
         konumUygula(btn, basLeft + dx, basTop + dy);
         const panel = document.getElementById('aiChatPanel');
         if (panel && !panel.classList.contains('hidden')) positionAiChatPanel();
+        const bubble = document.getElementById('dailyWarningBanner');
+        if (bubble && !bubble.classList.contains('hidden')) positionDailyWarningNearAssistant();
       }
 
       function birak() {
@@ -14751,9 +14978,6 @@
         document.removeEventListener('touchmove', tasi);
         document.removeEventListener('touchend', birak);
         if (tasindi) {
-          const btn = document.getElementById('aiChatWidgetBtn');
-          const rect = btn.getBoundingClientRect();
-          try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left: rect.left, top: rect.top })); } catch (e) {}
           // Sürükleme bitince tarayıcının otomatik ürettiği "click" olayı paneli açmasın.
           suppressClick = true;
         }
