@@ -2354,7 +2354,12 @@
             <form onsubmit="handleUploadDevFile(event)" class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4 mb-5 space-y-3">
               <div>
                 <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Dosya <span class="text-rose-500">*</span></label>
-                <input type="file" id="devFileInput" required class="w-full text-xs text-slate-600 dark:text-slate-300 file:me-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-cyan-500/10 file:text-cyan-600 dark:file:text-cyan-400 hover:file:bg-cyan-500/20">
+                <div id="devFileDropzone" onclick="document.getElementById('devFileInput').click()" class="cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl px-4 py-6 text-center transition-all hover:border-cyan-500 hover:bg-cyan-500/5">
+                  <i class="fa-solid fa-cloud-arrow-up text-2xl text-cyan-500 mb-2"></i>
+                  <p class="text-xs text-slate-600 dark:text-slate-300"><span class="font-semibold text-cyan-600 dark:text-cyan-400">Dosya seçin</span> veya buraya sürükleyip bırakın</p>
+                  <p id="devFileDropHint" class="text-[10px] text-slate-400 mt-1">Her türde dosya · en fazla 50MB</p>
+                  <input type="file" id="devFileInput" class="hidden">
+                </div>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -2376,7 +2381,11 @@
 
             <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
               <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Yüklenen Dosyalar</span>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <div class="relative">
+                  <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400"></i>
+                  <input type="text" id="devFilesSearch" oninput="renderDevFilesList()" placeholder="Dosya ara..." class="w-44 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg pl-7 pr-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:border-cyan-500">
+                </div>
                 <select id="devFilesDeptFilter" onchange="onDevFilesDeptFilterChange()" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-cyan-500">
                   <option value="">Tüm Birimler</option>
                   <option value="ELEKTRONIK">Elektronik</option>
@@ -2388,7 +2397,7 @@
                 </select>
               </div>
             </div>
-            <div id="devFilesList" class="mt-2 space-y-1.5"></div>
+            <div id="devFilesList" class="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"></div>
             <p id="devFilesEmptyHint" class="hidden text-xs text-slate-400 text-center py-6">Henüz yüklenmiş dosya yok.</p>
             <p id="devFilesNoMatchHint" class="hidden text-xs text-slate-400 text-center py-6">Bu filtreye uygun dosya yok.</p>
           </div>
@@ -10692,7 +10701,79 @@
       if (form) form.reset();
       const deptFilter = document.getElementById('devFilesDeptFilter');
       if (deptFilter) deptFilter.value = '';
+      const searchEl = document.getElementById('devFilesSearch');
+      if (searchEl) searchEl.value = '';
+      initDevFilesDropzone();
+      updateDevFileDropHint();
       loadDevFiles();
+    }
+
+    // Genel sürükle-bırak yardımcıları — hem Geliştirmeler hem Doküman Denetimi dropzone'ları kullanır.
+    function bindDropzone(zone, onFiles) {
+      if (!zone || zone.dataset.dzBound) return;
+      zone.dataset.dzBound = '1';
+      ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => {
+        e.preventDefault(); e.stopPropagation();
+        zone.classList.add('border-cyan-500', 'bg-cyan-500/10');
+      }));
+      ['dragleave', 'dragend', 'drop'].forEach(ev => zone.addEventListener(ev, e => {
+        e.preventDefault(); e.stopPropagation();
+        zone.classList.remove('border-cyan-500', 'bg-cyan-500/10');
+      }));
+      zone.addEventListener('drop', e => {
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files.length) onFiles(files);
+      });
+    }
+
+    // Sürüklenen dosyaları gizli <input type=file>'a yazar ki mevcut form mantığı değişmeden çalışsın.
+    function setInputFiles(input, fileList) {
+      if (!input) return;
+      try {
+        const dt = new DataTransfer();
+        Array.from(fileList).forEach(f => dt.items.add(f));
+        input.files = dt.files;
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function initDevFilesDropzone() {
+      const zone = document.getElementById('devFileDropzone');
+      const input = document.getElementById('devFileInput');
+      if (!zone || !input) return;
+      bindDropzone(zone, files => { setInputFiles(input, [files[0]]); updateDevFileDropHint(); });
+      if (!input.dataset.hintBound) {
+        input.dataset.hintBound = '1';
+        input.addEventListener('change', updateDevFileDropHint);
+      }
+    }
+
+    function updateDevFileDropHint() {
+      const input = document.getElementById('devFileInput');
+      const hint = document.getElementById('devFileDropHint');
+      if (!input || !hint) return;
+      const f = input.files && input.files[0];
+      hint.textContent = f ? `${f.name} · ${formatDosyaBoyutu(f.size)}` : 'Her türde dosya · en fazla 50MB';
+      hint.classList.toggle('text-cyan-600', !!f);
+      hint.classList.toggle('dark:text-cyan-400', !!f);
+      hint.classList.toggle('font-semibold', !!f);
+    }
+
+    // Dosya adı uzantısına göre "Drive" benzeri renkli ikon.
+    function devFileIcon(name) {
+      const ext = String(name || '').split('.').pop().toLowerCase();
+      if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) return { icon: 'fa-file-image', cls: 'bg-emerald-500/10 text-emerald-500' };
+      if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return { icon: 'fa-file-video', cls: 'bg-rose-500/10 text-rose-500' };
+      if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) return { icon: 'fa-file-audio', cls: 'bg-fuchsia-500/10 text-fuchsia-500' };
+      if (['pdf'].includes(ext)) return { icon: 'fa-file-pdf', cls: 'bg-rose-500/10 text-rose-500' };
+      if (['doc', 'docx'].includes(ext)) return { icon: 'fa-file-word', cls: 'bg-blue-500/10 text-blue-500' };
+      if (['xls', 'xlsx', 'csv'].includes(ext)) return { icon: 'fa-file-excel', cls: 'bg-green-500/10 text-green-600' };
+      if (['ppt', 'pptx'].includes(ext)) return { icon: 'fa-file-powerpoint', cls: 'bg-orange-500/10 text-orange-500' };
+      if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return { icon: 'fa-file-zipper', cls: 'bg-amber-500/10 text-amber-500' };
+      if (['js', 'ts', 'py', 'c', 'cpp', 'java', 'json', 'html', 'css'].includes(ext)) return { icon: 'fa-file-code', cls: 'bg-cyan-500/10 text-cyan-500' };
+      return { icon: 'fa-file-shield', cls: 'bg-slate-400/10 text-slate-400' };
     }
 
     function closeDevFilesPage() {
@@ -10745,9 +10826,14 @@
 
       const dept = document.getElementById('devFilesDeptFilter').value;
       const userId = document.getElementById('devFilesUserFilter').value;
+      const q = (document.getElementById('devFilesSearch')?.value || '').trim().toLocaleLowerCase('tr');
       const files = devFilesCache.filter(f => {
         if (dept && f.uploaded_by_department !== dept) return false;
         if (userId && String(f.uploaded_by_id) !== userId) return false;
+        if (q) {
+          const hay = `${f.file_name || ''} ${f.description || ''} ${f.uploaded_by || ''}`.toLocaleLowerCase('tr');
+          if (!hay.includes(q)) return false;
+        }
         return true;
       });
 
@@ -10758,22 +10844,21 @@
       listEl.innerHTML = files.map(f => {
         const isOwner = Number(f.uploaded_by_id) === Number(currentUser.id);
         const canDelete = canManage || isOwner;
+        const ic = devFileIcon(f.file_name);
         return `
-          <div class="bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2.5">
-            <div class="flex items-center justify-between gap-2">
-              <button type="button" onclick="openDevFileDownloadModal(${f.id}, '${escapeHtmlProj(f.file_name).replace(/'/g, "\\'")}')" class="min-w-0 flex-1 flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-400 hover:underline text-left">
-                <i class="fa-solid fa-file-shield shrink-0"></i>
-                <span class="min-w-0">
-                  <span class="block truncate font-semibold">${escapeHtmlProj(f.file_name)}</span>
-                  ${f.description ? `<span class="block truncate text-[10px] text-slate-400 font-normal">${escapeHtmlProj(f.description)}</span>` : ''}
-                </span>
-                <span class="shrink-0 text-slate-400">(${formatDosyaBoyutu(f.file_size)})</span>
-              </button>
-              <div class="flex items-center gap-2 shrink-0">
-                <span class="text-[10px] text-slate-400">${f.uploaded_by || ''}</span>
-                ${isOwner ? `<button type="button" onclick="toggleDevFilePasswordReveal(${f.id})" title="Şifreni gör" class="text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 text-xs"><i class="fa-solid fa-key"></i></button>` : ''}
-                ${canDelete ? `<button type="button" onclick="handleDeleteDevFile(${f.id})" class="text-rose-500 hover:text-rose-600 text-xs"><i class="fa-solid fa-trash-can"></i></button>` : ''}
-              </div>
+          <div class="group flex flex-col bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-xl p-3 hover:border-cyan-500 hover:shadow-lg transition-all">
+            <button type="button" onclick="openDevFileDownloadModal(${f.id}, '${escapeHtmlProj(f.file_name).replace(/'/g, "\\'")}')" class="min-w-0 flex items-start gap-2.5 text-left">
+              <span class="h-9 w-9 shrink-0 rounded-lg ${ic.cls} flex items-center justify-center"><i class="fa-solid ${ic.icon}"></i></span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-xs font-semibold text-slate-800 dark:text-slate-100 group-hover:text-cyan-600 dark:group-hover:text-cyan-400">${escapeHtmlProj(f.file_name)}</span>
+                <span class="block text-[10px] text-slate-400 mt-0.5">${formatDosyaBoyutu(f.file_size)}${f.uploaded_by ? ' · ' + escapeHtmlProj(f.uploaded_by) : ''}</span>
+              </span>
+            </button>
+            ${f.description ? `<p class="text-[10px] text-slate-400 mt-1.5 truncate" title="${escapeHtmlProj(f.description)}">${escapeHtmlProj(f.description)}</p>` : ''}
+            <div class="flex items-center justify-end gap-1.5 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <span class="me-auto text-[10px] text-slate-400"><i class="fa-solid fa-lock me-1"></i>Şifreli</span>
+              ${isOwner ? `<button type="button" onclick="toggleDevFilePasswordReveal(${f.id})" title="Şifreni gör" class="w-7 h-7 flex items-center justify-center rounded-lg text-cyan-600 hover:bg-cyan-500/10 dark:text-cyan-400 text-xs"><i class="fa-solid fa-key"></i></button>` : ''}
+              ${canDelete ? `<button type="button" onclick="handleDeleteDevFile(${f.id})" class="w-7 h-7 flex items-center justify-center rounded-lg text-rose-500 hover:bg-rose-500/10 text-xs"><i class="fa-solid fa-trash-can"></i></button>` : ''}
             </div>
             ${isOwner ? `<div id="devFilePwReveal_${f.id}" class="hidden mt-1.5 text-[10px] font-mono text-emerald-600 dark:text-emerald-400"></div>` : ''}
           </div>
@@ -10839,6 +10924,7 @@
           showToast('Dosya yüklendi.', 'success');
           const form = document.querySelector('#devFilesPageSection form');
           if (form) form.reset();
+          updateDevFileDropHint();
           await loadDevFiles();
         } catch (err) {
           console.error('Dosya yükleme hatası:', err);
@@ -15740,7 +15826,27 @@
       const modal = document.getElementById('dokDenetimModal');
       if (!modal) return;
       modal.classList.remove('hidden');
+      ['dokYeniReferansArama', 'dokReferansArama'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      initDokDropzones();
       dokDenetimSekmeSec('yeni');
+    }
+
+    // Doküman Denetimi'ndeki iki .docx alanını sürükle-bırak yapar; bırakılan dosyayı
+    // gizli input'a yazıp mevcut dokDosyaSec() akışını tetikler.
+    function initDokDropzones() {
+      [['dokYeniDropzone', 'dokYeniDosyaInput', 'yeni', 'dokYeniDosyaEtiket'],
+       ['dokReferansDropzone', 'dokReferansDosyaInput', 'referans', 'dokReferansDosyaEtiket']].forEach(([zid, iid, hedef, eid]) => {
+        const zone = document.getElementById(zid);
+        const input = document.getElementById(iid);
+        if (!zone || !input) return;
+        bindDropzone(zone, files => {
+          const arr = Array.from(files);
+          const docx = arr.find(f => /\.docx$/i.test(f.name)) || arr[0];
+          if (!docx) return;
+          if (!/\.docx$/i.test(docx.name)) { showToast('Lütfen bir .docx dosyası bırakın.', 'error'); return; }
+          if (setInputFiles(input, [docx])) dokDosyaSec(input, hedef, eid);
+        });
+      });
     }
     function closeDokDenetimModal() {
       const modal = document.getElementById('dokDenetimModal');
@@ -15767,6 +15873,7 @@
 
     // "Yeni Değerlendirme" sekmesinde, o an var olan referansları çip listesi olarak gösterir;
     // kullanıcı istediği referansı/referansları seçip değerlendirmeyi onlarla sınırlayabilir.
+    let dokYeniReferansCache = [];
     async function renderDokYeniReferansSecimi() {
       const el = document.getElementById('dokYeniReferansSecimi');
       if (!el) return;
@@ -15775,27 +15882,38 @@
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`);
         const data = await res.json();
         if (!res.ok || !Array.isArray(data.referanslar)) { el.innerHTML = '<span class="text-[11px] text-rose-400">Referanslar yüklenemedi.</span>'; return; }
-        if (!data.referanslar.length) { el.innerHTML = '<span class="text-[11px] text-slate-400">Henüz referans doküman yok — tüm dokümanlar genel kalite kontrolüyle değerlendirilir.</span>'; return; }
+        dokYeniReferansCache = data.referanslar;
 
         // Silinmiş bir referans seçili kalmışsa listeden düş
         const gecerliIdler = new Set(data.referanslar.map(r => r.id));
         dokYeniSeciliReferanslar = dokYeniSeciliReferanslar.filter(id => gecerliIdler.has(id));
-
-        el.innerHTML = data.referanslar.map(r => {
-          const aktif = dokYeniSeciliReferanslar.includes(r.id);
-          return `<button type="button" onclick="dokYeniReferansToggle(${r.id})" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${aktif
-            ? 'bg-violet-600 text-white border-violet-600'
-            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'}">${escapeHtmlProj(r.baslik || '')}</button>`;
-        }).join('');
       } catch (err) {
         el.innerHTML = '<span class="text-[11px] text-rose-400">Referanslar yüklenemedi.</span>';
+        return;
       }
+      cizDokYeniReferansSecimi();
+    }
+
+    // Önbellekteki referansları arama kutusuna göre süzüp çip listesi olarak çizer.
+    function cizDokYeniReferansSecimi() {
+      const el = document.getElementById('dokYeniReferansSecimi');
+      if (!el) return;
+      if (!dokYeniReferansCache.length) { el.innerHTML = '<span class="text-[11px] text-slate-400">Henüz referans doküman yok — tüm dokümanlar genel kalite kontrolüyle değerlendirilir.</span>'; return; }
+      const q = (document.getElementById('dokYeniReferansArama')?.value || '').trim().toLocaleLowerCase('tr');
+      const arr = dokYeniReferansCache.filter(r => !q || (r.baslik || '').toLocaleLowerCase('tr').includes(q));
+      if (!arr.length) { el.innerHTML = '<span class="text-[11px] text-slate-400">Aramayla eşleşen referans yok.</span>'; return; }
+      el.innerHTML = arr.map(r => {
+        const aktif = dokYeniSeciliReferanslar.includes(r.id);
+        return `<button type="button" onclick="dokYeniReferansToggle(${r.id})" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${aktif
+          ? 'bg-violet-600 text-white border-violet-600'
+          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'}">${escapeHtmlProj(r.baslik || '')}</button>`;
+      }).join('');
     }
 
     function dokYeniReferansToggle(id) {
       const idx = dokYeniSeciliReferanslar.indexOf(id);
       if (idx === -1) dokYeniSeciliReferanslar.push(id); else dokYeniSeciliReferanslar.splice(idx, 1);
-      renderDokYeniReferansSecimi();
+      cizDokYeniReferansSecimi();
     }
 
     // Genel .docx -> base64 dosya seçici (hem yeni değerlendirme hem referans ekleme formunda kullanılır)
@@ -15982,6 +16100,7 @@
     }
 
     // -------- Referans Dokümanlar --------
+    let dokReferanslarCache = [];
     async function renderDokReferanslar() {
       const list = document.getElementById('dokReferansListe');
       if (!list) return;
@@ -15989,21 +16108,39 @@
       try {
         const res = await fetch(`${API_BASE_URL}/api/dok-denetim/referanslar`);
         const data = await res.json();
-        if (!res.ok || !Array.isArray(data.referanslar)) { list.innerHTML = '<div class="text-center text-xs text-rose-400 py-6">Liste yüklenemedi.</div>'; return; }
-        if (!data.referanslar.length) { list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">Henüz referans doküman eklenmedi.</div>'; return; }
-
-        list.innerHTML = data.referanslar.map(r => `
-          <div class="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
-            <div class="min-w-0">
-              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(r.baslik || '')}</div>
-              <div class="text-[10px] text-slate-400 mt-0.5">${escapeHtmlProj(r.ekleyen_adi || '—')} • ${escapeHtmlProj(r.created_at || '')} • ${r.parca_sayisi} parça</div>
-            </div>
-            <button onclick="handleDokReferansSil(${r.id})" class="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all"><i class="fa-solid fa-trash text-xs"></i></button>
-          </div>
-        `).join('');
+        if (!res.ok || !Array.isArray(data.referanslar)) { list.innerHTML = '<div class="text-center text-xs text-rose-400 py-6 col-span-full">Liste yüklenemedi.</div>'; return; }
+        dokReferanslarCache = data.referanslar;
       } catch (err) {
-        list.innerHTML = '<div class="text-center text-xs text-rose-400 py-6">Liste yüklenemedi.</div>';
+        list.innerHTML = '<div class="text-center text-xs text-rose-400 py-6 col-span-full">Liste yüklenemedi.</div>';
+        return;
       }
+      cizDokReferansListe();
+    }
+
+    // Önbellekteki referansları arama kutusuna göre süzüp "Drive" benzeri kart listesi çizer.
+    function cizDokReferansListe() {
+      const list = document.getElementById('dokReferansListe');
+      if (!list) return;
+      if (!dokReferanslarCache.length) { list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6 col-span-full">Henüz referans doküman eklenmedi.</div>'; return; }
+      const q = (document.getElementById('dokReferansArama')?.value || '').trim().toLocaleLowerCase('tr');
+      const arr = dokReferanslarCache.filter(r => {
+        if (!q) return true;
+        return `${r.baslik || ''} ${r.ekleyen_adi || ''}`.toLocaleLowerCase('tr').includes(q);
+      });
+      if (!arr.length) { list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6 col-span-full">Aramayla eşleşen referans yok.</div>'; return; }
+      list.innerHTML = arr.map(r => `
+        <div class="group flex flex-col bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl p-3 hover:border-violet-500 transition-all">
+          <div class="flex items-start gap-2.5">
+            <span class="h-9 w-9 shrink-0 rounded-lg bg-violet-500/10 text-violet-500 flex items-center justify-center"><i class="fa-solid fa-file-word"></i></span>
+            <div class="min-w-0 flex-1">
+              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(r.baslik || '')}</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">${escapeHtmlProj(r.ekleyen_adi || '—')} • ${escapeHtmlProj(r.created_at || '')}</div>
+            </div>
+            <button onclick="handleDokReferansSil(${r.id})" class="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all"><i class="fa-solid fa-trash text-xs"></i></button>
+          </div>
+          <div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400"><i class="fa-solid fa-layer-group me-1"></i>${r.parca_sayisi} parça</div>
+        </div>
+      `).join('');
     }
 
     async function handleDokReferansEkle() {
@@ -16171,14 +16308,17 @@
         <input type="text" id="dokYeniBaslik" placeholder="Doküman başlığı (boş bırakılırsa dosya adı kullanılır)" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
         <div>
           <label class="block text-[11px] font-semibold mb-1.5 text-slate-500 dark:text-slate-400">Karşılaştırılacak referanslar (hiçbiri seçilmezse tümü kullanılır)</label>
+          <div class="relative mb-2">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400"></i>
+            <input type="text" id="dokYeniReferansArama" oninput="cizDokYeniReferansSecimi()" placeholder="Referans ara..." class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg pl-7 pr-3 py-1.5 text-xs focus:outline-none focus:border-violet-500">
+          </div>
           <div id="dokYeniReferansSecimi" class="flex flex-wrap gap-1.5"></div>
         </div>
-        <div class="flex items-center gap-2">
-          <label class="shrink-0 cursor-pointer bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl transition-all">
-            <i class="fa-solid fa-upload me-1"></i> .docx Seç
-            <input type="file" id="dokYeniDosyaInput" accept=".docx" class="hidden" onchange="dokDosyaSec(this, 'yeni', 'dokYeniDosyaEtiket')">
-          </label>
-          <span id="dokYeniDosyaEtiket" class="text-xs text-slate-400 truncate">Dosya seçilmedi</span>
+        <div id="dokYeniDropzone" onclick="document.getElementById('dokYeniDosyaInput').click()" class="cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl px-4 py-5 text-center transition-all hover:border-violet-500 hover:bg-violet-500/5">
+          <i class="fa-solid fa-cloud-arrow-up text-xl text-violet-500 mb-1"></i>
+          <p class="text-xs text-slate-600 dark:text-slate-300"><span class="font-semibold text-violet-600 dark:text-violet-400">.docx seçin</span> veya buraya sürükleyip bırakın</p>
+          <p id="dokYeniDosyaEtiket" class="text-[10px] text-slate-400 mt-1 truncate">Dosya seçilmedi</p>
+          <input type="file" id="dokYeniDosyaInput" accept=".docx" class="hidden" onchange="dokDosyaSec(this, 'yeni', 'dokYeniDosyaEtiket')">
         </div>
         <textarea id="dokYeniMetin" rows="4" placeholder="...veya metni buraya yapıştırın" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500"></textarea>
         <button id="dokDegerlendirBtn" onclick="handleDokDegerlendir()" class="w-full bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-bold py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-violet-500/20">
@@ -16192,17 +16332,20 @@
         <div class="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-2.5">
           <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-plus-circle me-1 text-cyan-500"></i>Referans Ekle</h4>
           <input type="text" id="dokReferansBaslik" placeholder="Referans başlığı" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500">
-          <div class="flex items-center gap-2">
-            <label class="shrink-0 cursor-pointer bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl transition-all">
-              <i class="fa-solid fa-upload me-1"></i> .docx Seç
-              <input type="file" id="dokReferansDosyaInput" accept=".docx" class="hidden" onchange="dokDosyaSec(this, 'referans', 'dokReferansDosyaEtiket')">
-            </label>
-            <span id="dokReferansDosyaEtiket" class="text-xs text-slate-400 truncate">Dosya seçilmedi</span>
+          <div id="dokReferansDropzone" onclick="document.getElementById('dokReferansDosyaInput').click()" class="cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl px-4 py-5 text-center transition-all hover:border-cyan-500 hover:bg-cyan-500/5">
+            <i class="fa-solid fa-cloud-arrow-up text-xl text-cyan-500 mb-1"></i>
+            <p class="text-xs text-slate-600 dark:text-slate-300"><span class="font-semibold text-cyan-600 dark:text-cyan-400">.docx seçin</span> veya buraya sürükleyip bırakın</p>
+            <p id="dokReferansDosyaEtiket" class="text-[10px] text-slate-400 mt-1 truncate">Dosya seçilmedi</p>
+            <input type="file" id="dokReferansDosyaInput" accept=".docx" class="hidden" onchange="dokDosyaSec(this, 'referans', 'dokReferansDosyaEtiket')">
           </div>
           <textarea id="dokReferansMetin" rows="3" placeholder="...veya metni buraya yapıştırın" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-cyan-500"></textarea>
           <button id="dokReferansEkleBtn" onclick="handleDokReferansEkle()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2 rounded-xl text-xs transition-all">Referans Hafızasına Ekle</button>
         </div>
-        <div id="dokReferansListe" class="space-y-2"></div>
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400"></i>
+          <input type="text" id="dokReferansArama" oninput="cizDokReferansListe()" placeholder="Referanslarda ara..." class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+        </div>
+        <div id="dokReferansListe" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
       </div>
 
       <!-- SEKME: Geçmiş -->
