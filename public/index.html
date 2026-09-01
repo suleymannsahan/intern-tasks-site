@@ -42,6 +42,18 @@
     @media (prefers-reduced-motion: reduce) {
       [id$="Section"]:not(.hidden) { animation: none; }
     }
+    /* Giriş ekranı kartı (logo + başlık + form): sayfa ilk açıldığında hafifçe büyüyerek ve
+       belirerek gelir — "hoş geldin" hissi için. */
+    #authCard {
+      animation: authCardEnter 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes authCardEnter {
+      from { opacity: 0; transform: translateY(14px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #authCard { animation: none; }
+    }
     /* "Günlük Bilgilendirme Notu Girilmedi" — BEYES Asistan avatarının hemen üstünde bir konuşma
        balonu olarak, sanki avatarın içinden çıkıyormuş gibi küçülüp büyüyerek belirir (transform-
        origin köşesi kuyruğun/avatarın olduğu sağ-alt köşede) + ikon rozetinin arkasında nazikçe
@@ -250,9 +262,10 @@
     <!-- Video üzerine hafif karartma katmanı (formların okunabilirliği için) -->
     <div class="absolute inset-0 z-0 bg-black/40 dark:bg-black/55"></div>
 
-    <div class="relative z-10 bg-transparent border-none rounded-2xl p-5 sm:p-8 w-full max-w-md">
+    <div id="authCard" class="relative z-10 bg-transparent border-none rounded-2xl p-5 sm:p-8 w-full max-w-md">
       <div class="text-center mb-8 flex flex-col items-center">
         <img src="Y_logo.png" alt="Logo" class="h-20 w-auto mb-3 drop-shadow-[0_0_15px_rgba(6,182,212,0.25)]">
+        <div id="authGreeting" class="text-sm font-semibold text-cyan-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)] mb-1.5"></div>
         <h1 class="text-2xl font-bold text-center text-white mb-6 drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
           Görevlendirme & Takip Sistemi
         </h1>
@@ -1502,7 +1515,7 @@
                   <button type="button" onclick="lioxerpExportExcel()" class="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2"><i class="fa-solid fa-file-excel text-emerald-500 w-4"></i>Excel</button>
                 </div>
               </div>
-              <button type="button" onclick="loadLioxerpTalepFormlari()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all"><i class="fa-solid fa-rotate me-1.5"></i>Yenile</button>
+              <button type="button" onclick="loadLioxerpTalepFormlari(true)" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all"><i class="fa-solid fa-rotate me-1.5"></i>Yenile</button>
             </div>
           </div>
           <p class="text-xs text-slate-500 dark:text-slate-400">LioXERP sisteminden (Uyumsoft ERP) canlı olarak çekilen Talep Formu kayıtları — son ~25 yıllık kayıtlar arasından, sistemde bulunan tüm kayıtlar listelenir.</p>
@@ -1561,6 +1574,10 @@
               <div>
                 <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Proje Adı</label>
                 <input type="text" id="editProjectName" required class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Proje Kodu (ops.)</label>
+                <input type="text" id="editProjectCode" placeholder="örn: PRJ-2026-001" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
               </div>
               <div id="editProjectDeptWrap">
                 <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Birim</label>
@@ -1709,7 +1726,7 @@
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <h3 class="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                <button type="button" onclick="closeLeaderSubPage()" class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-500 hover:border-cyan-500 transition-all">
+                <button type="button" onclick="handleAdminProjectsBackBtn()" class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-500 hover:border-cyan-500 transition-all">
                   <i class="fa-solid fa-arrow-left"></i>
                 </button>
                 <span class="flex items-center gap-2"><i class="fa-solid fa-chart-line text-cyan-500"></i> Proje Gidişatı</span>
@@ -1751,6 +1768,26 @@
             </div>
           </div>
 
+          <!-- PROJE ARAMA: sistemdeki TÜM projeler arasında ada, koda, firmaya, birime veya
+               sorumluya göre anlık arama (bkz. handleProjectSearchInput) — Birim/Firma seçimine
+               bağlı değildir. -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+            <div class="relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+              <input type="text" id="projGlobalSearchInput" oninput="handleProjectSearchInput(this, 'projSearchResultsCard', 'projBrowseWrap', 'projSearchResultsList', 'adminPanelSection')" placeholder="Proje adı, kodu, firma, birim veya sorumluya göre tüm projelerde ara..." class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+            </div>
+          </div>
+
+          <!-- ARAMA SONUÇLARI: arama kutusu doluyken görünür, altındaki normal gezinme kartlarının
+               (projBrowseWrap) yerini geçici olarak alır. -->
+          <div id="projSearchResultsCard" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+            <h3 class="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-3">
+              <i class="fa-solid fa-magnifying-glass text-cyan-500"></i> Arama Sonuçları
+            </h3>
+            <div id="projSearchResultsList" class="space-y-2 scroll-panel max-h-[560px] pr-1"></div>
+          </div>
+
+          <div id="projBrowseWrap" class="space-y-6">
           <!-- MEVCUT PROJELER (Firma & Proje Yönetimi modalından çıkarıldı; varsayılan kapalı) -->
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
             <button type="button" onclick="toggleExistingProjectsPanel()" class="w-full flex items-center justify-between gap-2 p-5 text-left">
@@ -1789,13 +1826,14 @@
               <div id="completedProjectsList" class="space-y-2 scroll-panel max-h-72 pr-1"></div>
             </div>
           </div>
+          </div>
         </section>
 
         <!-- ADMİN: EKİPLERİN DURUM VE İŞ YÜKÜ (Birim -> Rol -> durum/iş yükü kartları) -->
         <section id="adminStatusPageSection" class="hidden space-y-6">
           <div class="bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur-md">
             <div class="flex items-center gap-3 mb-4">
-              <button type="button" onclick="closeLeaderSubPage()" class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-500 hover:border-cyan-500 transition-all">
+              <button type="button" onclick="handleAdminStatusBackBtn()" class="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-500 hover:border-cyan-500 transition-all">
                 <i class="fa-solid fa-arrow-left"></i>
               </button>
               <h2 class="font-bold text-lg text-slate-900 dark:text-slate-100">Ekiplerin Durum ve İş Yükü</h2>
@@ -2163,6 +2201,25 @@
             </div>
           </div>
 
+          <!-- PROJE ARAMA: sorumlu olunan projeler arasında ada, koda, firmaya veya birime göre
+               anlık arama (bkz. handleEngineerProjectSearchInput). -->
+          <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+            <div class="relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+              <input type="text" id="engProjSearchInput" oninput="handleEngineerProjectSearchInput(this)" placeholder="Sorumlu olduğunuz projeler arasında ada, koda veya firmaya göre ara..." class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-cyan-500 text-slate-900 dark:text-slate-100">
+            </div>
+          </div>
+
+          <!-- ARAMA SONUÇLARI: arama kutusu doluyken görünür, altındaki normal listelerin
+               (engProjBrowseWrap) yerini geçici olarak alır. -->
+          <div id="engProjSearchResultsCard" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+            <h3 class="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-3">
+              <i class="fa-solid fa-magnifying-glass text-cyan-500"></i> Arama Sonuçları
+            </h3>
+            <div id="engProjSearchResultsList" class="space-y-2 scroll-panel max-h-[560px] pr-1"></div>
+          </div>
+
+          <div id="engProjBrowseWrap" class="space-y-6">
           <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden">
             <button type="button" onclick="toggleEngineerUrgencyPanel()" class="w-full flex items-center justify-between gap-2 p-5 text-left">
               <h3 class="font-bold text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -2186,6 +2243,7 @@
             <div id="engineerCompletedProjectsBody" class="hidden px-5 pb-5">
               <div id="engineerCompletedProjectsList" class="space-y-2 scroll-panel max-h-72 pr-1"></div>
             </div>
+          </div>
           </div>
         </section>
 
@@ -2531,6 +2589,12 @@
            (sol sidebar'ın aksine açılır/kapanır değil). Küçük ekranlarda yer sıkışmaması için
            sadece geniş ekranlarda (lg+) gösterilir. -->
       <aside id="rightSidebar" class="hidden lg:flex lg:flex-col w-80 shrink-0 bg-white dark:bg-slate-900 md:bg-white/90 md:dark:bg-slate-900/90 border-l border-slate-200 dark:border-slate-800 p-5 space-y-5 overflow-y-auto">
+        <!-- GÜNAYDIN / İYİ GÜNLER: gün saatine göre değişen kısa karşılama + bugünün tarihi (bkz. renderSelfInfoCard) -->
+        <div class="bg-gradient-to-br from-cyan-500 to-cyan-600 dark:from-cyan-600 dark:to-cyan-800 rounded-2xl p-4 text-white shadow-sm">
+          <div id="rsGreeting" class="font-bold text-base truncate"></div>
+          <div id="rsDate" class="text-[11px] text-cyan-50/90 mt-0.5"></div>
+        </div>
+
         <!-- KENDİ BİLGİLERİM -->
         <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
           <div class="flex items-center gap-3">
@@ -2739,6 +2803,10 @@
             <div>
               <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Proje Adı</label>
               <input type="text" id="newProjectName" placeholder="örn: A Projesi" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Proje Kodu (ops.)</label>
+              <input type="text" id="newProjectCode" placeholder="örn: PRJ-2026-001" class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
             </div>
             <div id="newProjectDeptWrap">
               <label class="block text-xs font-semibold mb-1.5 text-slate-700 dark:text-slate-300">Birim</label>
@@ -3452,6 +3520,11 @@
     }, true);
 
     window.onload = async function() {
+      // Giriş ekranı (henüz oturum açılmamışsa) için gün saatine göre kısa karşılama — aynı
+      // getTurkishGreeting() ana ekrandaki sağ panel karşılama kartıyla da paylaşılır.
+      const authGreetEl = document.getElementById('authGreeting');
+      if (authGreetEl && typeof getTurkishGreeting === 'function') authGreetEl.innerText = getTurkishGreeting();
+
       // Birim listesi (admin'in eklediği/sildiği birimler dahil) — giriş ekranındaki
       // kayıt formu da dahil, birimlerin göründüğü her yer bundan beslenir.
       await loadProjectDepartments();
@@ -3481,19 +3554,38 @@
     // ============================================================
     let notificationsList = [];
     let notifAutoOpenDone = false;
-    const NOTIF_LABELS_TR = {
-      TASK_ASSIGNED: 'fa-solid fa-list-check',
-      TASK_COMPLETED: 'fa-solid fa-list-check',
-      TASK_APPROVED: 'fa-solid fa-list-check',
-      TASK_REVISION: 'fa-solid fa-list-check',
-      MEETING_REQUEST: 'fa-solid fa-comments',
-      MEETING_REVIEWED: 'fa-solid fa-comments',
-      USER_PENDING: 'fa-solid fa-user-clock',
-      PROJECT_PROGRESS: 'fa-solid fa-diagram-project',
-      PROJECT_ASSIGNED: 'fa-solid fa-diagram-project',
-      ATTENDANCE_CHECKIN: 'fa-solid fa-right-to-bracket',
-      ATTENDANCE_CHECKOUT: 'fa-solid fa-right-from-bracket'
+    // Bildirim türüne göre ikon + renk: kullanıcı listeye şöyle bir bakışta "bu ne tür bir
+    // bildirim" ayırt edebilsin (görev/proje mavi-yeşil tonları, dikkat isteyenler amber/gül,
+    // toplantı mor, giriş-çıkış çay yeşili).
+    const NOTIF_TYPE_STYLE = {
+      TASK_ASSIGNED: { icon: 'fa-solid fa-list-check', bg: 'bg-cyan-500/10', text: 'text-cyan-500' },
+      TASK_COMPLETED: { icon: 'fa-solid fa-clipboard-check', bg: 'bg-amber-500/10', text: 'text-amber-500' },
+      TASK_APPROVED: { icon: 'fa-solid fa-circle-check', bg: 'bg-emerald-500/10', text: 'text-emerald-500' },
+      TASK_REVISION: { icon: 'fa-solid fa-rotate-left', bg: 'bg-rose-500/10', text: 'text-rose-500' },
+      MEETING_REQUEST: { icon: 'fa-solid fa-comments', bg: 'bg-violet-500/10', text: 'text-violet-500' },
+      MEETING_REVIEWED: { icon: 'fa-solid fa-comments', bg: 'bg-violet-500/10', text: 'text-violet-500' },
+      USER_PENDING: { icon: 'fa-solid fa-user-clock', bg: 'bg-amber-500/10', text: 'text-amber-500' },
+      PROJECT_PROGRESS: { icon: 'fa-solid fa-diagram-project', bg: 'bg-indigo-500/10', text: 'text-indigo-500' },
+      PROJECT_ASSIGNED: { icon: 'fa-solid fa-diagram-project', bg: 'bg-indigo-500/10', text: 'text-indigo-500' },
+      ATTENDANCE_CHECKIN: { icon: 'fa-solid fa-right-to-bracket', bg: 'bg-teal-500/10', text: 'text-teal-500' },
+      ATTENDANCE_CHECKOUT: { icon: 'fa-solid fa-right-from-bracket', bg: 'bg-teal-500/10', text: 'text-teal-500' }
     };
+    const NOTIF_STYLE_DEFAULT = { icon: 'fa-solid fa-bell', bg: 'bg-slate-500/10', text: 'text-slate-500' };
+
+    // Bildirim oluşturulma zamanına göre "Bugün / Dün / Bu Hafta / Daha Eski" grubu — server
+    // created_at'i Türkiye yerel saatiyle "YYYY-MM-DD HH:MM:SS" biçiminde tutuyor (bkz.
+    // server.js nowTurkeyLocal), boşluk yerine "T" ile Date'e verilir.
+    function getNotifDateGroup(createdAt) {
+      if (!createdAt) return 'Daha Eski';
+      const d = new Date(String(createdAt).replace(' ', 'T'));
+      if (isNaN(d.getTime())) return 'Daha Eski';
+      const startOfDay = dt => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+      const diffDays = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+      if (diffDays <= 0) return 'Bugün';
+      if (diffDays === 1) return 'Dün';
+      if (diffDays <= 7) return 'Bu Hafta';
+      return 'Daha Eski';
+    }
 
     // Sunucudan okunmamış bildirimleri çeker. autoOpen=true ise ve bildirim varsa
     // paneli bu oturumda ilk kez otomatik açar (giriş anındaki davranış).
@@ -3533,15 +3625,23 @@
       countEl.textContent = notificationsList.length > 99 ? '99+' : String(notificationsList.length);
       if (clearAllWrap) clearAllWrap.classList.remove('hidden');
 
-      listEl.innerHTML = notificationsList.map(n => `
+      let lastNotifGroup = null;
+      listEl.innerHTML = notificationsList.map(n => {
+        const group = getNotifDateGroup(n.created_at);
+        const groupHeaderHtml = group !== lastNotifGroup
+          ? `<div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1 pt-3 first:pt-0">${group}</div>`
+          : '';
+        lastNotifGroup = group;
+        const style = NOTIF_TYPE_STYLE[n.type] || NOTIF_STYLE_DEFAULT;
+        return `${groupHeaderHtml}
         <button type="button" onclick="viewNotification(${n.id})" class="w-full text-left bg-slate-50 dark:bg-slate-800/60 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 border border-slate-200 dark:border-slate-700 hover:border-cyan-400 dark:hover:border-cyan-600 rounded-xl p-3 transition-all flex items-start gap-3">
-          <div class="h-8 w-8 shrink-0 rounded-lg bg-cyan-500/10 text-cyan-500 flex items-center justify-center text-sm"><i class="${NOTIF_LABELS_TR[n.type] || 'fa-solid fa-bell'}"></i></div>
+          <div class="h-8 w-8 shrink-0 rounded-lg ${style.bg} ${style.text} flex items-center justify-center text-sm"><i class="${style.icon}"></i></div>
           <div class="min-w-0 flex-1">
             <div class="text-xs font-bold text-slate-900 dark:text-slate-100">${escapeHtmlProj(n.title)}</div>
             ${n.message ? `<div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">${escapeHtmlProj(n.message)}</div>` : ''}
           </div>
-        </button>
-      `).join('');
+        </button>`;
+      }).join('');
     }
 
     // Bir bildirimin içeriği görüntülendi: sunucudan sil, listeden çıkar, rozetleri güncelle,
@@ -4090,6 +4190,7 @@
         // Paneli göster ve role göre yönlendir (showDashboard bitmeden handleUserNavigation çalışmasın)
         if (typeof showDashboard === 'function') await showDashboard();
         if (typeof handleUserNavigation === 'function') handleUserNavigation(currentUser);
+        if (typeof prefetchLioxerpListInBackground === 'function') prefetchLioxerpListInBackground();
         startSessionExpiryWatcher();
       }
     });
@@ -4756,6 +4857,37 @@
       renderUrgencyRanking(cachedUrgencyRanking);
     }
 
+    // "Proje Gidişatı" kutucuğunun üstündeki "Geri Dön": Birim → Firma → Alt Alan kademeli
+    // seçimi bir adımda geri sarar (seçili en derin adımı temizler), her şeyi bırakıp direkt ana
+    // ekrana atmaz — sadece hiçbir seçim kalmayınca closeLeaderSubPage() ile bölümden çıkılır.
+    // Müdür/Ekip Lideri için Birim sabit olduğundan (seçim adımı değildir) hiç temizlenmez.
+    function handleAdminProjectsBackBtn() {
+      if (projSelectedCompany != null) {
+        projSelectedCompany = null;
+        projSelectedSubArea = null;
+        renderProjectCompanyChips();
+        const subAreaWrap = document.getElementById('projSubAreaWrap');
+        if (subAreaWrap) subAreaWrap.classList.add('hidden');
+        renderExistingProjectsList();
+        renderUrgencyRanking(cachedUrgencyRanking);
+        return;
+      }
+      const isManagerView = currentUser && isProjectDeptLockedRole(currentUser.role);
+      if (!isManagerView && projSelectedDept != null) {
+        projSelectedDept = null;
+        projCompaniesCache = [];
+        renderProjectDeptChips();
+        const companyWrap = document.getElementById('projCompanyWrap');
+        if (companyWrap) companyWrap.classList.add('hidden');
+        const subAreaWrap = document.getElementById('projSubAreaWrap');
+        if (subAreaWrap) subAreaWrap.classList.add('hidden');
+        renderExistingProjectsList();
+        renderUrgencyRanking([]);
+        return;
+      }
+      closeLeaderSubPage();
+    }
+
     // "Projelerin Aciliyet & Önem Sırası" panelinin (Proje Gidişatı içinde) son çekilen tam listesi —
     // firma seçimi değiştiğinde ağa gitmeden yeniden filtrelemek için önbelleklenir.
     let cachedUrgencyRanking = [];
@@ -4790,7 +4922,7 @@
       const upcoming = (projects || []).filter(p => p.days_left >= 0 && p.days_left <= 3).sort((a, b) => a.days_left - b.days_left);
 
       const cardHtml = (p, text) => `<button onclick="jumpToProject(${p.id})" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
-          <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+          <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(formatProjectLabel(p))}</div>
           <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between mt-0.5">
             <span>${escapeHtmlProj(p.owner_name || 'Sorumlu yok')}</span>
             <span class="text-rose-500 font-bold">${text}</span>
@@ -4840,7 +4972,7 @@
           <div class="w-6 h-6 shrink-0 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-600 dark:text-slate-300">${i + 1}</div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between gap-2">
-              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(formatProjectLabel(p))}</div>
               <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${p.urgency >= 70 ? 'bg-rose-500/15 text-rose-500' : p.urgency >= 40 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'} shrink-0">${lvl}</span>
             </div>
             <div class="flex items-center gap-2 mt-1">
@@ -4892,7 +5024,7 @@
           : completed.map(p => `
             <button type="button" onclick="openProjectDetailPage(${p.id}, 'engineerProjectsPageSection')" class="w-full text-left flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-lg p-2.5 transition-all">
               <div class="min-w-0">
-                <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+                <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(formatProjectLabel(p))}</div>
                 <div class="text-[10px] text-slate-400">Bitiş: ${p.end_date} · %${p.actual ?? 0}</div>
               </div>
               <i class="fa-solid fa-circle-check text-emerald-500 shrink-0"></i>
@@ -4920,7 +5052,7 @@
           <div class="flex items-center justify-between gap-2">
             <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-1.5">
               ${isPending ? '<span class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400"><i class="fa-solid fa-triangle-exclamation"></i>BEKLEMEDE</span>' : ''}
-              <span class="truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</span>
+              <span class="truncate">${escapeHtmlProj(formatProjectLabel(p))}</span>
             </div>
             ${isPending ? '' : `<span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>`}
           </div>
@@ -4947,7 +5079,7 @@
           <div class="w-6 h-6 shrink-0 rounded-md bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-600 dark:text-slate-300">${i + 1}</div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between gap-2">
-              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+              <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(formatProjectLabel(p))}</div>
               <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${p.urgency >= 70 ? 'bg-rose-500/15 text-rose-500' : p.urgency >= 40 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'} shrink-0">${lvl}</span>
             </div>
             <div class="flex items-center gap-2 mt-1">
@@ -4979,7 +5111,7 @@
 
       const homeSectionId = isTechnicianView ? 'technicianHomeSection' : 'engineerHomeSection';
       const cardHtml = (p, text) => `<button type="button" onclick="openProjectDetailPage(${p.id}, '${homeSectionId}')" class="w-full text-left bg-rose-500/5 border border-rose-200 dark:border-rose-900/40 rounded-lg p-2.5 hover:bg-rose-500/10 transition-all">
-          <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+          <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(formatProjectLabel(p))}</div>
           <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-end mt-0.5">
             <span class="text-rose-500 font-bold">${text}</span>
           </div>
@@ -5284,7 +5416,7 @@
             <div class="min-w-0">
               <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-1.5">
                 ${isPending ? '<span class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400"><i class="fa-solid fa-triangle-exclamation"></i>BEKLEMEDE</span>' : ''}
-                <span class="truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</span>
+                <span class="truncate">${escapeHtmlProj(formatProjectLabel(p))}</span>
               </div>
               <div class="text-[10px] text-slate-400">${DEPARTMENT_LABELS[p.department] || p.department} · ${p.owner_name || 'Sorumlu yok'} · Bitiş: ${p.end_date} · Öncelik: ${p.priority || 'NORMAL'}</div>
             </div>
@@ -5300,7 +5432,7 @@
             : completed.map(p => `
               <button type="button" onclick="openProjectDetailPage(${p.id}, 'adminPanelSection')" class="w-full text-left flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 rounded-lg p-2.5 transition-all">
                 <div class="min-w-0">
-                  <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+                  <div class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(formatProjectLabel(p))}</div>
                   <div class="text-[10px] text-slate-400">${p.owner_name || 'Sorumlu yok'} · Bitiş: ${p.end_date} · %${p.actual ?? 0}</div>
                 </div>
                 <i class="fa-solid fa-circle-check text-emerald-500 shrink-0"></i>
@@ -5407,6 +5539,7 @@
     async function handleAddProject() {
       const company_id = document.getElementById('newProjectCompany').value;
       const name = document.getElementById('newProjectName').value.trim();
+      const project_code = document.getElementById('newProjectCode').value.trim();
       const department = document.getElementById('newProjectDept').value;
       const subAreaWrap = document.getElementById('newProjectSubAreaWrap');
       const sub_area = (subAreaWrap && !subAreaWrap.classList.contains('hidden')) ? document.getElementById('newProjectSubArea').value : null;
@@ -5421,11 +5554,12 @@
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ company_id, name, department, sub_area, owner_id: owner_id || null, start_date, end_date, priority, note, userRole: currentUser.role, userId: currentUser.id, createdBy: currentUser.name })
+          body: JSON.stringify({ company_id, name, project_code, department, sub_area, owner_id: owner_id || null, start_date, end_date, priority, note, userRole: currentUser.role, userId: currentUser.id, createdBy: currentUser.name })
         });
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Oluşturulamadı.', 'error'); return; }
         document.getElementById('newProjectName').value = '';
+        document.getElementById('newProjectCode').value = '';
         document.getElementById('newProjectNote').value = '';
         showToast(out.stagesApplied ? `Proje oluşturuldu. "${out.stagesApplied}" şablonu otomatik uygulandı.` : 'Proje oluşturuldu.', 'success');
         await refreshProjectManageModal();
@@ -5555,6 +5689,116 @@
       return String(str == null ? '' : str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Proje adının gösterildiği HER yerde (listeler, seçiciler, sayfa başlıkları, e-posta/görev
+    // açıklamaları) tutarlı tek biçim: "{Proje Kodu — }{Firma} — {Proje Adı}". Proje kodu
+    // opsiyonel olduğundan boşsa hiç eklenmez. Düz metin döner — HTML'e basılan yerlerde
+    // escapeHtmlProj(formatProjectLabel(p)) ile, .innerText atamalarında doğrudan kullanılır.
+    function formatProjectLabel(p) {
+      if (!p) return '';
+      const code = (p.project_code || p.projectCode || '').trim();
+      return (code ? code + ' — ' : '') + (p.company_name || p.company || '') + ' — ' + (p.name || '');
+    }
+
+    // ============================================================
+    // PROJE ARAMA ("Projeler" kutucuğu olan tüm roller): ada, proje koduna, firmaya, birime
+    // veya sorumlu kişiye göre yazdıkça anlık filtreleme. Admin/Müdür/Ekip Lideri panelinde
+    // (adminPanelSection) sistemdeki TÜM projeler arasında arar (bkz. loadTaskProjectsCache —
+    // "Proje (opsiyonel)" seçicisiyle aynı, zaten departman filtresi uygulamayan önbellek);
+    // Mühendis/Teknisyen panelinde (engineerProjectsPageSection) sadece o kişinin sorumlu
+    // olduğu projeler (engineerOwnedProjects) arasında arar. Sonuçlarda eşleşen kısım
+    // <mark> ile vurgulanır ki kullanıcı NEDEN eşleştiğini görsün.
+    // ============================================================
+    function projectMatchesSearchQuery(p, normalizedQuery) {
+      const norm = s => (s || '').toString().toLocaleLowerCase('tr-TR');
+      const haystacks = [
+        p.name, p.project_code || p.projectCode, p.company_name || p.company,
+        p.owner_name, DEPARTMENT_LABELS[p.department] || p.department
+      ];
+      return haystacks.some(h => norm(h).includes(normalizedQuery));
+    }
+
+    function highlightProjectSearchMatch(text, rawQuery) {
+      const escaped = escapeHtmlProj(text || '—');
+      if (!rawQuery) return escaped;
+      const escapedQuery = rawQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      try {
+        const re = new RegExp(`(${escapedQuery})`, 'gi');
+        return escaped.replace(re, '<mark class="bg-cyan-200 dark:bg-cyan-500/40 text-slate-900 dark:text-cyan-50 rounded px-0.5">$1</mark>');
+      } catch (e) { return escaped; }
+    }
+
+    function renderProjectSearchResults(listElId, projects, rawQuery, returnTo) {
+      const el = document.getElementById(listElId);
+      if (!el) return;
+      const normalizedQuery = rawQuery.toLocaleLowerCase('tr-TR');
+      const matches = (projects || []).filter(p => projectMatchesSearchQuery(p, normalizedQuery));
+      if (matches.length === 0) {
+        el.innerHTML = emptyStateHtml('fa-magnifying-glass', `"${escapeHtmlProj(rawQuery)}" ile eşleşen proje bulunamadı.`);
+        return;
+      }
+      el.innerHTML = matches.map(p => {
+        const statusBadge = p.status === 'COMPLETED'
+          ? '<span class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"><i class="fa-solid fa-circle-check"></i>TAMAMLANDI</span>'
+          : p.status === 'PENDING'
+            ? '<span class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400"><i class="fa-solid fa-triangle-exclamation"></i>BEKLEMEDE</span>'
+            : '';
+        return `<button type="button" onclick="openProjectDetailPage(${p.id}, '${returnTo}')" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${highlightProjectSearchMatch(formatProjectLabel(p), rawQuery)}</div>
+            ${statusBadge}
+          </div>
+          <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+            <span><i class="fa-solid fa-building me-1 text-slate-400"></i>${highlightProjectSearchMatch(DEPARTMENT_LABELS[p.department] || p.department, rawQuery)}</span>
+            <span><i class="fa-regular fa-user me-1 text-slate-400"></i>${highlightProjectSearchMatch(p.owner_name || 'Sorumlu yok', rawQuery)}</span>
+          </div>
+        </button>`;
+      }).join('');
+    }
+
+    // Admin/Müdür/Ekip Lideri "Proje Gidişatı" kutucuğu: sistemdeki tüm projeler arasında arar.
+    async function handleProjectSearchInput(inputEl, resultsWrapId, browseWrapId, resultsListId, returnTo) {
+      const query = inputEl.value.trim();
+      const browseWrap = document.getElementById(browseWrapId);
+      const resultsWrap = document.getElementById(resultsWrapId);
+      if (!query) {
+        if (browseWrap) browseWrap.classList.remove('hidden');
+        if (resultsWrap) resultsWrap.classList.add('hidden');
+        return;
+      }
+      if (browseWrap) browseWrap.classList.add('hidden');
+      if (resultsWrap) resultsWrap.classList.remove('hidden');
+      const projects = await loadTaskProjectsCache();
+      renderProjectSearchResults(resultsListId, projects, query, returnTo);
+    }
+
+    // "Projeler" kutucuğu her açılışta (bir önceki oturumdan kalan arama sorgusu/sonuçlarıyla
+    // değil) temiz gelsin diye — bkz. openAdminProjectsPage/openManagerProjectsPage/
+    // openEngineerProjectsPage/openTechnicianProjectsPage.
+    function resetProjectSearchUI(inputId, browseWrapId, resultsWrapId) {
+      const input = document.getElementById(inputId);
+      if (input) input.value = '';
+      const browseWrap = document.getElementById(browseWrapId);
+      if (browseWrap) browseWrap.classList.remove('hidden');
+      const resultsWrap = document.getElementById(resultsWrapId);
+      if (resultsWrap) resultsWrap.classList.add('hidden');
+    }
+
+    // Mühendis/Teknisyen "Sorumlu Olunan Proje Gidişatı" kutucuğu: sadece kendi sorumlu olduğu
+    // projeler arasında arar (engineerOwnedProjects zaten bellekte — ağa gitmeye gerek yok).
+    function handleEngineerProjectSearchInput(inputEl) {
+      const query = inputEl.value.trim();
+      const browseWrap = document.getElementById('engProjBrowseWrap');
+      const resultsWrap = document.getElementById('engProjSearchResultsCard');
+      if (!query) {
+        if (browseWrap) browseWrap.classList.remove('hidden');
+        if (resultsWrap) resultsWrap.classList.add('hidden');
+        return;
+      }
+      if (browseWrap) browseWrap.classList.add('hidden');
+      if (resultsWrap) resultsWrap.classList.remove('hidden');
+      renderProjectSearchResults('engProjSearchResultsList', engineerOwnedProjects, query, 'engineerProjectsPageSection');
     }
 
     let progressCurrentPersonTasks = [];
@@ -5815,10 +6059,11 @@
                     const assignedInternCount = u.role === 'ENGINEER'
                       ? (usersList || []).filter(x => x.role === 'INTERN' && x.engineer_id == u.id).length
                       : 0;
+                    const avatarC = getAvatarColorClasses(u.id);
                     return `
                       <button onclick="openPersonDetailPage(${u.id})" class="group w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-lg rounded-2xl p-4 text-left transition-all">
                         <div class="flex items-center gap-3">
-                          <div class="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 border border-cyan-500/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400 font-bold text-sm">
+                          <div class="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br ${avatarC.gradient} border ${avatarC.border} ${avatarC.text} flex items-center justify-center font-bold text-sm">
                             ${(u.name || '?').trim().charAt(0).toUpperCase()}
                           </div>
                           <div class="min-w-0 flex-1">
@@ -5986,6 +6231,7 @@
       const logs = data.logs || [];
 
       // Kimlik kartı
+      updatePdAvatarColor(u.id);
       document.getElementById('pdAvatar').innerText = (u.name || '?').trim().charAt(0).toUpperCase();
       document.getElementById('pdName').innerText = u.name || '-';
       let roleLine = ROLE_LABELS_TR[u.role] || u.role || '';
@@ -6077,12 +6323,15 @@
       const assignedWrap = document.getElementById('pdAssignedInternsWrap');
       if (u.role === 'ENGINEER' && assignedInterns.length > 0) {
         assignedWrap.classList.remove('hidden');
-        document.getElementById('pdAssignedInterns').innerHTML = assignedInterns.map(i => `
+        document.getElementById('pdAssignedInterns').innerHTML = assignedInterns.map(i => {
+          const avatarC = getAvatarColorClasses(i.id);
+          return `
           <button onclick="openPersonDetailPage(${i.id}, personDetailReturnTo)" class="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 text-left transition-all">
-            <div class="h-7 w-7 shrink-0 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xs font-bold">${(i.name || '?').trim().charAt(0).toUpperCase()}</div>
+            <div class="h-7 w-7 shrink-0 rounded-full ${avatarC.flatBg} ${avatarC.text} flex items-center justify-center text-xs font-bold">${(i.name || '?').trim().charAt(0).toUpperCase()}</div>
             <span class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(i.name)}</span>
           </button>
-        `).join('');
+        `;
+        }).join('');
       } else {
         assignedWrap.classList.add('hidden');
       }
@@ -6095,9 +6344,9 @@
         projEl.innerHTML = projects.map(p => {
           const daysTxt = p.days_left < 0 ? `${Math.abs(p.days_left)} gün gecikti` : `${p.days_left} gün kaldı`;
           const daysCls = p.days_left < 0 ? 'text-rose-500' : p.days_left <= 3 ? 'text-amber-500' : 'text-emerald-500';
-          return `<button type="button" onclick="openPersonProjectInline(${p.id}, ${u.id})" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
+          return `<button type="button" onclick="openProjectDetailPage(${p.id}, 'personDetailSection')" class="w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 hover:shadow-lg hover:-translate-y-0.5 rounded-lg p-3 transition-all">
             <div class="flex items-center justify-between gap-2">
-              <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</div>
+              <div class="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(formatProjectLabel(p))}</div>
               <span class="text-[10px] font-bold ${daysCls} shrink-0">${daysTxt}</span>
             </div>
             <div class="flex items-center gap-2 mt-2">
@@ -6285,6 +6534,7 @@
       companySel.value = project.company_id;
 
       document.getElementById('editProjectName').value = project.name || '';
+      document.getElementById('editProjectCode').value = project.project_code || '';
       const deptSel = document.getElementById('editProjectDept');
       deptSel.value = project.department || 'ELEKTRONIK';
       deptSel.disabled = isManagerView; // Müdür/Ekip Lideri kendi biriminin dışına proje taşıyamaz
@@ -6334,6 +6584,7 @@
       const pid = personProjectData.project.id;
       const company_id = document.getElementById('editProjectCompany').value;
       const name = document.getElementById('editProjectName').value.trim();
+      const project_code = document.getElementById('editProjectCode').value.trim();
       const department = document.getElementById('editProjectDept').value;
       const subAreaWrap = document.getElementById('editProjectSubAreaWrap');
       const sub_area = (subAreaWrap && !subAreaWrap.classList.contains('hidden')) ? document.getElementById('editProjectSubArea').value : null;
@@ -6348,7 +6599,7 @@
       try {
         const res = await fetch(`${API_BASE_URL}/api/projects/${pid}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ company_id, name, department, sub_area, owner_id: owner_id || null, status, start_date, end_date, priority, note, userRole: currentUser.role, userId: currentUser.id })
+          body: JSON.stringify({ company_id, name, project_code, department, sub_area, owner_id: owner_id || null, status, start_date, end_date, priority, note, userRole: currentUser.role, userId: currentUser.id })
         });
         const out = await safeJson(res);
         if (!res.ok) { showToast(out.error || 'Güncellenemedi.', 'error'); return; }
@@ -6373,13 +6624,18 @@
         renderExistingProjectsList();
         refreshDashboardSummary();
       } else if (projectDetailReturnTo === 'engineerProjectsPageSection') {
-        loadEngineerOwnedProjects();
+        loadEngineerOwnedProjects().then(() => {
+          const searchInput = document.getElementById('engProjSearchInput');
+          if (searchInput && searchInput.value.trim()) handleEngineerProjectSearchInput(searchInput);
+        });
+      } else if (projectDetailReturnTo === 'personDetailSection' && pdCurrentUserId != null) {
+        openPersonDetailPage(pdCurrentUserId, personDetailReturnTo);
       }
     }
 
     function renderProjectDetailPage(data) {
       const project = data.project;
-      document.getElementById('projDetTitle').innerText = `${project.company_name || ''} — ${project.name}`;
+      document.getElementById('projDetTitle').innerText = `${formatProjectLabel(project)}`;
       const editBtn = document.getElementById('projDetEditBtn');
       if (editBtn) editBtn.classList.toggle('hidden', !canEditProjectDetailsClient());
 
@@ -6387,7 +6643,9 @@
         <span><i class="fa-solid fa-building me-1 text-slate-400"></i>${DEPARTMENT_LABELS[project.department] || project.department || '—'}</span>
         <span><i class="fa-regular fa-user me-1 text-slate-400"></i>${project.owner_name ? escapeHtmlProj(project.owner_name) : 'Sorumlu yok'}</span>
         <span><i class="fa-regular fa-calendar me-1 text-slate-400"></i>${project.start_date || '?'} → ${project.end_date || '?'}</span>
+        <span id="projDetErpTotal" class="hidden"></span>
       `;
+      loadProjectErpTotal(project);
 
       const priorityCls = project.priority === 'YÜKSEK' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
         : project.priority === 'DÜŞÜK' ? 'bg-slate-500/10 text-slate-500 border-slate-500/30'
@@ -6419,11 +6677,42 @@
       loadAndRenderProjectKartPlani(project);
     }
 
+    // Proje detay sayfası başlığındaki tarih aralığının hemen yanına, o projeye ait ERP (LioXERP)
+    // malzeme taleplerinin toplam tutarını ekler (bkz. server.js /api/lioxerp/project-total).
+    // Sunucu tarafı zaten arka planda 10 dakikada bir + her yeni Talep Formu için otomatik
+    // tazelenen bir önbellekten anında hesaplıyor, bu yüzden burada sadece o an güncel olanı
+    // çekmek yeterli — sayfa her açıldığında/geri dönüldüğünde tazelenir.
+    function formatLioxerpAmount(amount, currency) {
+      const formatted = Number(amount).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return currency === 'TRY' ? `${formatted} ₺` : `${formatted} ${currency || ''}`.trim();
+    }
+
+    async function loadProjectErpTotal(project) {
+      const wrap = document.getElementById('projDetErpTotal');
+      if (!wrap) return;
+      wrap.classList.add('hidden');
+      wrap.innerHTML = '';
+      const canSeeErpTotal = currentUser && ['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role);
+      if (!canSeeErpTotal || !project.project_code) return;
+      wrap.classList.remove('hidden');
+      wrap.innerHTML = `<i class="fa-solid fa-sack-dollar me-1 text-slate-400"></i>${skeletonBar('w-20', 'h-3')}`;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/lioxerp/project-total?projectCode=${encodeURIComponent(project.project_code)}&userRole=${currentUser.role}`);
+        const data = await safeJson(res);
+        if (!res.ok) { wrap.classList.add('hidden'); return; }
+        const totals = data.totals || [];
+        const amountText = totals.length === 0 ? 'ERP\'de kayıtlı malzeme talebi yok' : totals.map(t => formatLioxerpAmount(t.amount, t.currency)).join(' + ');
+        wrap.innerHTML = `<i class="fa-solid fa-sack-dollar me-1 text-slate-400"></i>ERP Toplam Tutar: <b class="text-slate-700 dark:text-slate-200">${amountText}</b>`;
+      } catch (e) {
+        wrap.classList.add('hidden');
+      }
+    }
+
     async function renderPersonProjectModal(data) {
       const idp = ppIdPrefix;
       const project = data.project;
       const progress = data.progress || [];
-      document.getElementById(idp + 'Title').innerText = `${project.company_name || ''} — ${project.name}`;
+      document.getElementById(idp + 'Title').innerText = `${formatProjectLabel(project)}`;
 
       const today = new Date().toISOString().substring(0, 10);
       const daysLeft = Math.round((new Date(project.end_date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
@@ -7715,6 +8004,27 @@
       }
     }
 
+    // Bir sayı kutucuğunu son değerinden (ilk çizimde 0'dan) hedef değere doğru sayarak
+    // canlandırır — düz "innerText = sayı" yerine ana ekran istatistik kartlarını canlandırmak
+    // için kullanılır. Aynı elemente art arda çağrılırsa (ör. periyodik yenileme) son gösterilen
+    // değerden devam eder (dataset.countVal'de tutulur), tekrar 0'dan başlamaz.
+    function animateCountUp(el, target, duration = 700) {
+      if (!el) return;
+      target = Number(target) || 0;
+      const start = Number(el.dataset.countVal || 0);
+      if (start === target) { el.innerText = target; return; }
+      el.dataset.countVal = target;
+      const startTime = performance.now();
+      function tick(now) {
+        const progress = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.innerText = Math.round(start + (target - start) * eased);
+        if (progress < 1) requestAnimationFrame(tick);
+        else el.innerText = target;
+      }
+      requestAnimationFrame(tick);
+    }
+
     // "Toplam Kullanıcı" kutucuğuna basılınca açılan role göre dağılım paneli için son çekilen sayılar
     let lastRoleCounts = {};
 
@@ -7732,11 +8042,11 @@
         const elTotalTechnicians = document.getElementById('statTotalTechnicians');
         const elTotalInterns = document.getElementById('statTotalInterns');
 
-        if (elTotalUsers) elTotalUsers.innerText = stats.totalUsers ?? 0;
-        if (elTotalHR) elTotalHR.innerText = roleCounts.HR || 0;
-        if (elTotalEngineers) elTotalEngineers.innerText = roleCounts.ENGINEER || 0;
-        if (elTotalTechnicians) elTotalTechnicians.innerText = roleCounts.TECHNICIAN || 0;
-        if (elTotalInterns) elTotalInterns.innerText = roleCounts.INTERN || 0;
+        animateCountUp(elTotalUsers, stats.totalUsers ?? 0);
+        animateCountUp(elTotalHR, roleCounts.HR || 0);
+        animateCountUp(elTotalEngineers, roleCounts.ENGINEER || 0);
+        animateCountUp(elTotalTechnicians, roleCounts.TECHNICIAN || 0);
+        animateCountUp(elTotalInterns, roleCounts.INTERN || 0);
 
         // Panel zaten açıksa (ör. sayfa yeniden çizildiyse) barları güncel veriyle tazele
         const panel = document.getElementById('userBreakdownPanel');
@@ -7862,16 +8172,19 @@
         return;
       }
 
-      grid.innerHTML = people.map(u => `
+      grid.innerHTML = people.map(u => {
+        const avatarC = getAvatarColorClasses(u.id);
+        return `
         <button type="button" onclick="openPersonDetailPage(${u.id}, 'adminHomeSection')" class="group w-full text-left bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-md rounded-xl p-3.5 flex items-center gap-3 transition-all">
-          <div class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 border border-cyan-500/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400 font-bold text-sm">${(u.name || '?').trim().charAt(0).toUpperCase()}</div>
+          <div class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br ${avatarC.gradient} border ${avatarC.border} ${avatarC.text} font-bold text-sm flex items-center justify-center">${(u.name || '?').trim().charAt(0).toUpperCase()}</div>
           <div class="min-w-0 flex-1">
             <div class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">${escapeHtmlProj(u.name || '-')}</div>
             <div class="text-[11px] text-slate-400 truncate">${escapeHtmlProj((DEPARTMENT_LABELS[u.department] || u.department || '—') + (u.sub_area ? ' · ' + u.sub_area : ''))}</div>
           </div>
           ${u.status === 'PENDING' ? `<span class="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">Onay Bekliyor</span>` : `<i class="fa-solid fa-chevron-right text-[10px] text-slate-300 dark:text-slate-600 group-hover:text-cyan-500 transition-colors"></i>`}
         </button>
-      `).join('');
+      `;
+      }).join('');
     }
 
     // Bir rol kutucuğunu açar/kapatır (Toplam Kullanıcı ile aynı animasyon). Açılırken diğer
@@ -8491,6 +8804,10 @@
             const key = u.role || 'DİĞER';
             if (!byRole[key]) byRole[key] = [];
             byRole[key].push(u);
+          });
+          // Her rol grubu içinde kişiler isme göre alfabetik sıralanır.
+          Object.keys(byRole).forEach(key => {
+            byRole[key].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
           });
 
           const roleKeys = Object.keys(byRole).sort((a, b) => {
@@ -9135,6 +9452,10 @@
           // 2. Kullanıcının rolüne göre (ADMIN vs.) sayfa yönlendirmesini yap
           handleUserNavigation(currentUser);
 
+          // 2.5. LioXERP Talep Formları listesini arka planda hemen çekmeye başla — kullanıcı
+          // "Talep Formları" kutucuğuna GİRMEDEN önce hazır olsun diye (bkz. prefetchLioxerpListInBackground).
+          if (typeof prefetchLioxerpListInBackground === 'function') prefetchLioxerpListInBackground();
+
           // 3. Bildirimleri çek; okunmamış varsa giriş anında paneli otomatik aç
           notifAutoOpenDone = false;
           loadNotifications(true);
@@ -9434,14 +9755,78 @@
     // SAĞ PANEL: Kendi Bilgilerim + Planlama (herkese açık, kendine özel not/hatırlatma sistemi)
     // ============================================================
 
+    // Gün saatine göre kısa Türkçe karşılama (sağ panel üstündeki karşılama kartı için).
+    function getTurkishGreeting() {
+      const h = new Date().getHours();
+      if (h < 6) return 'İyi geceler';
+      if (h < 12) return 'Günaydın';
+      if (h < 18) return 'İyi günler';
+      return 'İyi akşamlar';
+    }
+    // "1 Eylül 2026, Salı" biçiminde bugünün tarihi.
+    function getTurkishTodayLabel() {
+      const days = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+      const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+      const d = new Date();
+      return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${days[d.getDay()]}`;
+    }
+
+    // ============================================================
+    // KİŞİYE ÖZEL AVATAR RENGİ: aynı kişi (id ile) sitenin her yerinde — kendi bilgilerim,
+    // kişi detayı, ekip listeleri — hep aynı sabit renkte görünür, böylece bir listede birden
+    // fazla kişi yan yana gösterildiğinde göz kimin kim olduğunu daha kolay ayırt eder. Renk,
+    // kişi id'sinden basit bir hash ile küçük bir renk paletinden seçilir (sunucuya gerek yok).
+    // ============================================================
+    const AVATAR_COLOR_PALETTE = [
+      { flatBg: 'bg-cyan-500/10', gradient: 'from-cyan-500/20 to-cyan-500/5', border: 'border-cyan-500/30', text: 'text-cyan-600 dark:text-cyan-400' },
+      { flatBg: 'bg-violet-500/10', gradient: 'from-violet-500/20 to-violet-500/5', border: 'border-violet-500/30', text: 'text-violet-600 dark:text-violet-400' },
+      { flatBg: 'bg-rose-500/10', gradient: 'from-rose-500/20 to-rose-500/5', border: 'border-rose-500/30', text: 'text-rose-600 dark:text-rose-400' },
+      { flatBg: 'bg-amber-500/10', gradient: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/30', text: 'text-amber-600 dark:text-amber-400' },
+      { flatBg: 'bg-emerald-500/10', gradient: 'from-emerald-500/20 to-emerald-500/5', border: 'border-emerald-500/30', text: 'text-emerald-600 dark:text-emerald-400' },
+      { flatBg: 'bg-fuchsia-500/10', gradient: 'from-fuchsia-500/20 to-fuchsia-500/5', border: 'border-fuchsia-500/30', text: 'text-fuchsia-600 dark:text-fuchsia-400' },
+      { flatBg: 'bg-indigo-500/10', gradient: 'from-indigo-500/20 to-indigo-500/5', border: 'border-indigo-500/30', text: 'text-indigo-600 dark:text-indigo-400' },
+      { flatBg: 'bg-orange-500/10', gradient: 'from-orange-500/20 to-orange-500/5', border: 'border-orange-500/30', text: 'text-orange-600 dark:text-orange-400' },
+      { flatBg: 'bg-teal-500/10', gradient: 'from-teal-500/20 to-teal-500/5', border: 'border-teal-500/30', text: 'text-teal-600 dark:text-teal-400' },
+      { flatBg: 'bg-pink-500/10', gradient: 'from-pink-500/20 to-pink-500/5', border: 'border-pink-500/30', text: 'text-pink-600 dark:text-pink-400' }
+    ];
+    function getAvatarColorClasses(seed) {
+      const str = String(seed == null ? '' : seed);
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) | 0;
+      return AVATAR_COLOR_PALETTE[Math.abs(hash) % AVATAR_COLOR_PALETTE.length];
+    }
+    // rsAvatar (sağ panel "Kendi Bilgilerim") ve pdAvatar (Kişi Detayı) HTML'de sabit renkle
+    // yazılmıştı — JS ile her render'da o kişinin rengine göre className tamamen yeniden kurulur.
+    function updateRsAvatarColor(seed) {
+      const el = document.getElementById('rsAvatar');
+      if (!el) return;
+      const c = getAvatarColorClasses(seed);
+      el.className = `h-11 w-11 rounded-xl ${c.flatBg} ${c.text} flex items-center justify-center font-bold text-lg shrink-0`;
+    }
+    function updatePdAvatarColor(seed) {
+      const el = document.getElementById('pdAvatar');
+      if (!el) return;
+      const c = getAvatarColorClasses(seed);
+      el.className = `h-16 w-16 shrink-0 rounded-2xl bg-gradient-to-br ${c.gradient} border ${c.border} ${c.text} flex items-center justify-center font-bold text-2xl`;
+    }
+
     // Sağ panelin üstündeki "Kendi Bilgilerim" kartını doldurur.
     function renderSelfInfoCard(roleLabel) {
       if (!currentUser) return;
+      const greetEl = document.getElementById('rsGreeting');
+      if (greetEl) {
+        const firstName = (currentUser.name || '').trim().split(/\s+/)[0] || '';
+        greetEl.innerText = `${getTurkishGreeting()}, ${firstName}!`;
+      }
+      const dateEl = document.getElementById('rsDate');
+      if (dateEl) dateEl.innerText = getTurkishTodayLabel();
+
       const avatarEl = document.getElementById('rsAvatar');
       const nameEl = document.getElementById('rsName');
       const roleEl = document.getElementById('rsRole');
       if (!avatarEl || !nameEl || !roleEl) return;
 
+      updateRsAvatarColor(currentUser.id);
       avatarEl.innerText = (currentUser.name || '?').trim().charAt(0).toUpperCase();
       nameEl.innerText = currentUser.name || '-';
       roleEl.innerText = roleLabel || ROLE_LABELS_TR[currentUser.role] || currentUser.role || '';
@@ -9990,6 +10375,10 @@
           if (!byRole[key]) byRole[key] = [];
           byRole[key].push(u);
         });
+        // Her rol grubu içinde kişiler isme göre alfabetik sıralanır.
+        Object.keys(byRole).forEach(key => {
+          byRole[key].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
+        });
 
         const roleKeys = Object.keys(byRole).sort((a, b) => {
           const ia = ROLE_ORDER.indexOf(a);
@@ -10269,7 +10658,7 @@
       const projects = await loadTaskProjectsCache();
       const secili = selectedId != null ? String(selectedId) : sel.value;
       sel.innerHTML = '<option value="">Bir projeye bağlı değil</option>'
-        + projects.map(p => `<option value="${p.id}">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</option>`).join('');
+        + projects.map(p => `<option value="${p.id}">${escapeHtmlProj(formatProjectLabel(p))}</option>`).join('');
       sel.value = secili && projects.some(p => String(p.id) === secili) ? secili : '';
     }
     async function populateTaskProjectOptions() {
@@ -10582,7 +10971,7 @@
         if (typeof loadTasks === 'function') loadTasks();
         if (typeof populateAdminTaskFilters === 'function') populateAdminTaskFilters();
         if (typeof populateLeaderTaskFilter === 'function') populateLeaderTaskFilter();
-        if (typeof applyTaskSectionsDefaults === 'function') applyTaskSectionsDefaults(true);
+        if (typeof applyTaskSectionsDefaults === 'function') applyTaskSectionsDefaults(true, true);
       }, 'leaderSection');
     }
 
@@ -10708,6 +11097,7 @@
       const home = document.getElementById('adminHomeSection');
       if (home) home.classList.add('hidden');
       showSection('admin');
+      resetProjectSearchUI('projGlobalSearchInput', 'projBrowseWrap', 'projSearchResultsCard');
       if (typeof loadProjectDashboard === 'function') await loadProjectDashboard();
     }
 
@@ -10716,6 +11106,7 @@
       const home = document.getElementById('leaderSection');
       if (home) home.classList.add('hidden');
       showSection('admin');
+      resetProjectSearchUI('projGlobalSearchInput', 'projBrowseWrap', 'projSearchResultsCard');
       if (typeof loadProjectDashboard === 'function') await loadProjectDashboard();
     }
 
@@ -10754,7 +11145,22 @@
 
     // LioXERP (Uyumsoft ERP) entegrasyonu: sunucu ortak bir servis hesabıyla otomatik giriş yapıp
     // "Talep Formu" listesini çeker (bkz. server.js /api/lioxerp/talep-formlari) — kullanıcının
-    // kendi LioXERP bilgilerine ihtiyaç yoktur.
+    // kendi LioXERP bilgilerine ihtiyaç yoktur. Sunucu tarafında artık arka planda periyodik
+    // tazelenen bir önbellekten anında cevap verildiği için, bu istek siteye giriş yapılır
+    // yapılmaz (kutucuğa henüz girilmeden) arka planda tetiklenir — kullanıcı "Talep Formları"
+    // kutucuğuna tıkladığında veri zaten bellekte hazır olur, boş yükleniyor ekranı görülmez.
+    async function prefetchLioxerpListInBackground() {
+      if (!currentUser || !['ADMIN', 'HR', 'MANAGER', 'LEADER', 'ENGINEER'].includes(currentUser.role)) return;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/lioxerp/talep-formlari?userRole=${currentUser.role}`);
+        const data = await safeJson(res);
+        if (!res.ok || !Array.isArray(data)) return;
+        lioxerpAllRows = data;
+        lioxerpPopulateBranchOptions();
+        lioxerpStartDetailIndexPolling();
+      } catch (e) { /* sessizce geç — kutucuğa girilince loadLioxerpTalepFormlari normal şekilde dener */ }
+    }
+
     function openLioxerpTalepFormPage() {
       // Admin/İK/Müdür/Ekip Lideri/Mühendis ana ekranlarının hepsinden açılabildiği için,
       // sadece adminHomeSection değil, o anki kullanıcının ana ekranı hangisiyse hepsi gizlenir.
@@ -10776,7 +11182,19 @@
       if (projeSel) { projeSel.value = ''; projeSel.disabled = true; projeSel.innerHTML = '<option value="">3. Proje Kodu Seçin</option>'; }
       lioxerpSortField = 'DocDate';
       lioxerpSortDir = 'desc';
-      loadLioxerpTalepFormlari();
+      if (lioxerpAllRows.length > 0) {
+        // Site girişinde (prefetchLioxerpListInBackground) veya önceki ziyarette zaten çekilmiş
+        // veri varsa, ağ beklemeden anında render edilir — "Yükleniyor" ekranı görünmez. Arka
+        // planda sessizce (görünmeden) tazelenir ki liste LioXERP'te değişmişse yine de güncellenir.
+        lioxerpDetailSearchIndex = {};
+        lioxerpDetailProjects = {};
+        lioxerpPopulateBranchOptions();
+        lioxerpRenderTalepFormTable();
+        lioxerpStartDetailIndexPolling();
+        loadLioxerpTalepFormlari(false, true);
+      } else {
+        loadLioxerpTalepFormlari();
+      }
     }
 
     // Tabloda gösterilen ve "Dışa Aktar" (PDF/Word/Excel) ile aktarılan kolonlar — tek ortak
@@ -10836,15 +11254,18 @@
       return (y || 0) * 10000 + (m || 0) * 100 + (d || 0);
     }
 
-    async function loadLioxerpTalepFormlari() {
+    // force=true: sunucudaki önbelleği yok sayıp LioXERP'ten gerçekten yeniden çeker ("Yenile"
+    // butonu). silent=true: "Yükleniyor" ekranı göstermeden arka planda sessizce tazeler (bkz.
+    // openLioxerpTalepFormPage'in prefetch edilmiş veriyle anında render edip arkadan doğrulaması).
+    async function loadLioxerpTalepFormlari(force, silent) {
       const container = document.getElementById('lioxerpTalepFormTable');
       if (!container || !currentUser) return;
-      container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Yükleniyor...</p>`;
+      if (!silent) container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">Yükleniyor...</p>`;
       try {
-        const res = await fetch(`${API_BASE_URL}/api/lioxerp/talep-formlari?userRole=${currentUser.role}`);
+        const res = await fetch(`${API_BASE_URL}/api/lioxerp/talep-formlari?userRole=${currentUser.role}${force ? '&force=1' : ''}`);
         const data = await safeJson(res);
         if (!res.ok) {
-          container.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">${escapeHtmlProj((data && data.error) || 'Veri alınamadı.')}</p>`;
+          if (!silent) container.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">${escapeHtmlProj((data && data.error) || 'Veri alınamadı.')}</p>`;
           return;
         }
         lioxerpAllRows = Array.isArray(data) ? data : [];
@@ -10855,7 +11276,7 @@
         lioxerpRenderTalepFormTable();
         lioxerpStartDetailIndexPolling();
       } catch (err) {
-        container.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">Sunucu ile iletişim kurulamadı.</p>`;
+        if (!silent) container.innerHTML = `<p class="text-xs text-rose-500 text-center py-8">Sunucu ile iletişim kurulamadı.</p>`;
         console.error('LioXERP talep formu hatası:', err);
       }
     }
@@ -11207,7 +11628,9 @@
         if (typeof loadTasks === 'function') loadTasks();
         if (typeof populateAdminTaskFilters === 'function') populateAdminTaskFilters();
         if (typeof populateLeaderTaskFilter === 'function') populateLeaderTaskFilter();
-        if (typeof applyTaskSectionsDefaults === 'function') applyTaskSectionsDefaults(false);
+        // Admin/İK için de artık alt alta (Aktif üstte), Müdür/Ekip Lideri ile aynı varsayılan:
+        // açılışta Aktif Görevler açık, Geçmiş/Tamamlanan kapalı gelir.
+        if (typeof applyTaskSectionsDefaults === 'function') applyTaskSectionsDefaults(true, true);
       }, 'adminHomeSection');
     }
 
@@ -11255,6 +11678,7 @@
       if (home) home.classList.add('hidden');
       const section = document.getElementById('engineerProjectsPageSection');
       if (section) section.classList.remove('hidden');
+      resetProjectSearchUI('engProjSearchInput', 'engProjBrowseWrap', 'engProjSearchResultsCard');
       renderEngineerProjectsPage();
     }
 
@@ -11318,6 +11742,7 @@
       if (home) home.classList.add('hidden');
       const section = document.getElementById('engineerProjectsPageSection');
       if (section) section.classList.remove('hidden');
+      resetProjectSearchUI('engProjSearchInput', 'engProjBrowseWrap', 'engProjSearchResultsCard');
       renderEngineerProjectsPage();
     }
 
@@ -12578,6 +13003,28 @@
       renderStatusCards(listEl, wantedRole, adminStatusSelectedDept, undefined, subFilter);
     }
 
+    // "Ekiplerin Durum ve İş Yükü" kutucuğunun üstündeki "Geri Dön": Birim → Alt Alan → Rol
+    // kademeli seçimini bir adımda geri sarar, hiçbir seçim kalmayınca bölümden çıkar.
+    function handleAdminStatusBackBtn() {
+      if (adminStatusSelectedRole) {
+        adminStatusSelectedRole = '';
+        populateAdminStatusRoleToggle();
+        renderAdminStatusResults();
+        return;
+      }
+      if (adminStatusSelectedSubarea !== null) {
+        adminStatusSelectedSubarea = null;
+        populateAdminStatusSubareaChips();
+        return;
+      }
+      if (adminStatusSelectedDept) {
+        adminStatusSelectedDept = '';
+        populateAdminStatusDeptChips();
+        return;
+      }
+      closeLeaderSubPage();
+    }
+
     // Mühendis: kendisine sorumlu mühendis olarak atanmış (engineer_id ile bağlı) stajyerlerin durum listesi
     function renderEngineerInternStatusList() {
       const listEl = document.getElementById('engineerInternStatusList');
@@ -12750,7 +13197,7 @@
       const projects = await loadTaskProjectsCache();
       const secili = sel.value;
       sel.innerHTML = '<option value="">Proje Seçin</option>' +
-        (projects || []).map(p => `<option value="${p.id}">${escapeHtmlProj(p.company_name || '')} — ${escapeHtmlProj(p.name)}</option>`).join('');
+        (projects || []).map(p => `<option value="${p.id}">${escapeHtmlProj(formatProjectLabel(p))}</option>`).join('');
       sel.value = (projects || []).some(p => String(p.id) === secili) ? secili : '';
     }
 
@@ -12955,10 +13402,13 @@
     // Müdür/Ekip Lideri için: "Aktif Görevler" ve "Geçmiş/Tamamlanan" yan yana değil alt alta,
     // ve varsayılan olarak Aktif açık/Geçmiş kapalı gelir (Admin'de bu değişmiyor — hâlâ yan yana
     // ve ikisi de kapalı başlar, bkz. openAdminTasksPage).
-    function applyTaskSectionsDefaults(stackedWithActiveOpen) {
+    // stacked: yan yana (lg:grid-cols-2) yerine alt alta (Aktif üstte) mi gösterilsin.
+    // activeOpenDefault: açılışta Aktif Görevler açık/Geçmiş kapalı mı gelsin (false ise ikisi de
+    // kapalı gelir, mevcut Admin/İK davranışı korunur).
+    function applyTaskSectionsDefaults(stacked, activeOpenDefault) {
       const grid = document.getElementById('taskSectionsGrid');
-      if (grid) grid.classList.toggle('lg:grid-cols-2', !stackedWithActiveOpen);
-      if (stackedWithActiveOpen) {
+      if (grid) grid.classList.toggle('lg:grid-cols-2', !stacked);
+      if (activeOpenDefault) {
         setTaskSectionOpen('active', true);
         setTaskSectionOpen('past', false);
       } else {
@@ -13815,7 +14265,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: gorevAdi, description: `"${project.company_name || ''} — ${project.name}" projesi için kart tasarım planı.`,
+            title: gorevAdi, description: `"${formatProjectLabel(project)}" projesi için kart tasarım planı.`,
             assignedTo: currentUser.id, category: 'Donanım', endDate: bitisTarihi, workDays,
             projectId: project.id, isKartPlaniTask: true, createdBy: currentUser.name, userRole: currentUser.role, userId: currentUser.id
           })

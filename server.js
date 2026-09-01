@@ -342,6 +342,9 @@ async function initDb() {
     try { await db.execute(`ALTER TABLE projects ADD COLUMN status TEXT DEFAULT 'ACTIVE'`); } catch (e) {}
     // Alt alan: sadece belirli firmalarda (ör. ASELSAN → AGS/MEOS) anlamlı, diğerlerinde boş kalır.
     try { await db.execute(`ALTER TABLE projects ADD COLUMN sub_area TEXT`); } catch (e) {}
+    // Proje Kodu: projenin kendi kısa tanımlayıcı kodu (opsiyonel) — proje adının göründüğü her
+    // yerde (listeler, seçiciler, sayfa başlıkları, e-postalar) adın yanında gösterilir.
+    try { await db.execute(`ALTER TABLE projects ADD COLUMN project_code TEXT`); } catch (e) {}
 
     // ============================================================
     // AŞAMA ŞABLONLARI: bir projeye uygulanabilen, tekrar kullanılabilir "ana aşama + alt aşama"
@@ -1822,6 +1825,47 @@ async function lioxerpPrefetchDetailsInBackground(ids) {
   lioxerpDetailPrefetch.running = false;
 }
 
+// ============================================================
+// TALEP FORMU LİSTESİ ÖNBELLEĞİ: canlı LioXERP taraması (giriş + PDF export + parse) yavaş
+// olduğundan, liste artık kullanıcının isteği ANINDA değil, arka planda periyodik olarak
+// tazelenir — /api/lioxerp/talep-formlari bu önbellekten anında cevap verir. Sunucu ayağa
+// kalkar kalkmaz ilk tazeleme hemen başlar ki kullanıcı siteye ilk girdiğinde (kutucuğa henüz
+// girmeden) önbellek zaten dolu/dolmakta olsun.
+// ============================================================
+let lioxerpListCache = [];
+let lioxerpListCacheUpdatedAt = null;
+let lioxerpListCacheFetchPromise = null;
+
+async function refreshLioxerpListCache() {
+  if (lioxerpListCacheFetchPromise) return lioxerpListCacheFetchPromise; // zaten süren bir tazelemeye katıl
+  lioxerpListCacheFetchPromise = (async () => {
+    const rows = await lioxerpFetchTalepFormlari();
+    lioxerpListCache = rows;
+    lioxerpListCacheUpdatedAt = new Date().toISOString();
+    lioxerpPrefetchDetailsInBackground(rows.map((r) => r.Id)).catch(() => {});
+    return rows;
+  })();
+  try {
+    return await lioxerpListCacheFetchPromise;
+  } finally {
+    lioxerpListCacheFetchPromise = null;
+  }
+}
+
+let _lioxerpListSchedulerBasladi = false;
+function startLioxerpListRefreshScheduler() {
+  if (_lioxerpListSchedulerBasladi) return;
+  _lioxerpListSchedulerBasladi = true;
+  const REFRESH_MS = 10 * 60 * 1000; // 10 dakikada bir
+  const tick = () => {
+    refreshLioxerpListCache().catch((e) => console.error('LioXERP liste önbelleği tazeleme hatası:', e.message));
+  };
+  tick();
+  setInterval(tick, REFRESH_MS);
+  console.log('📋 LioXERP Talep Formu liste önbelleği zamanlayıcısı aktif (10 dakikada bir).');
+}
+startLioxerpListRefreshScheduler();
+
 // Admin Yetki Kontrolü Fonksiyonu (İK, admin ile birebir aynı yetkilere sahiptir)
 const isAdmin = (role) => role === 'ADMIN' || role === 'HR';
 // Firma/Proje yönetiminde kendi biriminle sınırlı erişimi olan roller (Müdür, Ekip Lideri)
@@ -1829,16 +1873,18 @@ const isDeptLockedRole = (role) => role === 'MANAGER' || role === 'LEADER';
 // LioXERP Talep Formları kutucuğuna erişebilen roller: Admin/İK/Müdür/Ekip Lideri/Mühendis
 const canAccessLioxerp = (role) => isAdmin(role) || isDeptLockedRole(role) || role === 'ENGINEER';
 
-// LioXERP "Talep Formu" listesini döner — Admin/İK/Müdür/Ekip Lideri/Mühendis.
+// LioXERP "Talep Formu" listesini döner — Admin/İK/Müdür/Ekip Lideri/Mühendis. Artık istek anında
+// canlı LioXERP'e gitmez: arka planda periyodik tazelenen önbellekten (lioxerpListCache) anında
+// cevap verir. Önbellek henüz hiç dolmadıysa (sunucu yeni ayağa kalktıysa) veya ?force=1 ile
+// ("Yenile" butonu) açıkça istenirse, o istek için senkron bir tazeleme beklenir.
 app.get('/api/lioxerp/talep-formlari', async (req, res) => {
   try {
-    const { userRole } = req.query;
+    const { userRole, force } = req.query;
     if (!canAccessLioxerp(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
-    const rows = await lioxerpFetchTalepFormlari();
-    res.json(rows);
-    // Liste yanıtı gönderildikten sonra, arama kutusunun satır/ürün detaylarını da kapsayabilmesi
-    // için tüm kayıtların detayı arka planda (kullanıcıyı bekletmeden) önbelleğe alınır.
-    lioxerpPrefetchDetailsInBackground(rows.map((r) => r.Id)).catch(() => {});
+    if (force === '1' || lioxerpListCache.length === 0) {
+      await refreshLioxerpListCache();
+    }
+    res.json(lioxerpListCache);
   } catch (error) {
     console.error('LioXERP veri çekme hatası:', error.message);
     res.status(502).json({ error: 'LioXERP verisi alınamadı: ' + error.message });
@@ -1859,6 +1905,40 @@ app.get('/api/lioxerp/talep-formlari-arama-indeksi', (req, res) => {
     if (codes.length > 0) projects[id] = codes;
   }
   res.json({ index, projects, progress: { ...lioxerpDetailPrefetch } });
+});
+
+// LioXERP'in Türkçe formatlı tutar metnini ("15.000,00" → 15000) sayıya çevirir — nokta binlik
+// ayıracı, virgül ondalık ayıracıdır.
+function parseLioxerpAmount(str) {
+  if (!str) return 0;
+  const n = parseFloat(String(str).trim().replace(/\./g, '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+
+// Bir projenin ERP'den (LioXERP) çekilen toplam malzeme talep tutarı — proje detay sayfasında
+// başlığın yanında gösterilir. Proje koduyla (projects.project_code) Talep Formu satırlarındaki
+// ProjectCode eşleştirilip lioxerpDetailCache'teki (zaten arka planda 10 dakikada bir + her yeni
+// Talep Formu için otomatik tazelenen — bkz. startLioxerpListRefreshScheduler) tüm satırlar
+// üzerinden anında toplanır; canlı LioXERP'e gidilmez.
+app.get('/api/lioxerp/project-total', (req, res) => {
+  try {
+    const { userRole, projectCode } = req.query;
+    if (!canAccessLioxerp(userRole)) return res.status(403).json({ error: 'Bu alana erişim yetkiniz yok.' });
+    if (!projectCode) return res.status(400).json({ error: 'projectCode zorunludur.' });
+
+    const byCurrency = new Map();
+    for (const lines of lioxerpDetailCache.values()) {
+      for (const line of lines) {
+        if (line.ProjectCode !== projectCode) continue;
+        const currency = line.CurTraCode || 'TRY';
+        byCurrency.set(currency, (byCurrency.get(currency) || 0) + parseLioxerpAmount(line.AmtTraEstimated));
+      }
+    }
+    const totals = Array.from(byCurrency.entries()).map(([currency, amount]) => ({ currency, amount }));
+    res.json({ totals, updatedAt: lioxerpListCacheUpdatedAt, detailsLoading: lioxerpDetailPrefetch.running });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Tek bir Talep Formu kaydının satır detaylarını döner — Admin/İK/Müdür/Ekip Lideri/Mühendis.
@@ -3049,7 +3129,7 @@ app.get('/api/reports/projects', async (req, res) => {
       const latest = latestByProject[p.id];
       const isOverdue = p.status === 'ACTIVE' && p.end_date && p.end_date < today;
       return {
-        id: p.id, name: p.name, company: p.company_name || '-', department: p.department,
+        id: p.id, name: p.name, projectCode: p.project_code, company: p.company_name || '-', department: p.department,
         owner: p.owner_name || '-', actual: latest ? latest.actual : 0,
         status: p.status, priority: p.priority, endDate: p.end_date, overdue: isOverdue
       };
@@ -3156,9 +3236,12 @@ app.put('/api/tasks/:id/complete', async (req, res) => {
       }
 
       // Bu görev "Görevi Ata" ile bir proje aşamasına/alt aşamasına doğrudan bağlıysa, atanan kişi
-      // görevi tamamlayınca o aşama da otomatik olarak tamamlanmış işaretlenir.
+      // görevi tamamlayınca o aşama da otomatik olarak tamamlanmış işaretlenir. AWAIT edilir ki
+      // yanıt dönene kadar aşama durumu gerçekten güncellenmiş olsun (fire-and-forget bırakılırsa,
+      // yanıtı hemen ardından aşamayı sorgulayan istemci/istek eski — henüz tamamlanmamış — durumu
+      // görebilir).
       if (task.stage_id && task.project_id) {
-        setProjectStageDone(task.project_id, task.stage_id, true, task.assignee_name, `"${task.title}" görevi tamamlanarak otomatik kapatıldı.`)
+        await setProjectStageDone(task.project_id, task.stage_id, true, task.assignee_name, `"${task.title}" görevi tamamlanarak otomatik kapatıldı.`)
           .catch(e => console.error('Aşama otomatik tamamlama hatası:', e.message));
       }
     }
@@ -3239,7 +3322,7 @@ app.put('/api/tasks/:id/review', async (req, res) => {
         // Aşamaya bağlı bir görev revize edilirse, görev henüz gerçekten bitmemiş demektir —
         // "Görevi Tamamla" ile otomatik kapatılmış olabilecek aşama da tekrar açılır.
         if (isRevision && t.stage_id && t.project_id) {
-          setProjectStageDone(t.project_id, t.stage_id, false, null, null)
+          await setProjectStageDone(t.project_id, t.stage_id, false, null, null)
             .catch(e => console.error('Aşama otomatik geri alma hatası:', e.message));
         }
         if (isRevision) {
@@ -4833,7 +4916,7 @@ app.get('/api/projects/:id', async (req, res) => {
 // Proje oluştur (Admin: herhangi bir birim; Müdür: yalnızca kendi birimi — sunucu tarafında sabitlenir)
 app.post('/api/projects', async (req, res) => {
   try {
-    const { company_id, name, department, sub_area, owner_id, start_date, end_date, priority, note, userRole, userId, createdBy } = req.body;
+    const { company_id, name, project_code, department, sub_area, owner_id, start_date, end_date, priority, note, userRole, userId, createdBy } = req.body;
     if (!company_id || !name || !start_date || !end_date) {
       return res.status(400).json({ error: 'Firma, proje adı ve tarihler zorunludur.' });
     }
@@ -4860,9 +4943,9 @@ app.post('/api/projects', async (req, res) => {
     }
 
     const r = await db.execute({
-      sql: `INSERT INTO projects (company_id, name, department, sub_area, owner_id, start_date, end_date, priority, status, note, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`,
-      args: [company_id, name.trim(), finalDepartment, sub_area || null, owner_id || null, start_date, end_date, priority || 'NORMAL', note || null, createdBy || null, todayISO()]
+      sql: `INSERT INTO projects (company_id, name, project_code, department, sub_area, owner_id, start_date, end_date, priority, status, note, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`,
+      args: [company_id, name.trim(), (project_code || '').trim() || null, finalDepartment, sub_area || null, owner_id || null, start_date, end_date, priority || 'NORMAL', note || null, createdBy || null, todayISO()]
     });
     const newProjectId = Number(r.lastInsertRowid);
 
@@ -4921,7 +5004,7 @@ app.post('/api/projects', async (req, res) => {
 // Proje güncelle (Admin) — durum, öncelik, not, tarihler
 app.put('/api/projects/:id', async (req, res) => {
   try {
-    const { name, company_id, department, sub_area, owner_id, start_date, end_date, priority, status, note, userRole, userId } = req.body;
+    const { name, company_id, project_code, department, sub_area, owner_id, start_date, end_date, priority, status, note, userRole, userId } = req.body;
     const pid = req.params.id;
     const cur = await db.execute({ sql: `SELECT * FROM projects WHERE id = ?`, args: [pid] });
     if (cur.rows.length === 0) return res.status(404).json({ error: 'Proje bulunamadı.' });
@@ -4930,10 +5013,11 @@ app.put('/api/projects/:id', async (req, res) => {
     // Müdür/Ekip Lideri kendi biriminin dışına proje taşıyamaz.
     const finalDepartment = isDeptLockedRole(userRole) ? p.department : (department ?? p.department);
     await db.execute({
-      sql: `UPDATE projects SET name=?, company_id=?, department=?, sub_area=?, owner_id=?, start_date=?, end_date=?, priority=?, status=?, note=? WHERE id=?`,
+      sql: `UPDATE projects SET name=?, company_id=?, project_code=?, department=?, sub_area=?, owner_id=?, start_date=?, end_date=?, priority=?, status=?, note=? WHERE id=?`,
       args: [
         name ?? p.name,
         company_id ?? p.company_id,
+        project_code !== undefined ? ((project_code || '').trim() || null) : p.project_code,
         finalDepartment,
         sub_area !== undefined ? (sub_area || null) : p.sub_area,
         owner_id !== undefined ? owner_id : p.owner_id,
@@ -5377,7 +5461,7 @@ app.get('/api/person/:id/detail', async (req, res) => {
       const actual = last ? Number(last.actual) : 0;
       const daysLeft = daysBetween(today, p.end_date);
       projects.push({
-        id: p.id, name: p.name, company_name: p.company_name, department: p.department,
+        id: p.id, name: p.name, project_code: p.project_code, company_name: p.company_name, department: p.department,
         end_date: p.end_date, priority: p.priority, status: p.status, note: p.note,
         actual, days_left: daysLeft
       });
@@ -5437,7 +5521,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
       const urgency = (daysLeft < 0 ? 60 : Math.max(0, 30 - daysLeft * 2)) +
         (p.priority === 'YÜKSEK' || p.priority === 'HIGH' ? 20 : (p.priority === 'DÜŞÜK' || p.priority === 'LOW' ? -10 : 0));
       all.push({
-        id: p.id, name: p.name, company_id: p.company_id, company_name: p.company_name, department: p.department,
+        id: p.id, name: p.name, project_code: p.project_code, company_id: p.company_id, company_name: p.company_name, department: p.department,
         sub_area: p.sub_area, owner_name: p.owner_name, end_date: p.end_date, priority: p.priority, status: p.status,
         note: p.note, actual, days_left: daysLeft, is_overdue: overdue,
         urgency: Math.round(urgency)
